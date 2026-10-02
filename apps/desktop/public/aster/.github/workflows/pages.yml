@@ -1,0 +1,150 @@
+name: GitHub Pages
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aster-pages
+  cancel-in-progress: false
+
+jobs:
+  verified-commit:
+    name: Select successfully tested main commit
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.head_repository.full_name == github.repository &&
+       (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+      deploy: ${{ steps.verify.outputs.deploy }}
+    steps:
+      - uses: actions/github-script@v7
+        id: verify
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            core.setOutput('deploy', 'false');
+            const { data: main } = await github.rest.git.getRef({ owner, repo, ref: 'heads/main' });
+            const sha = main.object.sha;
+            let run = context.payload.workflow_run;
+            if (run) {
+              // A retried Pages run retains its original event payload. Always
+              // inspect the latest Tests attempt instead of that stale conclusion.
+              ({ data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: run.id }));
+            }
+            if (!run) {
+              if (context.ref !== 'refs/heads/main') throw new Error('Manual deployment is restricted to main.');
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: 'tests.yml', branch: 'main', head_sha: sha,
+                status: 'completed', per_page: 100
+              });
+              run = data.workflow_runs.find(r => r.conclusion === 'success' &&
+                ['push', 'workflow_dispatch'].includes(r.event) && r.head_sha === sha &&
+                r.head_repository?.full_name === `${owner}/${repo}`);
+              if (!run) throw new Error('Run Tests successfully on the current main commit before deploying.');
+            }
+            if (run.head_sha !== sha) {
+              core.notice('Skipping an older tested commit because main has advanced.');
+              core.setOutput('deploy', 'false');
+              return;
+            }
+            if (run.head_branch !== 'main' ||
+                run.path !== '.github/workflows/tests.yml' ||
+                run.head_repository?.full_name !== `${owner}/${repo}` ||
+                !['push', 'workflow_dispatch'].includes(run.event)) {
+              throw new Error('Only successful Tests from this repository main branch may deploy.');
+            }
+            if (run.status !== 'completed' || run.conclusion !== 'success') {
+              const url = `https://github.com/${owner}/${repo}/actions/runs/${run.id}`;
+              const status = run.status === 'completed' ? run.conclusion : run.status;
+              await core.summary.addHeading('Pages deployment blocked by Tests')
+                .addRaw(`Commit: ${sha}\n\n[Tests run ${run.id}, attempt ${run.run_attempt}](${url}): **${status}**.\n\nFix or rerun the failed Tests jobs. A successful Tests run on current main triggers Pages automatically. Retrying this Pages run rechecks the latest Tests attempt.\n`).write();
+              core.setFailed(`Pages was not deployed: Tests are ${status}. See ${url}`);
+              return;
+            }
+            core.setOutput('sha', sha);
+            core.setOutput('deploy', 'true');
+            await core.summary.addHeading('Verified Pages source')
+              .addRaw(`Commit: ${sha}\n\nTests run: ${run.id}\n`).write();
+
+  build:
+    name: Build tested public runtime
+    needs: verified-commit
+    if: needs.verified-commit.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verified-commit.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reproduce the tested standalone
+        run: |
+          python build.py
+          git diff --exit-code -- Aster.html sdk/aster-files.js sdk/aster-clipboard.js
+      - name: Publish only public runtime files and their hashes
+        env:
+          TESTED_SHA: ${{ needs.verified-commit.outputs.sha }}
+        run: |
+          mkdir -p _site
+          cp index.html Aster.html manifest.webmanifest sw.js LICENSE _site/
+          cp -R sdk src assets third-party _site/
+          touch _site/.nojekyll
+          python - <<'PY'
+          import hashlib, json, os, subprocess
+          from pathlib import Path
+          sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert sha == os.environ['TESTED_SHA'], 'Checkout differs from tested commit'
+          root = Path('_site')
+          files = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                   for p in sorted(root.rglob('*')) if p.is_file()}
+          (root / 'deployment.json').write_text(json.dumps({'commit': sha, 'files': files}, indent=2) + '\n')
+          PY
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: [verified-commit, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Recheck main before publication
+        uses: actions/github-script@v7
+        id: current
+        env:
+          TESTED_SHA: ${{ needs.verified-commit.outputs.sha }}
+        with:
+          script: |
+            const { data } = await github.rest.git.getRef({ ...context.repo, ref: 'heads/main' });
+            const current = data.object.sha === process.env.TESTED_SHA;
+            if (!current) core.notice('Main advanced during the build; this publication is skipped.');
+            core.setOutput('deploy', String(current));
+      - uses: actions/configure-pages@v5
+        if: steps.current.outputs.deploy == 'true'
+      - uses: actions/deploy-pages@v4
+        if: steps.current.outputs.deploy == 'true'
+        id: deployment

@@ -1,0 +1,19 @@
+{
+  "name": "sodalis",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.4.1",
+  "scripts": {
+    "dev": "pnpm --filter @sodalis/desktop dev",
+    "build": "pnpm --recursive build",
+    "test": "pnpm --filter @sodalis/desktop-host test",
+    "typecheck": "pnpm --recursive typecheck"
+  },
+  "devDependencies": {
+    "@types/mithril": "^2.2.9",
+    "jsdom": "^30.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

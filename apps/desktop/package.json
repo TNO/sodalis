@@ -1,0 +1,16 @@
+{
+  "name": "@sodalis/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sodalis/desktop-host": "workspace:*",
+    "mithril": "^2.3.8",
+    "mithril-materialized": "^4.0.0"
+  }
+}

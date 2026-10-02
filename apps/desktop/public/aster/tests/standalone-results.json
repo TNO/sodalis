@@ -1,0 +1,11 @@
+{
+  "booted": true,
+  "apps": 18,
+  "externalScripts": 0,
+  "externalStyles": 0,
+  "standalone": true,
+  "mode": "Canvas 2D",
+  "storage": "Memory only",
+  "uncaughtErrors": [],
+  "testEnvironment": "Chromium 144 / injected about:blank. WebGPU and IndexedDB unavailable in this test context."
+}

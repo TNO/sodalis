@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#eaf0fc">
+  <meta name="description" content="Aster: an independent, local-first browser desktop with WebGPU graphics and working apps.">
+  <title>Aster Desktop</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="src/styles.css">
+  <link rel="stylesheet" href="src/shell-design.css">
+  <link rel="stylesheet" href="src/file-workflows.css">
+  <link rel="stylesheet" href="src/shell-launch.css">
+  <link rel="stylesheet" href="src/themes.css">
+  <link rel="stylesheet" href="src/web-app-chrome.css">
+  <link rel="stylesheet" href="src/visual-profiles.css">
+  <link rel="stylesheet" href="src/ui-refinement.css">
+  <link rel="stylesheet" href="src/desktop-refinement.css">
+  <link rel="stylesheet" href="src/web-io.css">
+  <link rel="stylesheet" href="src/file-picker.css">
+  <link rel="stylesheet" href="src/app-store.css">
+  <link rel="stylesheet" href="src/orbit.css">
+  <link rel="stylesheet" href="src/clipboard.css">
+</head>
+<body data-theme="light">
+  <canvas id="compositor" aria-hidden="true"></canvas>
+  <div id="brightness" aria-hidden="true"></div>
+  <main id="desktop" aria-label="Desktop"><div id="desktop-icons" role="group" aria-label="Desktop shortcuts"></div></main>
+  <div id="window-layer" aria-label="Application windows"></div>
+  <div id="snap-preview" hidden></div>
+  <div id="panel-layer"></div>
+  <div id="toast-layer" aria-live="polite"></div>
+  <div id="context-menu" class="flyout context-menu" role="menu" hidden></div>
+  <div id="dialog-layer"></div>
+  <nav id="taskbar" aria-label="Taskbar"></nav>
+  <div id="boot"><div class="aster-symbol"></div><strong>Aster</strong><span class="boot-spinner"></span><small>Your space. Your pace.</small></div>
+  <noscript>Aster requires JavaScript. All built-in apps run locally in your browser.</noscript>
+  <script src="src/core.js"></script>
+  <script src="src/desktop-models.js"></script>
+  <script src="src/archives.js"></script>
+  <script src="src/desktop-services.js"></script>
+  <script src="src/input-models.js"></script>
+  <script src="src/clipboard-service.js"></script>
+  <script src="src/clipboard-ui.js"></script>
+  <script src="src/renderer.js"></script>
+  <script src="src/windows.js"></script>
+  <script src="src/file-operations.js"></script>
+  <script src="src/explorer-operations.js"></script>
+  <script src="src/web-navigation.js"></script>
+  <script src="src/web-io-models.js"></script>
+  <script src="src/web-io-client.js"></script>
+  <script src="src/file-picker-models.js"></script>
+  <script src="src/file-picker.js"></script>
+  <script src="src/web-io-host.js"></script>
+  <script src="src/apps-files.js"></script>
+  <script src="src/apps-creative.js"></script>
+  <script src="src/apps-tools.js"></script>
+  <script src="src/apps-system.js"></script>
+  <script src="src/apps-desktop.js"></script>
+  <script src="src/apps-accessibility.js"></script>
+  <script src="src/apps-recorder.js"></script>
+  <script src="src/win32/gdi.js"></script>
+  <script src="src/win32/gui-host.js"></script>
+  <script src="src/apps-win32.js"></script>
+  <script src="src/web-app-catalog.js"></script>
+<script src="src/apps-web.js"></script>
+<script src="src/app-library-models.js"></script>
+<script src="src/app-library.js"></script>
+<script src="src/app-store.js"></script>
+<script src="src/orbit-models.js"></script>
+<script src="src/orbit-service.js"></script>
+<script src="src/webviews.js"></script>
+<script src="src/apps-browser.js"></script>
+<script src="src/integrated-desktop.js"></script>
+<script src="src/shell-command-models.js"></script>
+<script src="src/shell-launch.js"></script>
+<script src="src/web-app-settings.js"></script>
+<script src="src/web-io-shell.js"></script>
+<script src="src/theme-models.js"></script>
+<script src="src/theme-packs.js"></script>
+<script src="src/theme-assets.js"></script>
+<script src="src/theme-engine.js"></script>
+<script src="src/theme-settings.js"></script>
+<script src="src/shell.js"></script>
+<script src="src/shell-experience.js"></script>
+<script src="src/theme-shell.js"></script>
+<script src="src/material-optics.js"></script>
+<script src="src/profile-artwork.js"></script>
+<script src="src/liquid-material.js"></script>
+<script src="src/desktop-refinement-models.js"></script>
+<script src="src/desktop-refinement.js"></script>
+</body>
+</html>

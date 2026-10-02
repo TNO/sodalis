@@ -1,0 +1,33 @@
+'use strict';
+const CACHE = 'aster-desktop-2.4-catalog110-r1';
+const FILES = ['./src/input-models.js','./src/clipboard-service.js','./src/clipboard-ui.js','./src/clipboard-client.js','./src/clipboard.css','./sdk/aster-clipboard.js','./src/orbit-models.js','./src/orbit-service.js','./src/webviews.js','./src/apps-browser.js','./src/orbit.css','./sdk/aster-webview.js','./src/app-library-models.js','./src/app-library.js','./src/app-store.js','./src/app-store.css','./src/file-picker-models.js','./src/file-picker.js','./src/file-picker.css','./sdk/aster-files.js','./src/web-io-models.js','./src/web-io-client.js','./src/web-io-host.js','./src/web-io-shell.js','./src/web-io.css','./src/desktop-refinement.css','./src/desktop-refinement-models.js','./src/desktop-refinement.js','./src/ui-refinement.css', './src/web-navigation.js', './src/web-app-settings.js', './src/web-app-chrome.css', './src/themes.css','./src/visual-profiles.css','./src/material-optics.js','./src/profile-artwork.js','./src/liquid-material.js', './src/theme-models.js', './src/theme-assets.js', './src/theme-packs.js', './src/theme-engine.js', './src/theme-settings.js', './src/theme-shell.js', './', './index.html', './manifest.webmanifest', './assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png', './src/styles.css', './src/shell-design.css', './src/integrated-desktop.js', './src/shell-experience.js', './src/core.js', './src/desktop-models.js', './src/archives.js', './src/desktop-services.js', './src/apps-desktop.js', './src/apps-accessibility.js', './src/apps-recorder.js', './src/renderer.js', './src/windows.js', './src/file-operations.js', './src/explorer-operations.js', './src/file-workflows.css','./src/shell-command-models.js','./src/shell-launch.js','./src/shell-launch.css', './src/apps-files.js', './src/apps-creative.js', './src/apps-tools.js', './src/apps-system.js', './src/shell.js', './src/web-app-catalog.js', './src/apps-web.js', './src/apps-win32.js', './src/win32/gdi.js', './src/win32/gui-host.js', './src/win32/resources.js', './src/win32/registry.js', './src/win32/gui.js', './src/win32/bitmaps.js', './src/win32/third-party/winemine.exe', './src/win32/third-party/NOTICE.txt', './third-party/winemine/winemine-source.zip', './src/win32/pe.js', './src/win32/runtime.js', './src/win32/compat.js', './src/win32/third-party/7zr.exe', './src/win32/third-party/tcc.exe', './src/win32/third-party/tcc-files.json', './src/win32/worker.js', './src/win32/x86.wasm', './src/win32/examples/hello.exe', './src/win32/examples/pad.exe', './src/win32/examples/gdi.exe', './src/win32/examples/compute.exe'];
+self.addEventListener('install', event => {
+    event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', event => {
+    event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('aster-desktop-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', event => {
+    const request = event.request;
+    const allowed = new Set(FILES.map(path => new URL(path, self.registration.scope).href));
+    if (request.headers.has('Authorization') || !allowed.has(request.url)) return;
+    if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin)
+        return;
+    event.respondWith((async () => {
+        try {
+            const response = await fetch(request);
+            if (response.ok) {
+                // Await within respondWith: no late waitUntil call on an inactive event.
+                try {
+                    const cache = await caches.open(CACHE);
+                    await cache.put(request, response.clone());
+                }
+                catch { }
+            }
+            return response;
+        }
+        catch {
+            return await caches.match(request) || new Response('Aster is offline and this resource has not been cached.', { status: 503, headers: { 'Content-Type': 'text/plain' } });
+        }
+    })());
+});

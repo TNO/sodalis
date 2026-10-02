@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>File API conformance fixture</title>
+<style>body{font:14px system-ui;padding:18px;color:#182434;background:#f7f9fc}button{padding:10px;margin:5px}#drop{border:2px dashed #789;padding:30px;margin:10px}textarea{display:block;width:90%;height:80px}pre{white-space:pre-wrap}</style>
+<h1>File API conformance fixture</h1><p>This original test application uses normal browser APIs. It is not a replacement for a catalog app.</p>
+<button id="open">Open file</button><button id="multi">Open multiple</button><button id="save">Save file</button><button id="folder">Open folder</button><button id="read">Read handle</button><button id="write">Write handle</button><button id="download">Generate download</button><button id="export">Prepare export</button><button id="pick-input">Choose input</button>
+<input type="file" id="input" multiple accept=".txt,.bin" aria-label="Native file input"><input type="file" id="directory-input" webkitdirectory aria-label="Directory input"><button id="pick-directory">Choose directory input</button>
+<textarea id="text" aria-label="File content">Unicode żółć 日本語 🧪</textarea><div id="drop" tabindex="0">Drop files here</div><a id="out" href="#" draggable="true">Drag prepared export to Aster</a><pre id="status">Ready</pre>
+<script>
+window.events=[];window.result=null;window.error=null;window.h=null;window.dir=null;
+const $=s=>document.querySelector(s);const run=fn=>async()=>{error=null;result=null;$('#status').textContent='Working';try{result=await fn();$('#status').textContent=JSON.stringify(result);}catch(e){error={name:e.name,message:e.message};$('#status').textContent=JSON.stringify(error);}};
+$('#open').onclick=run(async()=>{[h]=await showOpenFilePicker({types:[{description:'Text and binary',accept:{'text/plain':['.txt','.bin']}}]});const f=await h.getFile();return {name:f.name,text:await f.text(),size:f.size};});
+$('#multi').onclick=run(async()=>{window.many=await showOpenFilePicker({multiple:true});return {names:many.map(h=>h.name)};});
+$('#save').onclick=run(async()=>{h=await showSaveFilePicker({suggestedName:'saved.txt'});const s=await h.createWritable();await s.write($('#text').value);await s.close();return {saved:h.name};});
+$('#read').onclick=run(async()=>({text:await(await h.getFile()).text()}));
+$('#write').onclick=run(async()=>{const s=await h.createWritable();await s.write($('#text').value);await s.close();return {saved:true};});
+$('#folder').onclick=run(async()=>{dir=await showDirectoryPicker({mode:'readwrite'});const entries=[];for await(const [name,h]of dir)entries.push([name,h.kind]);return {folder:dir.name,entries};});
+$('#download').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([new Uint8Array([0,255,128,13,10])],{type:'application/octet-stream'}));a.download='export.bin';a.click();URL.revokeObjectURL(a.href);};
+$('#export').onclick=run(async()=>{const f=new File([new Uint8Array([0,255,128,13,10])],'drag.bin',{type:'application/octet-stream'});await AsterFiles.makeDraggable($('#out'),[f]);return {prepared:true};});
+$('#pick-input').onclick=()=>$('#input').click();$('#pick-directory').onclick=()=>$('#directory-input').click();
+for(const id of ['#input','#directory-input']){$(id).onchange=run(async()=>({files:await Promise.all([...$(id).files].map(async f=>({name:f.name,size:f.size,text:await f.text(),relativePath:f.webkitRelativePath})))}));$(id).addEventListener('input',()=>events.push('input'));$(id).addEventListener('change',()=>events.push('change'));$(id).addEventListener('cancel',()=>events.push('cancel'));}
+$('#drop').ondragover=e=>e.preventDefault();$('#drop').ondrop=async e=>{e.preventDefault();window.dropped=await Promise.all([...e.dataTransfer.files].map(async f=>({name:f.name,bytes:[...new Uint8Array(await f.arrayBuffer())]})));$('#status').textContent=JSON.stringify(dropped);};
+</script></html>
