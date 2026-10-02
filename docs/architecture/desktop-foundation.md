@@ -2,8 +2,9 @@
 
 ## Integration
 
-Sodalis keeps the upstream Aster browser desktop as a static snapshot in
-`apps/desktop/public/aster/`. Vite serves it at `/aster/`, while the Sodalis
+Sodalis keeps the pinned Aster browser desktop in
+`apps/desktop/public/aster/`, with one documented compatibility patch. Vite
+serves it at `/aster/`, while the Sodalis
 Mithril application owns the outer page and the assistant/avatar host region.
 This keeps the initial shell useful without forking Aster internals.
 
@@ -29,6 +30,7 @@ integration belongs to the trusted-app SDK, not DOM inspection.
 | Sandboxed web apps | `src/webviews.js`, `src/apps-web.js`, `src/web-io-host.js`, `sdk/aster-webview.js` | No assistant semantic access |
 | App SDK | `sdk/aster-webview.js`, `sdk/aster-files.js`, `sdk/aster-clipboard.js` | Existing APIs remain within Aster's sandbox policy |
 | Accessibility and settings | `src/apps-accessibility.js`, `src/apps-system.js`, `src/theme-settings.js`, `src/styles.css` | Aster settings remain available through its normal UI |
+| Win32 sample and offline cache | `src/apps-win32.js`, `sw.js` | The unavailable Pad executable is disabled and omitted from precaching |
 
 ## Validation
 
@@ -44,10 +46,9 @@ The suite ran against the multi-file desktop over localhost. Its published
 report has environment-specific limits; see the vendored `TESTING.md` for
 storage, WebGPU, service-worker, and manual acceptance caveats.
 
-The host environment removes or denies access to Aster's
-`src/win32/examples/pad.exe` fixture after extraction. The baseline suite
-passed against the original upstream checkout before this restriction, but the
-vendored tree cannot retain the file here. The Win32 sample and service-worker
-precache may therefore be incomplete until the fixture can be supplied in an
-environment that permits it; no attempt has been made to bypass that
-protection.
+Host restrictions prevent retaining Aster's `src/win32/examples/pad.exe`
+fixture. The local patch disables its sample, excludes the missing file from
+the service-worker precache, and increments the cache revision so stale
+entries are removed. Other Win32 samples remain available. Upstream tests
+that specifically require Pad still need the fixture; no attempt has been
+made to bypass host protection.

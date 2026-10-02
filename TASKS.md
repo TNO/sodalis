@@ -12,9 +12,11 @@
 - [x] Show Aster alongside a visible, accessible assistant/avatar placeholder.
 - [x] Test built-in app discovery, launch completion, and refusal of untrusted
   app IDs.
-- [ ] Resolve host denial/removal of Aster's `src/win32/examples/pad.exe`
-  fixture before claiming the vendored snapshot or Win32 test coverage is
-  complete. Do not bypass the host's file protection.
+- [x] Handle the unavailable `src/win32/examples/pad.exe` fixture without
+  bypassing host protection: disable the Pad sample, omit it from service-worker
+  precaching, and bump the cache revision.
+- [ ] Run Pad-specific upstream tests only in an environment where the fixture
+  is available; the current vendor snapshot does not claim that coverage.
 
 ## Next
 
@@ -40,9 +42,9 @@
   catalog web apps. It does not expose semantic app state or DOM access.
 - Aster's published test instructions warn that the smoke runner writes
   `tests/results.json`; reruns should use a temporary copy.
-- This host removes or denies access to Aster's `pad.exe` sample after it is
-  extracted. The 54-check baseline passed against the original upstream
-  checkout before the restriction; the local vendor/build tree cannot preserve
-  that fixture, which may affect the Win32 sample and service-worker precache.
+- Host restrictions prevent retaining Aster's `pad.exe` sample. The UI disables
+  that sample and the service worker excludes its absent executable, preventing
+  a broken launch or corrupt offline cache entry. Pad-specific upstream tests
+  still need the fixture.
 - Persistent memory, speech, model choice, real Mail providers, and Home
   Assistant remain out of scope until the vertical slice has working tests.
