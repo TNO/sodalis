@@ -29,9 +29,9 @@ describes the standalone browser suite. At the pinned upstream commit, the
 unchanged smoke suite passed 54 checks in Chromium. The test runner writes its
 report into the Aster tree, so run it against a temporary copy when rechecking
 to keep the vendored upstream snapshot clean. Host restrictions prevent
-retaining Aster's `src/win32/examples/pad.exe` fixture. Its Win32 Pad sample
-is disabled and excluded from the offline precache; Pad-specific upstream
-tests still require the fixture. See `TASKS.md` for details.
+retaining Aster's `src/win32/examples/pad.exe` fixture. The Win32 Pad demo,
+source, and fixture-dependent tests are removed from this snapshot. See
+`TASKS.md` for details.
 
 ## Current scope
 

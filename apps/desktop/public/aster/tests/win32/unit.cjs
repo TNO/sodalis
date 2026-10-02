@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
-const root=path.resolve(__dirname,'../..');require(root+'/src/win32/pe.js');const {Runtime,Memory,RETURN,HOOK}=require(root+'/src/win32/runtime.js');
+const root=path.resolve(__dirname,'../..');require(root+'/src/win32/pe.js');require(root+'/src/win32/runtime.js');const {Runtime,Memory,RETURN,HOOK}=globalThis.AsterWin32;
 require(root+'/src/win32/compat.js');
 const wasm=fs.readFileSync(root+'/src/win32/x86.wasm'),report={tests:[],benchmarks:{},environment:{node:process.version,platform:process.platform,arch:process.arch}};
 let moduleCache;
@@ -31,7 +31,7 @@ await check('Out-of-bounds guest stores cannot overwrite emulator state',async()
 await check('Unmapped executable page is not executable',async()=>{const{c,status}=await cpu([0xb8,...u32(0x900000),0xff,0xe0]);assert.equal(status,3);assert.equal(c.get_fault(),2);});
 await check('Busy guest returns at the instruction budget',async()=>{const{c,status}=await cpu([0xeb,0xfe]);assert.equal(status,0);assert.equal(c.instruction_count(),10000);});
 await check('JavaScript API memory access has the same hard bounds',async()=>{const r=await runtime();for(const [p,n]of[[0,1],[0xffffffff,4],[0x3fffffe,4],[4096,-1]])assert.throws(()=>r.mem.check(p,n));assert.throws(()=>r.mem.alloc(17*1024*1024));});
-await check('PE32 import metadata resolves actual Windows DLL exports',async()=>{const r=await runtime();const image=r.load(exe('pad'),'pad.exe');assert.equal(image.machine,'i386');assert.equal(image.missing.length,0);assert(image.imports.some(x=>x.name==='WriteFile'&&x.dll==='kernel32.dll'));});
+await check('PE32 import metadata resolves actual Windows DLL exports',async()=>{const r=await runtime();const image=r.load(exe('compute'),'compute.exe');assert.equal(image.machine,'i386');assert.equal(image.missing.length,0);assert(image.imports.some(x=>x.name==='WriteFile'&&x.dll==='kernel32.dll'));});
 await check('PE HIGHLOW relocation executes the same program at another base',async()=>{let r;r=await runtime(e=>{if(e.type==='messagebox')r.event({type:'response',id:e.id,value:1});},{base:0x800000});r.load(exe('hello'));assert.equal(r.image.relocated,true);await r.run();assert.equal(r.exitCode,0);});
 for(const[name,change,pattern]of[
  ['Bad MZ',(b,v)=>v.setUint16(0,0,true),/MZ/],
@@ -57,15 +57,6 @@ await check('Worker publishes a real loader failure before its exit notification
 await check('Path traversal, UNC, device and alternate-drive paths are denied',async()=>{const r=await runtime();for(const p of['../secret','C:\\..\\secret','D:\\x','\\\\host\\share','NUL','folder/COM1.txt','a:b','x.','a\0b'])assert.throws(()=>r.path(p),p);assert.equal(r.path('C:\\Data\\Note.txt'),'data/note.txt');});
 await check('File budgets and private-drive isolation',async()=>{const r=await runtime(),other=await runtime();r.addFile('note.txt',new Uint8Array([1,2]));assert.equal(other.files.size,0);assert.throws(()=>r.addFile('big.bin',new Uint8Array(8*1024*1024+1)),/quota/);});
 await check('Unicode MessageBoxW resumes x86 code with the selected result',async()=>{let r,title;r=await runtime(e=>{if(e.type==='messagebox'){title=e.text;r.event({type:'response',id:e.id,value:2});}});r.load(exe('hello'));await r.run();assert.equal(r.exitCode,2);assert(title.includes('Zażółć'));});
-await check('Compiled Pad handles WM_COMMAND and executes UTF-16 WriteFile/ReadFile',async()=>{
- let r,stage=0;const phrase='Aster zażółć — user input',events=[];
- r=await runtime(e=>{events.push(e);if(e.type==='idle')setTimeout(()=>{
-  const controls=events.filter(x=>x.type==='window'),edit=controls.find(x=>x.className==='EDIT'),button=text=>controls.find(x=>x.title===text);
-  if(stage===0){stage++;r.event({type:'text',hwnd:edit.hwnd,text:phrase});r.event({type:'button',hwnd:button('Save note').hwnd});}
-  else if(stage===1){stage++;r.event({type:'button',hwnd:button('Clear').hwnd});r.event({type:'button',hwnd:button('Load note').hwnd});}
-  else r.event({type:'message',hwnd:r.mainWindow,message:16});
- },0);});r.load(exe('pad'));await r.run();assert.equal(Buffer.from(r.files.get('note.txt')).toString('utf16le'),phrase);assert(events.some(e=>e.type==='text'&&e.text===phrase));assert.equal(r.exitCode,0);assert(r.apiCounts['kernel32.dll!ReadFile']>=1);assert.equal(r.handles.size,[...r.handles.values()].filter(h=>h.type!=='window'&&h.type!=='dc').length);
-});
 await check('Compiled GDI app responds to pointer messages and emits draw commands',async()=>{
  let r,stage=0,clicked=false;r=await runtime(e=>{if(e.type==='draw'&&stage>0)clicked||=e.commands.some(c=>c.op==='ellipse'&&c.x===172&&c.y===152);if(e.type==='idle')setTimeout(()=>{if(stage++===0){r.event({type:'message',hwnd:r.mainWindow,message:513,wParam:1,lParam:200|(180<<16)});}else r.event({type:'message',hwnd:r.mainWindow,message:16});},0);});r.load(exe('gdi'));await r.run();assert(clicked);assert.equal(r.exitCode,0);assert.equal(r.timers.size,0);
 });

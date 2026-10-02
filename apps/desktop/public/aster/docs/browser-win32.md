@@ -31,10 +31,11 @@ This source-built fixture is distinct from the two unmodified upstream binaries
 above. [GUI compatibility details](win32-gui.md) and the complete
 [corresponding source](../third-party/winemine/winemine-source.zip) are included.
 
-Four original compiled GUI/CPU examples remain: **Win32 Pad**, **GDI Playground**,
-**Hello Win32**, and **Integer checksum**. The general runtime executes both the
-third-party programs and these small test programs; examples are not substituted
-with JavaScript apps.
+Three original compiled GUI/CPU examples remain: **GDI Playground**,
+**Hello Win32**, and **Integer checksum**. The unavailable Win32 Pad demo and
+its source were removed from this snapshot. The general runtime executes both
+the third-party programs and these small test programs; examples are not
+substituted with JavaScript apps.
 
 PuTTY/PuTTYgen were researched as further targets. Their required cryptography,
 networking and broader Windows UI/API behavior are outside this tested scope.

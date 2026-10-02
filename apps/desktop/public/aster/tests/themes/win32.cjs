@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const {root,Runtime,wasm,u32}=require('../win32/runner.cjs');
 const W=globalThis.AsterWin32;let compiled;
-async function runtime(host=()=>{}){compiled||=await WebAssembly.compile(wasm);const r=await Runtime.create(compiled,host);r.load(fs.readFileSync(root+'/src/win32/examples/pad.exe'),'pad.exe');return r;}
+async function runtime(host=()=>{}){compiled||=await WebAssembly.compile(wasm);const r=await Runtime.create(compiled,host);r.load(fs.readFileSync(root+'/src/win32/examples/hello.exe'),'hello.exe');return r;}
 const api=(r,n,...a)=>r.apis.get('user32.dll!'+n).fn(...a);
 async function window(r){return r.gui.createWindow(true,0,'STATIC','Theme test',0x10000000,0,0,80,80,0,0,r.image.base,0);}
 test('System colors are process-local and GetSysColor sees validated snapshots',async()=>{const a=await runtime(),b=await runtime();const old=api(b,'GetSysColor',5),p=a.systemColors.slice();p[5]=0x332211;assert.equal(a.setSystemColors(p,false),true);assert.equal(api(a,'GetSysColor',5),0x332211);assert.equal(api(b,'GetSysColor',5),old);assert.equal(api(a,'GetSysColor',99),0);});

@@ -117,12 +117,12 @@ def main(args):
                     js('await OS.themes.select(arg);',name);page.set_viewport_size({'width':390,'height':844});page.wait_for_function('innerWidth===390&&!Aster.viewport().side');js('OS.themes.reflow();');page.locator('#start-button').click();page.locator('.start-menu').wait_for();r=page.locator('.start-menu').bounding_box();assert r['x']>=-1 and r['x']+r['width']<=391;page.screenshot(path=str(out/(name+'-mobile.png')));page.keyboard.press('Escape');page.set_viewport_size({'width':1440,'height':1000});page.wait_for_function('innerWidth===1440');js('OS.themes.reflow();')
             check('All three shell profiles keep Start and their work areas within mobile bounds',mobile)
             def win32():
-                clear();ident=js('window.lab=OS.openApp("win32");await lab.ready;return lab.id;');w=page.locator(f'[data-window="{ident}"]');w.get_by_label('Win32 sample').select_option('pad');w.get_by_role('button',name='Run sample',exact=True).click();page.locator('.win32-edit').wait_for();page.locator('.win32-edit').fill('Guest edit remains alive')
+                clear();ident=js('window.lab=OS.openApp("win32");await lab.ready;return lab.id;');w=page.locator(f'[data-window="{ident}"]');w.get_by_label('Win32 sample').select_option('gdi');w.get_by_role('button',name='Run sample',exact=True).click();page.locator('.win32-canvas').wait_for()
                 for name in ['windows-dark','ubuntu-light','macos26-dark']:
-                    js('await OS.themes.select(arg);',name);page.wait_for_function('lab.win32Session.themeSnapshot?.colors[5]===Aster.themes.win32Colors()[5]');assert page.locator('.win32-edit').input_value()=='Guest edit remains alive'
+                    js('await OS.themes.select(arg);',name);page.wait_for_function('lab.win32Session.themeSnapshot?.colors[5]===Aster.themes.win32Colors()[5]');assert page.locator('.win32-canvas').is_visible()
                 if args.gpu:assert js('return lab.win32Session.renderer.mode;')=='WebGPU'
                 page.screenshot(path=str(out/'win32-theme-live.png'));w.get_by_role('button',name='Stop',exact=True).click();page.wait_for_function('!lab.win32Session.worker');clear()
-            check('A real Windows EXE receives live Worker theme colors without losing its edit controls',win32)
+            check('A compiled Windows GUI receives live Worker theme colors while running',win32)
             if args.gpu:
                 def gpu():
                     js('assert(OS.renderer.mode==="WebGPU","Desktop renderer fell back");');return js('const el=document.createElement("div");document.body.append(el);const g=new AsterGDI(el,64,64,{requireGPU:true});try{await g.init();await g.submit([{op:"rect",x:0,y:0,w:64,h:64,color:[19,55,101,255]}]);assert((await g.pixel(10,10)).join(",")==="19,55,101,255");return{desktop:OS.renderer.mode,gdi:g.stats()};}finally{g.destroy();el.remove();}')

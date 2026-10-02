@@ -12,11 +12,9 @@
 - [x] Show Aster alongside a visible, accessible assistant/avatar placeholder.
 - [x] Test built-in app discovery, launch completion, and refusal of untrusted
   app IDs.
-- [x] Handle the unavailable `src/win32/examples/pad.exe` fixture without
-  bypassing host protection: disable the Pad sample, omit it from service-worker
-  precaching, and bump the cache revision.
-- [ ] Run Pad-specific upstream tests only in an environment where the fixture
-  is available; the current vendor snapshot does not claim that coverage.
+- [x] Remove the unavailable Win32 Pad demo, source, and fixture-dependent
+  tests without bypassing host protection; omit the missing executable from
+  service-worker precaching and bump the cache revision.
 
 ## Next
 
@@ -34,17 +32,17 @@
 
 ## Findings and boundaries
 
-- Aster is a static vanilla-JavaScript desktop, not a pnpm package. Its
-  upstream `index.html` is served unchanged under `/aster/`.
+- Aster is a static vanilla-JavaScript desktop, not a pnpm package. Its pinned
+  multi-file `index.html` is served under `/aster/` with a documented local
+  compatibility patch.
 - Aster exposes a narrow runtime entry point as `window.Aster`; the adapter
   awaits `Aster.ready`, enumerates visible built-in apps, and uses `openApp`.
 - The adapter excludes hidden/system features, imported custom apps, and
   catalog web apps. It does not expose semantic app state or DOM access.
 - Aster's published test instructions warn that the smoke runner writes
   `tests/results.json`; reruns should use a temporary copy.
-- Host restrictions prevent retaining Aster's `pad.exe` sample. The UI disables
-  that sample and the service worker excludes its absent executable, preventing
-  a broken launch or corrupt offline cache entry. Pad-specific upstream tests
-  still need the fixture.
+- Host restrictions prevent retaining Aster's `pad.exe` sample. Its demo,
+  source, and tests were removed; the service worker excludes the missing
+  executable to avoid a broken launch or corrupt offline cache entry.
 - Persistent memory, speech, model choice, real Mail providers, and Home
   Assistant remain out of scope until the vertical slice has working tests.

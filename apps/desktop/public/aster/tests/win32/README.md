@@ -14,7 +14,7 @@ xvfb-run -a -s '-screen 0 1440x1000x24' python tests/win32/browser.py --gpu --he
 python tests/smoke.py
 ```
 
-The 40 unit checks exercise actual IA-32 machine code, memory bounds, instruction
+The 39 unit checks exercise actual IA-32 machine code, memory bounds, instruction
 cache invalidation, PE loader validation/relocation, Windows import resolution,
 compiled callbacks, file operations and a cached-versus-uncached checksum
 benchmark. A Worker transport regression verifies that an actual unsupported
@@ -25,14 +25,13 @@ programs must retain their diagnostic and zero-executed-instruction count.
 creation and draw acknowledgements. It requires the surface to be ready before
 painting and outstanding batches to remain bounded.
 
-The browser suite has 15 checks in HTTP + WebGPU mode. It verifies real selected
-EXEs, Unicode control/file round-trips, process restart, persistence across a
-full page reload, native pointer/timer callbacks, GPU texture readback, the
-presented screenshot pixel, unsupported-import diagnostics, and termination of
-an infinite guest loop while the desktop remains responsive. An additional
-rendering regression suppresses animation callbacks and submits 40 batches;
-the final pixel must be correct and no backlog may grow. The standalone check
-runs the checksum EXE after disabling network access.
+The browser suite has 11 checks in HTTP + WebGPU mode and 10 in restricted
+injected mode. It exercises the included Hello, GDI, and checksum samples,
+unsupported-import diagnostics, and termination of an infinite guest loop
+while the desktop remains responsive. An additional rendering regression
+suppresses animation callbacks and submits 40 batches; the final pixel must be
+correct and no backlog may grow. The standalone check runs the checksum EXE
+after disabling network access.
 
 For restricted development environments:
 

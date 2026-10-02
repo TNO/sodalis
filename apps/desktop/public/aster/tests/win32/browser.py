@@ -52,7 +52,6 @@ def main(args):
         def stop():
             if page.get_by_role('button',name='Stop',exact=True).is_enabled():page.get_by_role('button',name='Stop',exact=True).click()
             stopped()
-        phrase='An actual Windows program saved this.\nZażółć gęślą jaźń — 123'
         try:
             boot();report['environment']=page.evaluate('({ua:navigator.userAgent,secure:isSecureContext,storage:Aster.db.mode,gpuAPI:!!navigator.gpu})')
             check('SHA-256 application-drive identity',lambda:assert_digest(page))
@@ -66,21 +65,6 @@ def main(args):
             def hello():
                 sample('hello');page.wait_for_selector('.win32-messagebox');assert 'Zażółć' in page.locator('.win32-messagebox').inner_text();page.get_by_role('button',name='Cancel',exact=True).click();page.wait_for_function('w.win32Session.exitCode===2');stopped();return page.evaluate('w.win32Session.stats')
             check('PE32 MessageBoxW executes and resumes with Cancel result',hello)
-            def pad():
-                upload('pad.exe');page.wait_for_selector('.win32-edit');page.locator('.win32-edit').fill(phrase);page.get_by_role('button',name='Save note',exact=True).click();page.wait_for_function('w.win32Session.files.has("note.txt")');page.evaluate('w.win32Session.persist')
-                data=page.evaluate('Array.from(w.win32Session.files.get("note.txt"))');assert bytes(data).decode('utf-16-le')==phrase.replace('\n','\r\n');assert page.evaluate('w.win32Session.image.missing.length')==0
-                mode=page.evaluate('w.win32Session.renderer.mode');assert not args.gpu or mode=='WebGPU';return {'renderer':mode,'bytes':len(data),'apiCalls':page.evaluate('w.win32Session.stats.apiCounts')}
-            check('User-selected EXE creates controls and saves Unicode with Win32 WriteFile',pad)
-            def readback():
-                page.get_by_role('button',name='Clear',exact=True).click();page.wait_for_function('document.querySelector(".win32-edit").value===""');page.get_by_role('button',name='Load note',exact=True).click();page.wait_for_function('document.querySelector(".win32-edit").value=== '+json.dumps(phrase));page.screenshot(path=str(OUT/'win32-pad.png'));return page.evaluate('w.win32Session.stats.apiCounts')
-            check('Win32 ReadFile restores the exact text into EDIT',readback)
-            def restart():
-                stop();page.get_by_role('button',name='Run selected',exact=True).click();page.wait_for_selector('.win32-edit');page.get_by_role('button',name='Load note',exact=True).click();page.wait_for_function('document.querySelector(".win32-edit").value=== '+json.dumps(phrase));stop();return 'Same executable SHA-256 restored its private drive'
-            check('Process restart reloads saved C: data',restart)
-            if not args.inject:
-                def reload():
-                    boot();assert page.evaluate('Aster.db.mode')=='IndexedDB';upload('pad.exe');page.wait_for_selector('.win32-edit');page.get_by_role('button',name='Load note',exact=True).click();page.wait_for_function('document.querySelector(".win32-edit").value=== '+json.dumps(phrase));stop();return 'IndexedDB survived full page navigation'
-                check('Full page reload preserves the private C: drive',reload)
             def graphics():
                 sample('gdi');page.wait_for_function('w.win32Session.renderer?.frames>=3');assert not args.gpu or page.evaluate('w.win32Session.renderer.mode')=='WebGPU'
                 assert page.evaluate('w.win32Session.renderer.pixel(5,5)')==[16,23,42,255]
@@ -114,7 +98,7 @@ def main(args):
             check('No uncaught JavaScript errors',lambda:assert_empty(report['errors']))
             check('No executable upload or remote execution requests',lambda:assert_requests(report['requests'],url))
         finally:
-            report['limitations']=['No physical-GPU speed benchmark. --gpu uses Chromium SwiftShader to execute real WebGPU commands.','Four original compiled samples, not general Windows compatibility.']+(['Injected mode does not verify durable IndexedDB, HTTPS or WebGPU.'] if args.inject else [])
+            report['limitations']=['No physical-GPU speed benchmark. --gpu uses Chromium SwiftShader to execute real WebGPU commands.','Three original compiled samples, not general Windows compatibility.']+(['Injected mode does not verify durable IndexedDB, HTTPS or WebGPU.'] if args.inject else [])
             (OUT/'browser-results.json').write_text(json.dumps(report,indent=2));browser.close();server.shutdown()
     print(json.dumps({'passed':len(report['tests']),'report':str(OUT/'browser-results.json')},indent=2))
 def assert_digest(page):

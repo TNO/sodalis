@@ -21,10 +21,10 @@ adapter. Run upstream tests against a temporary copy because the smoke runner
 updates a tracked report file.
 
 The host prevents retaining Aster's `src/win32/examples/pad.exe` fixture. Keep
-a minimal local patch that disables its Win32 sample and removes it from the
-service-worker precache, incrementing the cache revision to purge any stale
-HTML fallback cached at that path. Do not attempt to bypass the host
-restriction.
+a minimal local patch that removes the Pad demo, its source, and fixture-
+dependent tests; omit the executable from the service-worker precache and
+increment the cache revision to purge any stale HTML fallback at that path.
+Do not attempt to bypass the host restriction.
 
 ## Consequences
 
@@ -33,6 +33,6 @@ restriction.
   dependency or uncontrolled fork.
 - Updates require reviewing upstream changes and bundled third-party
   components, then rerunning the baseline.
-- The Pad fixture-dependent tests cannot run in this environment.
+- The Pad fixture-dependent demo and tests are removed from this snapshot.
 - Local Aster patches must be documented and kept minimal; re-evaluate this
   compatibility patch when updating the pinned upstream snapshot.
