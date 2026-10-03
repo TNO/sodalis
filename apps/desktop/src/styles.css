@@ -356,7 +356,8 @@ body {
   line-height: 1.3;
 }
 
-.avatar-conversation-card button {
+.avatar-conversation-card button,
+.avatar-notification-summary button {
   min-height: 44px;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--shell-border);
@@ -368,11 +369,13 @@ body {
   cursor: pointer;
 }
 
-.avatar-conversation-card button:hover:not(:disabled) {
+.avatar-conversation-card button:hover:not(:disabled),
+.avatar-notification-summary button:hover:not(:disabled) {
   border-color: var(--shell-focus);
 }
 
-.avatar-conversation-card button:disabled {
+.avatar-conversation-card button:disabled,
+.avatar-notification-summary button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -439,6 +442,126 @@ body {
   background: var(--shell-panel);
   color: var(--shell-text);
   font: inherit;
+}
+
+.avatar-notification-indicator {
+  position: absolute;
+  z-index: 3;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0 0.55rem;
+  border: 1px solid var(--shell-border);
+  border-radius: 999px;
+  background: var(--shell-panel);
+  color: var(--shell-text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.avatar-notification-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--shell-indicator);
+}
+
+.desktop-avatar-layer .avatar-notification-summary {
+  position: absolute;
+  z-index: 3;
+  width: min(22rem, calc(100% - 1rem));
+  max-height: min(72%, 27rem);
+  padding: 1rem;
+  overflow-y: auto;
+  border: 1px solid var(--shell-border);
+  border-radius: 14px;
+  background: var(--shell-panel);
+  color: var(--shell-text);
+  font-size: 1rem;
+  line-height: 1.45;
+  pointer-events: auto;
+  scrollbar-color: var(--shell-border) transparent;
+  scrollbar-width: thin;
+}
+
+.avatar-notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.65rem;
+}
+
+.avatar-notification-header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+.avatar-notification-policy {
+  margin: 0 0 0.75rem;
+  color: var(--shell-muted);
+  font-size: 0.9rem;
+}
+
+.avatar-notification-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.avatar-notification-item {
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--shell-subtle-border);
+}
+
+.avatar-notification-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.avatar-notification-item h3,
+.avatar-notification-copy,
+.avatar-notification-source {
+  margin: 0;
+}
+
+.avatar-notification-source {
+  color: var(--shell-muted);
+  font-size: 0.82rem;
+}
+
+.avatar-notification-item h3 {
+  margin-top: 0.1rem;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.avatar-notification-copy {
+  margin-top: 0.15rem;
+}
+
+.avatar-notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.65rem;
+}
+
+.avatar-notification-error {
+  margin: 0.75rem 0 0;
+  color: var(--shell-error);
+  font-size: 0.9rem;
 }
 
 .avatar-viewport-status {

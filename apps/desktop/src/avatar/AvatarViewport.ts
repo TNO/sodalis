@@ -15,7 +15,10 @@ interface AvatarViewportAttrs {
   showGazeTarget?: boolean;
   interactive?: boolean;
   conversationOpen?: boolean;
+  notificationCount?: number;
+  notificationOpen?: boolean;
   onActivate?: () => void;
+  onNotificationsActivate?: () => void;
 }
 
 export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
@@ -118,6 +121,32 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
                 },
               )
             : null,
+          vnode.attrs.notificationCount &&
+          vnode.attrs.notificationCount > 0 &&
+          vnode.attrs.onNotificationsActivate &&
+          status === `${DEFAULT_AVATAR_ASSET.name} avatar ready.`
+              ? m(
+                  "button.avatar-notification-indicator[type=button]",
+                  {
+                    "aria-label": `${vnode.attrs.notificationOpen ? "Hide" : "Show"} ${
+                      vnode.attrs.notificationCount
+                    } ${
+                      vnode.attrs.notificationCount === 1
+                        ? "notification"
+                        : "notifications"
+                    }`,
+                    "aria-expanded": String(vnode.attrs.notificationOpen ?? false),
+                    ...(vnode.attrs.notificationOpen
+                      ? { "aria-controls": "avatar-notification-summary" }
+                      : {}),
+                    onclick: vnode.attrs.onNotificationsActivate,
+                  },
+                  [
+                    m("span.avatar-notification-dot[aria-hidden=true]"),
+                    String(vnode.attrs.notificationCount),
+                  ],
+                )
+              : null,
           m(
             "p.avatar-viewport-status[role=status][aria-live=polite]",
             {

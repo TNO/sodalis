@@ -3,6 +3,8 @@ import type { Vnode } from "mithril";
 import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import { AvatarConversationCard } from "./AvatarConversationCard.js";
+import { AvatarNotificationPanel } from "./AvatarNotificationPanel.js";
+import type { AvatarNotification } from "./AvatarNotificationPanel.js";
 import { AvatarViewport } from "./AvatarViewport.js";
 import type { AvatarPresentationController } from "./AvatarPresentationController.js";
 
@@ -14,10 +16,41 @@ interface DesktopAvatarOverlayAttrs {
   showGazeTarget?: boolean;
   frame?: HTMLIFrameElement;
   presentation?: AvatarPresentationController;
+  onOpenApplication?: (appId: string) => Promise<void>;
 }
 
 const TASKBAR_FLOOR_OVERLAP = 3;
 const TASKBAR_AVATAR_OCCLUSION_RATIO = 0.5;
+const MOCK_NOTIFICATIONS: AvatarNotification[] = [
+  {
+    id: "calendar-reminder",
+    source: "calendar",
+    sourceLabel: "Calendar",
+    type: "event-reminder",
+    title: "Appointment reminder",
+    summary: "Your calendar appointment starts in 15 minutes.",
+    appId: "calendar",
+    appTitle: "Calendar",
+    actions: ["read", "open", "dismiss"],
+    read: false,
+  },
+  {
+    id: "files-download",
+    source: "files",
+    sourceLabel: "Files",
+    type: "download-complete",
+    title: "Download complete",
+    summary: "The sample report is ready in Downloads.",
+    appId: "files",
+    appTitle: "File Explorer",
+    actions: ["read", "open", "dismiss"],
+    read: false,
+  },
+];
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export const DesktopAvatarOverlay =
   (): m.Component<DesktopAvatarOverlayAttrs> => {
@@ -34,7 +67,25 @@ export const DesktopAvatarOverlay =
     let presentation: AvatarPresentationController | undefined;
     let onGeometryChange: (() => void) | undefined;
     let conversationOpen = false;
+    let notificationOpen = false;
+    let notificationOpenError: string | undefined;
+    let notifications = MOCK_NOTIFICATIONS.map((notification) => ({
+      ...notification,
+      actions: [...notification.actions],
+    }));
     let restoreAvatarFocus = false;
+    let restoreNotificationFocus = false;
+
+    const closeNotificationCenter = () => {
+      notificationOpen = false;
+      notificationOpenError = undefined;
+      restoreNotificationFocus = true;
+      presentation?.setMode("ambient");
+      m.redraw();
+    };
+
+    const unreadNotificationCount = () =>
+      notifications.filter((notification) => !notification.read).length;
 
     const updateImportantRegions = () => {
       const document = frame?.contentDocument;
@@ -277,6 +328,17 @@ export const DesktopAvatarOverlay =
         onGeometryChange = vnode.attrs.onGeometryChange;
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
+        if (restoreNotificationFocus && !notificationOpen) {
+          restoreNotificationFocus = false;
+          (
+            layer?.querySelector<HTMLButtonElement>(
+              ".avatar-notification-indicator",
+            ) ??
+            layer?.querySelector<HTMLButtonElement>(
+              ".avatar-interaction-target",
+            )
+          )?.focus();
+        }
         if (restoreAvatarFocus && !conversationOpen) {
           restoreAvatarFocus = false;
           layer
@@ -286,8 +348,11 @@ export const DesktopAvatarOverlay =
       },
 
       onremove() {
-        if (conversationOpen) presentation?.setMode("ambient");
+        if (conversationOpen || notificationOpen) {
+          presentation?.setMode("ambient");
+        }
         conversationOpen = false;
+        notificationOpen = false;
         setPresentation(undefined);
         setFrame(undefined);
         layer = undefined;
@@ -302,11 +367,51 @@ export const DesktopAvatarOverlay =
           showGazeTarget: vnode.attrs.showGazeTarget,
           interactive: true,
           conversationOpen,
+          notificationCount: conversationOpen
+            ? 0
+            : unreadNotificationCount(),
+          notificationOpen,
           onActivate() {
+            notificationOpen = false;
+            notificationOpenError = undefined;
             conversationOpen = true;
             presentation?.setMode("conversation");
             m.redraw();
           },
+          onNotificationsActivate() {
+            if (conversationOpen) return;
+            if (notificationOpen) {
+              closeNotificationCenter();
+              return;
+            }
+            notificationOpen = true;
+            notificationOpenError = undefined;
+            presentation?.setMode("notification");
+            m.redraw();
+          },
+        };
+        const openNotificationApp = async (
+          notification: AvatarNotification,
+        ) => {
+          const openApplication = vnode.attrs.onOpenApplication;
+          if (!openApplication) {
+            notificationOpenError =
+              "Opening the related application is unavailable.";
+            m.redraw();
+            return;
+          }
+          try {
+            await openApplication(notification.appId);
+            notifications = notifications.map((current) =>
+              current.id === notification.id
+                ? { ...current, read: true }
+                : current,
+            );
+            closeNotificationCenter();
+          } catch (error) {
+            notificationOpenError = errorMessage(error);
+            m.redraw();
+          }
         };
         return m(
           ".desktop-avatar-layer",
@@ -316,6 +421,29 @@ export const DesktopAvatarOverlay =
           },
           [
             m(AvatarViewport, viewportAttrs),
+            notificationOpen && !conversationOpen
+              ? m(AvatarNotificationPanel, {
+                  notifications,
+                  openError: notificationOpenError,
+                  onClose: closeNotificationCenter,
+                  onRead(notification) {
+                    notifications = notifications.map((current) =>
+                      current.id === notification.id
+                        ? { ...current, read: true }
+                        : current,
+                    );
+                    closeNotificationCenter();
+                  },
+                  onOpen: (notification) =>
+                    void openNotificationApp(notification),
+                  onDismiss(notification) {
+                    notifications = notifications.filter(
+                      (current) => current.id !== notification.id,
+                    );
+                    closeNotificationCenter();
+                  },
+                })
+              : null,
             conversationOpen
               ? m(AvatarConversationCard, {
                   onClose() {

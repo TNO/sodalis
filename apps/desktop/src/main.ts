@@ -157,6 +157,12 @@ const DesktopShell = () => {
                     m.redraw();
                   },
                   presentation,
+                  async onOpenApplication(appId) {
+                    if (!state.host) {
+                      throw new Error("The desktop connection is unavailable.");
+                    }
+                    await state.host.openApplication(appId);
+                  },
                 }),
               ],
             ),

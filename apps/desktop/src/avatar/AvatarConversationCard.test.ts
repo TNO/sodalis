@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { positionAvatarConversationCard } from "./AvatarConversationCard.js";
+import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
 
 function bounds(
   left: number,
@@ -25,13 +25,13 @@ describe("positionAvatarConversationCard", () => {
     const layer = bounds(0, 0, 1000, 700);
     const card = { width: 300, height: 250 };
 
-    const rightDock = positionAvatarConversationCard(
+    const rightDock = positionAvatarCompanionCard(
       layer,
       bounds(800, 350, 180, 300),
       card,
       "right",
     );
-    const leftDock = positionAvatarConversationCard(
+    const leftDock = positionAvatarCompanionCard(
       layer,
       bounds(20, 350, 180, 300),
       card,
@@ -46,7 +46,7 @@ describe("positionAvatarConversationCard", () => {
     const layer = bounds(0, 0, 320, 500);
     const avatar = bounds(72, 250, 176, 185);
 
-    const position = positionAvatarConversationCard(
+    const position = positionAvatarCompanionCard(
       layer,
       avatar,
       { width: 284, height: 300 },
@@ -63,7 +63,7 @@ describe("positionAvatarConversationCard", () => {
 
   it("uses the space above the face before shrinking the card on mobile", () => {
     const layer = bounds(0, 0, 356, 565);
-    const position = positionAvatarConversationCard(
+    const position = positionAvatarCompanionCard(
       layer,
       bounds(173, 295, 176, 239),
       { width: 336, height: 385 },

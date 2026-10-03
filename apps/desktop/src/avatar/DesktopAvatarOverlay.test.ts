@@ -320,4 +320,211 @@ describe("DesktopAvatarOverlay", () => {
     expect(document.activeElement).toBe(activate);
     expect(activate?.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("opens one accessible summary for multiple user-controlled notifications", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { presentation }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+
+    const indicator = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Show 2 notifications"]',
+    );
+    expect(indicator).not.toBeNull();
+    indicator?.click();
+
+    expect(presentation.state.mode).toBe("notification");
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-notification-summary")).not.toBeNull();
+    });
+    expect(host.textContent).toContain("Appointment reminder");
+    expect(host.textContent).toContain("Download complete");
+    expect(scene.controller.startMockSpeech).not.toHaveBeenCalled();
+  });
+
+  it("marks notifications read or dismissed and returns to ambient mode", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { presentation }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Show 2 notifications"]')
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-notification-summary")).not.toBeNull();
+    });
+    const indicator = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Hide 2 notifications"]',
+    );
+    indicator?.focus();
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Mark Appointment reminder as read"]',
+      )
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-notification-summary")).toBeNull();
+      expect(presentation.state.mode).toBe("ambient");
+    });
+    expect(
+      host.querySelector(".avatar-notification-indicator")?.getAttribute("aria-label"),
+    ).toBe("Show 1 notification");
+    expect(document.activeElement).toBe(indicator);
+
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Show 1 notification"]')
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-notification-summary")).not.toBeNull();
+    });
+    const openIndicator = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Hide 1 notification"]',
+    );
+    openIndicator?.focus();
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Dismiss Download complete"]',
+      )
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-notification-summary")).toBeNull();
+      expect(presentation.state.mode).toBe("ambient");
+    });
+    expect(host.querySelector(".avatar-notification-indicator")).toBeNull();
+    expect(document.activeElement).toBe(
+      host.querySelector(".avatar-interaction-target"),
+    );
+  });
+
+  it("opens the related application from a notification and marks it read", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+    const onOpenApplication = vi.fn(async () => undefined);
+
+    m.mount(host, {
+      view: () =>
+        m(DesktopAvatarOverlay, { presentation, onOpenApplication }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Show 2 notifications"]')
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-notification-summary")).not.toBeNull();
+    });
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Open Calendar"]')
+      ?.click();
+
+    await vi.waitFor(() => {
+      expect(onOpenApplication).toHaveBeenCalledWith("calendar");
+      expect(host.querySelector("#avatar-notification-summary")).toBeNull();
+    });
+    expect(presentation.state.mode).toBe("ambient");
+    expect(
+      host.querySelector(".avatar-notification-indicator")?.getAttribute("aria-label"),
+    ).toBe("Show 1 notification");
+  });
+
+  it("shows an error when a related application cannot be opened", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+    const onOpenApplication = vi.fn(async () => {
+      throw new Error("Calendar is unavailable.");
+    });
+
+    m.mount(host, {
+      view: () =>
+        m(DesktopAvatarOverlay, { presentation, onOpenApplication }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Show 2 notifications"]')
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-notification-summary")).not.toBeNull();
+    });
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Open Calendar"]')
+      ?.click();
+
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Calendar is unavailable.");
+    });
+    expect(presentation.state.mode).toBe("notification");
+    expect(host.querySelector("#avatar-notification-summary")).not.toBeNull();
+    expect(
+      host.querySelector(".avatar-notification-indicator")?.getAttribute("aria-label"),
+    ).toBe("Hide 2 notifications");
+  });
+
+  it("keeps notification controls out of an active conversation", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { presentation }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Start a conversation with Sodalis"]',
+      )
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-conversation-card")).not.toBeNull();
+    });
+
+    expect(presentation.state.mode).toBe("conversation");
+    expect(host.querySelector(".avatar-notification-indicator")).toBeNull();
+    expect(host.querySelector("#avatar-notification-summary")).toBeNull();
+    expect(scene.controller.startMockSpeech).not.toHaveBeenCalled();
+  });
 });
