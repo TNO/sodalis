@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Scene } from "three";
+import { Bone, PerspectiveCamera, Scene } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createTalkingHeadAvatarController } from "./TalkingHeadAvatarController.js";
 import { createAvatarUiTargetRegistry } from "../index.js";
@@ -68,6 +68,25 @@ function createHarness(
   };
 }
 
+function addIdleRig(scene: Scene) {
+  const hips = new Bone();
+  hips.name = "Hips";
+  const spine = new Bone();
+  spine.name = "Spine";
+  const spine1 = new Bone();
+  spine1.name = "Spine1";
+  const spine2 = new Bone();
+  spine2.name = "Spine2";
+  const head = new Bone();
+  head.name = "Head";
+  hips.add(spine);
+  spine.add(spine1);
+  spine1.add(spine2);
+  spine2.add(head);
+  scene.add(hips);
+  return { hips, spine, spine1, spine2, head };
+}
+
 describe("TalkingHead avatar controller", () => {
   it("creates an avatar-only runtime bound to the Sodalis scene and camera", async () => {
     const { scene, camera, runtime, createRuntime, controller } =
@@ -97,6 +116,93 @@ describe("TalkingHead avatar controller", () => {
     controller.update(0.016);
 
     expect(runtime.animate).toHaveBeenCalledWith(16);
+  });
+
+  it("adds subtle breathing and weight shifts through the idle update loop", async () => {
+    const { scene, runtime, controller } = createHarness();
+    const { hips, spine2, head } = addIdleRig(scene);
+    const baseHipsRotation = hips.rotation.clone();
+    const baseSpineRotation = spine2.rotation.clone();
+    const baseHeadRotation = head.rotation.clone();
+    await controller.load(testAsset);
+
+    controller.update(1);
+
+    expect(spine2.rotation.x).not.toBe(baseSpineRotation.x);
+    expect(hips.rotation.z).not.toBe(baseHipsRotation.z);
+    expect(Math.abs(spine2.rotation.x - baseSpineRotation.x)).toBeLessThan(0.02);
+    expect(Math.abs(hips.rotation.z - baseHipsRotation.z)).toBeLessThan(0.02);
+    expect(head.rotation.toArray()).toEqual(baseHeadRotation.toArray());
+    expect(runtime.animate).toHaveBeenCalledOnce();
+
+    await controller.unload();
+
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+  });
+
+  it("restores the idle pose and suspends body motion for reduced motion", async () => {
+    const { scene, controller } = createHarness();
+    const { hips, spine2 } = addIdleRig(scene);
+    const baseHipsRotation = hips.rotation.clone();
+    const baseSpineRotation = spine2.rotation.clone();
+    await controller.load(testAsset);
+
+    controller.update(1);
+    controller.setReducedMotion(true);
+
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+
+    controller.update(1);
+
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+  });
+
+  it("suspends idle body motion while speaking and during explicit gestures", async () => {
+    const { scene, controller } = createHarness();
+    const { hips, spine2 } = addIdleRig(scene);
+    const baseHipsRotation = hips.rotation.clone();
+    const baseSpineRotation = spine2.rotation.clone();
+    await controller.load(testAsset);
+    controller.update(1);
+
+    controller.setState("speaking");
+
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+    controller.update(1);
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+    controller.setState("idle");
+    controller.update(1);
+    expect(spine2.rotation.x).not.toBe(baseSpineRotation.x);
+
+    controller.startMockSpeech({
+      durationSeconds: 0.1,
+      keyframes: [
+        { atSeconds: 0, viseme: "viseme_sil", weight: 1 },
+        { atSeconds: 0.1, viseme: "viseme_aa", weight: 1 },
+      ],
+    });
+
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+    controller.update(0.1);
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+
+    controller.update(1);
+    expect(spine2.rotation.x).not.toBe(baseSpineRotation.x);
+    const gesture = controller.playGesture("acknowledge");
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+
+    controller.update(0.8);
+    await gesture;
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
   });
 
   it("maps normalized semantic affect to a restrained ARKit expression", async () => {

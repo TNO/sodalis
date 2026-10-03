@@ -1,6 +1,6 @@
 /// <reference path="./talkinghead.d.ts" />
 
-import type { Camera, Scene } from "three";
+import type { Camera, Euler, Object3D, Scene } from "three";
 import {
   AVATAR_VISEMES,
   normalizeAvatarAffect,
@@ -88,6 +88,19 @@ interface ActiveGesture {
   reject(reason: unknown): void;
   signal?: AbortSignal;
   onAbort?: () => void;
+}
+
+interface AmbientPoseJoint {
+  node: Object3D;
+  baseRotation: Euler;
+}
+
+interface AmbientPose {
+  hips?: AmbientPoseJoint;
+  spine1?: AmbientPoseJoint;
+  spine2?: AmbientPoseJoint;
+  elapsedSeconds: number;
+  applied: boolean;
 }
 
 function applyState(
@@ -249,6 +262,65 @@ export function createTalkingHeadAvatarController({
   let releaseFromWeights = silenceWeights();
   let reducedMotion = false;
   let expressionScale = 1;
+  let ambientPose: AmbientPose | undefined;
+
+  const getAmbientPoseJoint = (name: string): AmbientPoseJoint | undefined => {
+    const node = scene.getObjectByName(name);
+    return node ? { node, baseRotation: node.rotation.clone() } : undefined;
+  };
+
+  const restoreAmbientPose = () => {
+    if (!ambientPose?.applied) return;
+    for (const joint of [
+      ambientPose.hips,
+      ambientPose.spine1,
+      ambientPose.spine2,
+    ]) {
+      if (joint) joint.node.rotation.copy(joint.baseRotation);
+    }
+    ambientPose.applied = false;
+  };
+
+  const captureAmbientPose = () => {
+    ambientPose = {
+      hips: getAmbientPoseJoint("Hips"),
+      spine1: getAmbientPoseJoint("Spine1"),
+      spine2: getAmbientPoseJoint("Spine2"),
+      elapsedSeconds: 0,
+      applied: false,
+    };
+  };
+
+  const updateAmbientPose = (deltaSeconds: number) => {
+    if (!ambientPose) return;
+    if (reducedMotion || state !== "idle" || activeGesture) {
+      restoreAmbientPose();
+      return;
+    }
+    ambientPose.elapsedSeconds += deltaSeconds;
+    const breath =
+      Math.sin((ambientPose.elapsedSeconds * Math.PI * 2) / 4.6) * 0.006;
+    const sway =
+      Math.sin((ambientPose.elapsedSeconds * Math.PI * 2) / 18) * 0.008;
+
+    for (const joint of [
+      ambientPose.hips,
+      ambientPose.spine1,
+      ambientPose.spine2,
+    ]) {
+      if (joint) joint.node.rotation.copy(joint.baseRotation);
+    }
+    if (ambientPose.hips) {
+      ambientPose.hips.node.rotation.z += sway;
+    }
+    if (ambientPose.spine1) {
+      ambientPose.spine1.node.rotation.z -= sway * 0.35;
+    }
+    if (ambientPose.spine2) {
+      ambientPose.spine2.node.rotation.x += breath;
+    }
+    ambientPose.applied = true;
+  };
 
   const completeGesture = () => {
     const current = activeGesture;
@@ -312,6 +384,8 @@ export function createTalkingHeadAvatarController({
     cancelPendingLoad?.(reason);
     cancelPendingLoad = undefined;
     cancelGesture(reason);
+    restoreAmbientPose();
+    ambientPose = undefined;
     mockSequence = undefined;
     releaseElapsedSeconds = undefined;
     setVisemeWeights(silenceWeights(), 180);
@@ -386,6 +460,7 @@ export function createTalkingHeadAvatarController({
   };
 
   const beginInterruption = () => {
+    restoreAmbientPose();
     mockSequence = undefined;
     releaseElapsedSeconds = 0;
     releaseFromWeights = { ...visemeWeights };
@@ -399,6 +474,7 @@ export function createTalkingHeadAvatarController({
       beginInterruption();
       return;
     }
+    if (nextState !== "idle") restoreAmbientPose();
     if (activeGesture && nextState !== state) {
       cancelGesture(new Error("Avatar gesture was interrupted by a state change."));
     }
@@ -420,6 +496,7 @@ export function createTalkingHeadAvatarController({
       keyframes: sequence.keyframes.map((keyframe) => ({ ...keyframe })),
     };
     sampleMockVisemeSequence(snapshot, 0);
+    restoreAmbientPose();
     cancelGesture(new Error("Avatar gesture was interrupted by speech."));
     postSpeechState =
       state === "listening" || state === "interrupted" ? "listening" : "idle";
@@ -477,6 +554,7 @@ export function createTalkingHeadAvatarController({
           throw cancellationError();
         }
         if (loaded?.instance === runtime) {
+          captureAmbientPose();
           cancelPendingLoad = undefined;
           applyHeadMotionPreference(runtime);
           runtime.setMood("neutral");
@@ -487,6 +565,8 @@ export function createTalkingHeadAvatarController({
         }
       } catch (error) {
         if (loaded?.instance === runtime) loaded = undefined;
+        restoreAmbientPose();
+        ambientPose = undefined;
         disposeRuntime();
         void loadPromise.then(disposeRuntime, () => undefined);
         throw error;
@@ -540,6 +620,7 @@ export function createTalkingHeadAvatarController({
       if (!definition) throw new Error(`Unknown avatar gesture "${gesture}".`);
       const runtime = requireRuntime();
       cancelGesture(new Error("Avatar gesture was superseded."));
+      restoreAmbientPose();
 
       return new Promise<void>((resolve, reject) => {
         const current: ActiveGesture = {
@@ -595,6 +676,7 @@ export function createTalkingHeadAvatarController({
         throw new RangeError("Avatar delta time must be a finite non-negative number.");
       }
       loaded?.instance.animate(deltaSeconds * 1000);
+      updateAmbientPose(deltaSeconds);
       const transitionMilliseconds = Math.min(80, deltaSeconds * 1000);
       if (mockSequence) {
         mockElapsedSeconds = Math.min(
@@ -636,6 +718,7 @@ export function createTalkingHeadAvatarController({
 
     setReducedMotion(reduced) {
       reducedMotion = reduced;
+      if (reduced) restoreAmbientPose();
       if (reduced && activeGesture) {
         cancelGesture(new Error("Avatar gesture was stopped by reduced motion."));
       }

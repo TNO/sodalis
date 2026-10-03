@@ -1,6 +1,6 @@
 # 0018 Avatar ambient idle pose
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: frontend
 Depends on: 0016
@@ -36,3 +36,14 @@ more neutral ambient posture for a persistent desktop companion.
   currently handles idle head gaze/motion and explicit gestures, but exposes no
   neutral body-pose or weight-shift system. Implementing one would be a separate
   animation/asset change, so it is intentionally deferred.
+- 2026-03-17: Started implementation after inspecting
+  `apps/desktop/public/avatars/talkinghead-brunette.glb`: it has a 67-joint
+  skeleton, no authored animation clips, and facial-only morph targets. Keep
+  the avatar's relaxed bind pose; add procedural torso/hip motion through the
+  existing controller update loop. Do not invent an occasional hand-on-hip
+  animation unsupported by this asset.
+- 2026-03-17: Added low-amplitude breathing and slow hip/torso sway in the
+  controller's existing update loop. Motion is idle-only, restores the captured
+  bind pose for reduced motion, speech, gestures, unload, and failed loads, and
+  does not write to head/gaze joints. Avatar package tests (51) and typecheck
+  pass. The asset has no hand-on-hip animation to retain as a variation.

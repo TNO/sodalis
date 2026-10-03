@@ -37,4 +37,4 @@ overlay.
 
 - [x] 0016 Adding the persistent desktop avatar overlay
 - [x] 0017 Adding avatar presentation modes *(needs 0016)*
-- [ ] 0018 Improving the avatar's ambient idle pose *(needs 0016)*
+- [x] 0018 Improving the avatar's ambient idle pose *(needs 0016)*
