@@ -50,8 +50,10 @@ describe("Sodalis avatar scene", () => {
     const canvas = document.createElement("canvas");
     host.append(canvas);
     document.body.append(host);
+    let hostWidth = 320;
+    let hostHeight = 240;
     Object.defineProperty(host, "getBoundingClientRect", {
-      value: () => ({ width: 320, height: 240 }),
+      value: () => ({ width: hostWidth, height: hostHeight }),
     });
 
     let frameCallback: FrameRequestCallback | undefined;
@@ -118,8 +120,11 @@ describe("Sodalis avatar scene", () => {
     expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(2);
     scene.setQuality("auto");
     expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1.5);
+    hostWidth = 480;
+    hostHeight = 360;
     window.dispatchEvent(new Event("resize"));
-    expect(renderer.setSize).toHaveBeenLastCalledWith(320, 240, false);
+    expect(renderer.setSize).toHaveBeenLastCalledWith(480, 360, false);
+    expect(runtime.showAvatar).toHaveBeenCalledOnce();
 
     Object.defineProperty(document, "hidden", {
       configurable: true,

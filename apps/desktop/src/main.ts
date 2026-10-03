@@ -1,7 +1,7 @@
 import m from "mithril";
 import { Button, ThemeManager } from "mithril-materialized";
 import { createAvatarUiTargetRegistry } from "@sodalis/avatar";
-import { AvatarViewport } from "./avatar/AvatarViewport.js";
+import { DesktopAvatarOverlay } from "./avatar/DesktopAvatarOverlay.js";
 import {
   createAvatarLab,
   createAvatarLabState,
@@ -85,44 +85,50 @@ const DesktopShell = () => {
         m("main.desktop-layout", [
           m(
             "section.desktop-pane[aria-label='Desktop workspace']",
-            {
-              tabIndex: 0,
-              "aria-describedby": "desktop-pan-hint",
-            },
             [
               m(
-                "p.desktop-scroll-hint#desktop-pan-hint",
-                "Swipe left or right within this desktop to reach off-screen controls.",
+                ".desktop-scrollport",
+                {
+                  tabIndex: 0,
+                  "aria-describedby": "desktop-pan-hint",
+                },
+                [
+                  m(
+                    "p.desktop-scroll-hint#desktop-pan-hint",
+                    "Swipe left or right within this desktop to reach off-screen controls.",
+                  ),
+                  m("iframe", {
+                    title: "Aster desktop",
+                    src: "./aster/index.html",
+                    onload: (event: Event) => {
+                      const frame = event.currentTarget;
+                      if (frame instanceof HTMLIFrameElement)
+                        void connect(frame);
+                    },
+                  }),
+                ],
               ),
-              m("iframe", {
-                title: "Aster desktop",
-                src: "./aster/index.html",
-                onload: (event: Event) => {
-                  const frame = event.currentTarget;
-                  if (frame instanceof HTMLIFrameElement) void connect(frame);
+              m(DesktopAvatarOverlay, {
+                targetRegistry: avatarTargetRegistry,
+                gazeOverlay: state.avatarLab.gazeOverlay,
+                onScene(scene) {
+                  if (scene) {
+                    scene.setFraming(state.avatarLab.framing);
+                    scene.setQuality(state.avatarLab.quality);
+                    scene.controller.setReducedMotion(
+                      state.avatarLab.reducedMotion,
+                    );
+                  }
+                  state.avatarScene = scene;
+                  m.redraw();
                 },
               }),
             ],
           ),
           m("aside.assistant-panel[aria-labelledby='assistant-title']", [
             m("div.assistant-heading", [
-              m("h2#assistant-title", "Assistant and avatar"),
+              m("h2#assistant-title", "Assistant"),
             ]),
-            m(AvatarViewport, {
-              targetRegistry: avatarTargetRegistry,
-              gazeOverlay: state.avatarLab.gazeOverlay,
-              onScene(scene) {
-                if (scene) {
-                  scene.setFraming(state.avatarLab.framing);
-                  scene.setQuality(state.avatarLab.quality);
-                  scene.controller.setReducedMotion(
-                    state.avatarLab.reducedMotion,
-                  );
-                }
-                state.avatarScene = scene;
-                m.redraw();
-              },
-            }),
             m("p.avatar-attribution", [
               "Avatar model: ",
               m(
@@ -154,7 +160,7 @@ const DesktopShell = () => {
               : null,
             m(
               "p.assistant-description",
-              "This desktop keeps the open application beside the assistant and avatar.",
+              "The avatar stays with the desktop while applications open and close.",
             ),
             m("div.desktop-status", [
               m("span.status-indicator[aria-hidden=true]"),

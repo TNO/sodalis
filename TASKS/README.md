@@ -28,3 +28,11 @@ in this phase.
 - [x] 0013 Adding the TalkingHead brunette avatar
 - [ ] 0014 Generating a Blender/MPFB avatar
 - [ ] 0015 Building in-app avatar selection *(needs 0013, 0014)*
+
+## Desktop avatar presentation
+
+Task 0016 uses the current avatar asset and can proceed independently of the
+asset pipeline and selector tasks. Task 0017 builds on the desktop overlay.
+
+- [x] 0016 Adding the persistent desktop avatar overlay
+- [ ] 0017 Adding avatar presentation modes *(needs 0016)*
