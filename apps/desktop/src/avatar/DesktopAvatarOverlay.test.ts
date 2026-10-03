@@ -122,33 +122,47 @@ describe("DesktopAvatarOverlay", () => {
     });
 
     const layer = host.querySelector<HTMLElement>(".desktop-avatar-layer");
+    if (!layer) throw new Error("The avatar layer is unavailable.");
+    vi.spyOn(layer, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 872, 768),
+    );
+    frame.contentWindow?.dispatchEvent(new Event("resize"));
     expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
-      "calc(100% - 700px - 3px)",
+      "calc(100% - 727px)",
+    );
+    expect(layer.style.getPropertyValue("--avatar-taskbar-clip-bottom")).toBe(
+      "68px",
     );
 
     taskbarBounds = new DOMRect(0, 650, 872, 48);
     frame.contentWindow?.dispatchEvent(new Event("resize"));
     expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
-      "calc(100% - 650px - 3px)",
+      "calc(100% - 677px)",
+    );
+    expect(layer.style.getPropertyValue("--avatar-taskbar-clip-bottom")).toBe(
+      "118px",
     );
 
     taskbarBounds = new DOMRect(0, 768, 0, 0);
     frame.contentWindow?.dispatchEvent(new Event("resize"));
     expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
-      "calc(100% - 768px - 3px)",
+      "calc(100% - 771px)",
     );
+    expect(layer.style.getPropertyValue("--avatar-taskbar-clip-bottom")).toBe("");
 
     taskbarBounds = new DOMRect(0, 0, 48, 768);
     frame.contentWindow?.dispatchEvent(new Event("resize"));
     expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
-      "calc(100% - 768px - 3px)",
+      "calc(100% - 771px)",
     );
+    expect(layer.style.getPropertyValue("--avatar-taskbar-clip-bottom")).toBe("");
 
     taskbarBounds = new DOMRect(0, 0, 872, 48);
     frame.contentWindow?.dispatchEvent(new Event("resize"));
     expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
-      "calc(100% - 48px - 3px)",
+      "calc(100% - 51px)",
     );
+    expect(layer.style.getPropertyValue("--avatar-taskbar-clip-bottom")).toBe("");
     expect(scene.controller.load).toHaveBeenCalledOnce();
   });
 

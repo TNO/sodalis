@@ -15,6 +15,7 @@ interface DesktopAvatarOverlayAttrs {
 }
 
 const TASKBAR_FLOOR_OVERLAP = 3;
+const TASKBAR_AVATAR_OCCLUSION_RATIO = 0.5;
 
 export const DesktopAvatarOverlay =
   (): m.Component<DesktopAvatarOverlayAttrs> => {
@@ -78,6 +79,7 @@ export const DesktopAvatarOverlay =
       const innerWindow = frame.contentWindow;
       if (!taskbar || !innerWindow) {
         layer.style.removeProperty("--avatar-taskbar-bottom");
+        layer.style.removeProperty("--avatar-taskbar-clip-bottom");
         updateImportantRegions();
         return;
       }
@@ -88,6 +90,7 @@ export const DesktopAvatarOverlay =
       const viewportHeight = innerWindow.innerHeight;
       if (!viewportHeight || !frameBounds.height) {
         layer.style.removeProperty("--avatar-taskbar-bottom");
+        layer.style.removeProperty("--avatar-taskbar-clip-bottom");
         updateImportantRegions();
         return;
       }
@@ -106,10 +109,23 @@ export const DesktopAvatarOverlay =
       const frameScale = frameBounds.height / viewportHeight;
       const floorY =
         frameBounds.top + floorOffset * frameScale - layerBounds.top;
+      const taskbarOccludesAvatar =
+        taskbarVisible && horizontalTaskbar && !taskbarAtTop;
+      const occlusionDepth = taskbarOccludesAvatar
+        ? taskbarBounds.height * frameScale * TASKBAR_AVATAR_OCCLUSION_RATIO
+        : 0;
       layer.style.setProperty(
         "--avatar-taskbar-bottom",
-        `calc(100% - ${floorY}px - ${TASKBAR_FLOOR_OVERLAP}px)`,
+        `calc(100% - ${floorY + occlusionDepth + TASKBAR_FLOOR_OVERLAP}px)`,
       );
+      if (taskbarOccludesAvatar) {
+        layer.style.setProperty(
+          "--avatar-taskbar-clip-bottom",
+          `${Math.max(0, layerBounds.height - floorY)}px`,
+        );
+      } else {
+        layer.style.removeProperty("--avatar-taskbar-clip-bottom");
+      }
       updateImportantRegions();
     };
 
@@ -198,6 +214,7 @@ export const DesktopAvatarOverlay =
 
       if (!frame || !layer) {
         layer?.style.removeProperty("--avatar-taskbar-bottom");
+        layer?.style.removeProperty("--avatar-taskbar-clip-bottom");
         return;
       }
 

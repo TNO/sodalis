@@ -184,6 +184,7 @@ body {
   z-index: 1;
   inset: 0;
   overflow: hidden;
+  clip-path: inset(0 0 var(--avatar-taskbar-clip-bottom, 0px) 0);
   pointer-events: none;
 }
 

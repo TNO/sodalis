@@ -35,8 +35,9 @@ tasks.
 - Existing Avatar Lab continues to work.
 - Avatar failure does not prevent normal desktop operation.
 - Existing avatar lifecycle/disposal behavior remains correct.
-- The avatar's visible floor aligns with the live taskbar or desktop edge, with
-  a small overlap and no fixed-resolution position.
+- The avatar's visible floor aligns with the live taskbar or desktop edge.
+- The avatar may extend behind a horizontal bottom taskbar, which remains
+  visually in front and interactive.
 - Gaze diagnostics are hidden by default and can be enabled from Avatar Lab.
 - Preserve the existing avatar dimensions and pass pointer events through the
   transparent overlay.
@@ -85,3 +86,6 @@ tasks.
   Added the Avatar Lab gaze-diagnostic toggle (off by default) and recorded
   neutral ambient body animation as task 0018. Desktop tests, typecheck, build,
   and browser checks passed.
+- 2026-10-03: Lowered the avatar by half the live bottom-taskbar height and
+  clipped the overlay at the taskbar's top edge, letting Aster's original
+  taskbar render and receive input in front of her lower legs.
