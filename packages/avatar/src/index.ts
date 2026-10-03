@@ -172,20 +172,16 @@ export type AvatarLookTarget =
   | { type: "ui-element"; id: string }
   | { type: "world"; x: number; y: number; z: number };
 
-export interface AvatarUiTargetBounds {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-export interface AvatarUiTargetRegistry {
-  register(
-    id: string,
-    getBounds: () => AvatarUiTargetBounds | undefined,
-  ): () => void;
-  resolve(id: string): AvatarUiTargetBounds | undefined;
-}
+export {
+  createAttentionTargetRegistry,
+  createAvatarUiTargetRegistry,
+  type AttentionImportance,
+  type AttentionTarget,
+  type AttentionTargetRegistration,
+  type AttentionTargetRegistry,
+  type AvatarUiTargetBounds,
+  type AvatarUiTargetRegistry,
+} from "./targets/AttentionTargetRegistry.js";
 
 export type AvatarQuality = "low" | "medium" | "high" | "auto";
 
@@ -379,5 +375,3 @@ export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
     },
   };
 }
-
-export { createAvatarUiTargetRegistry } from "./targets/AvatarUiTargetRegistry.js";

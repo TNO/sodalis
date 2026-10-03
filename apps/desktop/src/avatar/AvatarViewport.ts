@@ -1,7 +1,7 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
-import type { AvatarUiTargetRegistry } from "@sodalis/avatar";
+import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import { DEFAULT_AVATAR_ASSET } from "./defaultAvatar.js";
 
 function errorMessage(error: unknown): string {
@@ -9,7 +9,7 @@ function errorMessage(error: unknown): string {
 }
 
 interface AvatarViewportAttrs {
-  targetRegistry?: AvatarUiTargetRegistry;
+  targetRegistry?: AttentionTargetRegistry;
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
   gazeOverlay?: string;
   showGazeTarget?: boolean;

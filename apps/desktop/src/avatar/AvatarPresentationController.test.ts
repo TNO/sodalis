@@ -27,6 +27,7 @@ describe("AvatarPresentationController", () => {
       mode: "ambient",
       dock: "left",
       effectiveDock: "left",
+      effectivePlacement: "bottom-left",
       visible: false,
       scale: 1,
       framing: "upper-body",
@@ -76,6 +77,31 @@ describe("AvatarPresentationController", () => {
     expect(controller.state.effectiveDock).toBe("left");
     expect(layer.dataset.effectiveDock).toBe("left");
     expect(viewport.style.left).toBe("var(--avatar-edge-margin)");
+  });
+
+  it("can move above blocked lower desktop content and stay put under reduced motion", () => {
+    const controller = createAvatarPresentationController({
+      storage: createStorage(),
+      onError: vi.fn(),
+    });
+    const layer = document.createElement("div");
+    const viewport = document.createElement("div");
+    vi.spyOn(layer, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 1000, 700),
+    );
+    vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(800, 400, 180, 300),
+    );
+    controller.attach(layer, viewport);
+    controller.setDock("auto");
+    controller.setImportantRegions([new DOMRect(0, 400, 1000, 300)]);
+
+    expect(controller.state.effectivePlacement).toBe("right-side");
+
+    controller.setReducedMotion(true);
+    controller.setImportantRegions([new DOMRect(0, 0, 1000, 700)]);
+
+    expect(controller.state.effectivePlacement).toBe("right-side");
   });
 
   it("applies scale, framing, and reduced-motion changes through presentation", () => {

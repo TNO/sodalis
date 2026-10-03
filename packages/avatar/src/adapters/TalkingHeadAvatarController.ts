@@ -12,6 +12,7 @@ import {
   type AvatarGesture,
   type AvatarLookTarget,
   type MockVisemeSequence,
+  type AttentionTargetRegistry,
   type AvatarUiTargetRegistry,
   type AvatarState,
   type AvatarViseme,
@@ -72,7 +73,7 @@ export interface TalkingHeadAvatarControllerOptions {
   scene: Scene;
   camera: Camera;
   avatarElement?: HTMLElement;
-  targetRegistry?: AvatarUiTargetRegistry;
+  targetRegistry?: AttentionTargetRegistry | AvatarUiTargetRegistry;
   onAvatarLoaded?: (asset: AvatarAsset) => void;
   createRuntime?: TalkingHeadFactory;
 }
@@ -413,10 +414,24 @@ export function createTalkingHeadAvatarController({
       };
     }
     if (target.type === "ui-element") {
-      const bounds = targetRegistry?.resolve(target.id);
+      const resolved = targetRegistry?.resolve(target.id);
+      let bounds:
+        | { left: number; top: number; width: number; height: number }
+        | undefined;
+      if (targetRegistry?.kind === "semantic") {
+        if (resolved && "rect" in resolved && resolved.visible) {
+          bounds = resolved.rect ?? undefined;
+        }
+      } else if (resolved && !("rect" in resolved)) {
+        bounds = resolved;
+      }
       if (!bounds) {
+        const targetType =
+          targetRegistry?.kind === "semantic"
+            ? "Attention target"
+            : "Avatar UI target";
         throw new Error(
-          `Avatar UI target "${target.id}" is not visible or registered.`,
+          `${targetType} "${target.id}" is not visible or registered.`,
         );
       }
       return {

@@ -9,9 +9,9 @@ import {
   type AvatarFramingName,
   type AvatarQuality,
   type AvatarState,
-  type AvatarUiTargetRegistry,
 } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
+import type { AttentionManager } from "./AttentionManager.js";
 import {
   AVATAR_DOCK_POSITIONS,
   AVATAR_PRESENTATION_MODES,
@@ -33,7 +33,7 @@ export interface AvatarLabState {
 
 interface AvatarLabAttrs {
   scene?: AvatarSceneHandle;
-  registry: AvatarUiTargetRegistry;
+  attention: AttentionManager;
   value: AvatarLabState;
   presentation?: AvatarPresentationController;
 }
@@ -52,7 +52,7 @@ function report(state: AvatarLabState, action: () => void): void {
 }
 
 function gazeOverlayForReadMessage(
-  bounds: { left: number; top: number; width: number; height: number },
+  bounds: DOMRectReadOnly,
 ): string {
   const x = Math.min(window.innerWidth, Math.max(0, bounds.left + bounds.width / 2));
   const y = Math.min(window.innerHeight, Math.max(0, bounds.top + bounds.height / 2));
@@ -88,7 +88,7 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
     },
 
     view(vnode) {
-      const { scene, registry, value } = vnode.attrs;
+      const { scene, attention, value } = vnode.attrs;
       const presentation = vnode.attrs.presentation;
       const controller = scene?.controller;
       const run = (action: () => void) =>
@@ -320,34 +320,32 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
                 disabled: !scene,
                 onclick: () =>
                   run(() => {
-                    const bounds = registry.resolve("read-message");
-                    if (!bounds) {
+                    const target = attention.resolve("read-message");
+                    if (!target?.visible || !target.rect) {
                       throw new Error(
-                        'Avatar UI target "read-message" is not visible or registered.',
+                        'Attention target "read-message" is not visible or registered.',
                       );
                     }
                     controller?.setState("listening");
                     controller?.startMockSpeech();
                     value.state = "speaking";
-                    controller?.lookAt({
-                      type: "ui-element",
-                      id: "read-message",
-                    });
-                    value.gazeOverlay = gazeOverlayForReadMessage(bounds);
+                    attention.focus("read-message");
+                    value.gazeOverlay = gazeOverlayForReadMessage(target.rect);
                   }),
                 oncreate(vnode: VnodeDOM) {
                   const button = vnode.dom;
                   if (!(button instanceof HTMLButtonElement)) {
                     throw new Error("Avatar Lab gaze target button is unavailable.");
                   }
-                  unregisterTarget = registry.register("read-message", () => {
-                    const bounds = button.getBoundingClientRect();
-                    return {
-                      left: bounds.left,
-                      top: bounds.top,
-                      width: bounds.width,
-                      height: bounds.height,
-                    };
+                  unregisterTarget = attention.register({
+                    id: "read-message",
+                    appId: "sodalis.avatar-lab",
+                    element: button,
+                    role: "button",
+                    label: "Read message",
+                    description:
+                      "Demonstrates semantic highlighting, avatar gaze, and placement avoidance.",
+                    importance: "high",
                   });
                 },
               },
@@ -359,11 +357,12 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
                 disabled: !scene,
                 onclick: () =>
                   run(() => {
+                    attention.clear();
                     controller?.lookAt({ type: "user" });
                     value.gazeOverlay = "Gaze target: User";
                   }),
               },
-              "Look at user",
+              "Clear guidance",
             ),
             m(
               "button[type=button]",

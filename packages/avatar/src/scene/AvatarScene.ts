@@ -9,7 +9,10 @@ import {
   type Camera,
   type WebGLRendererParameters,
 } from "three";
-import type { AvatarUiTargetRegistry } from "../index.js";
+import type {
+  AttentionTargetRegistry,
+  AvatarUiTargetRegistry,
+} from "../index.js";
 import {
   createTalkingHeadAvatarController,
   type TalkingHeadAvatarControllerOptions,
@@ -35,7 +38,7 @@ export interface AvatarSceneOptions {
     options: WebGLRendererParameters,
   ) => RendererPort;
   createRuntime?: TalkingHeadAvatarControllerOptions["createRuntime"];
-  targetRegistry?: AvatarUiTargetRegistry;
+  targetRegistry?: AttentionTargetRegistry | AvatarUiTargetRegistry;
   onReady?: () => void;
   onError?: (error: Error) => void;
   onFpsChange?: (fps: number | undefined) => void;

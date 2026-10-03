@@ -1,12 +1,13 @@
 import m from "mithril";
 import type { Vnode } from "mithril";
-import type { AvatarUiTargetRegistry } from "@sodalis/avatar";
+import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import { AvatarViewport } from "./AvatarViewport.js";
 import type { AvatarPresentationController } from "./AvatarPresentationController.js";
 
 interface DesktopAvatarOverlayAttrs {
-  targetRegistry?: AvatarUiTargetRegistry;
+  targetRegistry?: AttentionTargetRegistry;
+  onGeometryChange?: () => void;
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
   gazeOverlay?: string;
   showGazeTarget?: boolean;
@@ -23,17 +24,22 @@ export const DesktopAvatarOverlay =
     let frame: HTMLIFrameElement | undefined;
     let outerWindow: Window | undefined;
     let contentWindow: Window | undefined;
+    let contentDocument: Document | undefined;
     let frameLoadHandler: (() => void) | undefined;
     let outerResizeObserver: ResizeObserver | undefined;
     let contentResizeObserver: ResizeObserver | undefined;
     let contentMutationObserver: MutationObserver | undefined;
     let windowMutationObserver: MutationObserver | undefined;
     let presentation: AvatarPresentationController | undefined;
+    let onGeometryChange: (() => void) | undefined;
 
     const updateImportantRegions = () => {
       const document = frame?.contentDocument;
       const innerWindow = frame?.contentWindow;
-      if (!presentation || !frame || !document || !innerWindow) return;
+      if (!presentation || !frame || !document || !innerWindow) {
+        onGeometryChange?.();
+        return;
+      }
       const frameBounds = frame.getBoundingClientRect();
       if (
         !frameBounds.width ||
@@ -42,6 +48,7 @@ export const DesktopAvatarOverlay =
         !innerWindow.innerHeight
       ) {
         presentation.setImportantRegions([]);
+        onGeometryChange?.();
         return;
       }
 
@@ -71,6 +78,7 @@ export const DesktopAvatarOverlay =
         );
       }
       presentation.setImportantRegions(regions);
+      onGeometryChange?.();
     };
 
     const updateGeometry = () => {
@@ -137,7 +145,10 @@ export const DesktopAvatarOverlay =
       windowMutationObserver?.disconnect();
       windowMutationObserver = undefined;
       contentWindow?.removeEventListener("resize", updateGeometry);
+      contentWindow?.removeEventListener("scroll", updateGeometry);
+      contentDocument?.removeEventListener("scroll", updateGeometry, true);
       contentWindow = undefined;
+      contentDocument = undefined;
     };
 
     const observeImportantWindows = () => {
@@ -173,7 +184,10 @@ export const DesktopAvatarOverlay =
       }
 
       contentWindow = innerWindow;
+      contentDocument = document ?? undefined;
       innerWindow.addEventListener("resize", updateGeometry);
+      innerWindow.addEventListener("scroll", updateGeometry);
+      document?.addEventListener("scroll", updateGeometry, true);
       if (typeof ResizeObserver !== "undefined") {
         const observer = new ResizeObserver(updateGeometry);
         observer.observe(taskbar);
@@ -205,6 +219,7 @@ export const DesktopAvatarOverlay =
       outerResizeObserver?.disconnect();
       outerResizeObserver = undefined;
       outerWindow?.removeEventListener("resize", updateGeometry);
+      outerWindow?.removeEventListener("scroll", updateGeometry);
       outerWindow = undefined;
       if (frame && frameLoadHandler) {
         frame.removeEventListener("load", frameLoadHandler);
@@ -220,6 +235,7 @@ export const DesktopAvatarOverlay =
 
       outerWindow = frame.ownerDocument.defaultView ?? undefined;
       outerWindow?.addEventListener("resize", updateGeometry);
+      outerWindow?.addEventListener("scroll", updateGeometry);
       if (typeof ResizeObserver !== "undefined") {
         const observer = new ResizeObserver(updateGeometry);
         observer.observe(frame);
@@ -249,11 +265,13 @@ export const DesktopAvatarOverlay =
     return {
       oncreate(vnode) {
         layer = vnode.dom as HTMLElement;
+        onGeometryChange = vnode.attrs.onGeometryChange;
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
       },
 
       onupdate(vnode) {
+        onGeometryChange = vnode.attrs.onGeometryChange;
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
       },
@@ -262,6 +280,7 @@ export const DesktopAvatarOverlay =
         setPresentation(undefined);
         setFrame(undefined);
         layer = undefined;
+        onGeometryChange = undefined;
       },
 
       view(vnode: Vnode<DesktopAvatarOverlayAttrs>) {

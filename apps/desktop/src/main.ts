@@ -1,7 +1,8 @@
 import m from "mithril";
 import { Button, ThemeManager } from "mithril-materialized";
-import { createAvatarUiTargetRegistry } from "@sodalis/avatar";
+import { createAttentionTargetRegistry } from "@sodalis/avatar";
 import { DesktopAvatarOverlay } from "./avatar/DesktopAvatarOverlay.js";
+import { createAttentionManager } from "./avatar/AttentionManager.js";
 import { createAvatarPresentationController } from "./avatar/AvatarPresentationController.js";
 import {
   createAvatarLab,
@@ -18,7 +19,7 @@ import "./styles.css";
 
 ThemeManager.initialize("auto");
 
-const avatarTargetRegistry = createAvatarUiTargetRegistry();
+const avatarTargetRegistry = createAttentionTargetRegistry();
 const AvatarLab = createAvatarLab();
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -47,6 +48,11 @@ const DesktopShell = () => {
     onFramingChange(framing) {
       state.avatarScene?.setFraming(framing);
     },
+  });
+  const attention = createAttentionManager({
+    registry: avatarTargetRegistry,
+    presentation,
+    getAvatarController: () => state.avatarScene?.controller,
   });
 
   const connect = async (frame: HTMLIFrameElement) => {
@@ -81,122 +87,135 @@ const DesktopShell = () => {
 
   return {
     view: () =>
-      m(".sodalis-shell", [
-        m("header.sodalis-header", [
-          m("div.brand", [
-            m("span.brand-mark[aria-hidden=true]", "S"),
-            m("div", [
-              m("h1", "Sodalis"),
-              m("p", "Your personal desktop"),
+      m(
+        ".sodalis-shell",
+        {
+          oncreate(vnode) {
+            attention.attach(vnode.dom as HTMLElement);
+          },
+          onremove() {
+            attention.detach();
+          },
+        },
+        [
+          m("header.sodalis-header", [
+            m("div.brand", [
+              m("span.brand-mark[aria-hidden=true]", "S"),
+              m("div", [
+                m("h1", "Sodalis"),
+                m("p", "Your personal desktop"),
+              ]),
             ]),
+            m(Button, {
+              label: "Open desktop settings",
+              disabled: !state.host,
+              onclick: () => void openSettings(),
+            }),
           ]),
-          m(Button, {
-            label: "Open desktop settings",
-            disabled: !state.host,
-            onclick: () => void openSettings(),
-          }),
-        ]),
-        m("main.desktop-layout", [
-          m(
-            "section.desktop-pane[aria-label='Desktop workspace']",
-            [
-              m(
-                ".desktop-scrollport",
-                {
-                  tabIndex: 0,
-                  "aria-describedby": "desktop-pan-hint",
-                },
-                [
-                  m(
-                    "p.desktop-scroll-hint#desktop-pan-hint",
-                    "Swipe left or right within this desktop to reach off-screen controls.",
-                  ),
-                  m("iframe", {
-                    title: "Aster desktop",
-                    src: "./aster/index.html",
-                    onload: (event: Event) => {
-                      const frame = event.currentTarget;
-                      if (frame instanceof HTMLIFrameElement)
-                        void connect(frame);
-                    },
-                  }),
-                ],
-              ),
-              m(DesktopAvatarOverlay, {
-                targetRegistry: avatarTargetRegistry,
-                gazeOverlay: state.avatarLab.gazeOverlay,
-                showGazeTarget: state.avatarLab.showGazeTarget,
-                frame: state.desktopFrame,
-                onScene(scene) {
-                  if (scene) {
-                    scene.setFraming(presentation.state.framing);
-                    scene.setQuality(state.avatarLab.quality);
-                    scene.controller.setReducedMotion(
-                      state.avatarLab.reducedMotion,
-                    );
-                  }
-                  state.avatarScene = scene;
-                  m.redraw();
-                },
-                presentation,
-              }),
-            ],
-          ),
-          m("aside.assistant-panel[aria-labelledby='assistant-title']", [
-            m("div.assistant-heading", [
-              m("h2#assistant-title", "Assistant"),
-            ]),
-            m("p.avatar-attribution", [
-              "Avatar model: ",
-              m(
-                "a",
-                {
-                  href: "https://github.com/met4citizen/TalkingHead/blob/v1.7.0/avatars/brunette.glb",
-                  target: "_blank",
-                  rel: "noreferrer",
-                },
-                "Ready Player Me brunette (TalkingHead example)",
-              ),
-              " · ",
-              m(
-                "a",
-                {
-                  href: "https://creativecommons.org/licenses/by-nc/4.0/",
-                  target: "_blank",
-                  rel: "noreferrer",
-                },
-                "CC BY-NC 4.0",
-              ),
-            ]),
-            import.meta.env.DEV
-              ? m(AvatarLab, {
-                  scene: state.avatarScene,
-                  registry: avatarTargetRegistry,
-                  value: state.avatarLab,
+          m("main.desktop-layout", [
+            m(
+              "section.desktop-pane[aria-label='Desktop workspace']",
+              [
+                m(
+                  ".desktop-scrollport",
+                  {
+                    tabIndex: 0,
+                    "aria-describedby": "desktop-pan-hint",
+                  },
+                  [
+                    m(
+                      "p.desktop-scroll-hint#desktop-pan-hint",
+                      "Swipe left or right within this desktop to reach off-screen controls.",
+                    ),
+                    m("iframe", {
+                      title: "Aster desktop",
+                      src: "./aster/index.html",
+                      onload: (event: Event) => {
+                        const frame = event.currentTarget;
+                        if (frame instanceof HTMLIFrameElement)
+                          void connect(frame);
+                      },
+                    }),
+                  ],
+                ),
+                m(DesktopAvatarOverlay, {
+                  targetRegistry: avatarTargetRegistry,
+                  onGeometryChange: () => attention.refresh(),
+                  gazeOverlay: state.avatarLab.gazeOverlay,
+                  showGazeTarget: state.avatarLab.showGazeTarget,
+                  frame: state.desktopFrame,
+                  onScene(scene) {
+                    if (scene) {
+                      scene.setFraming(presentation.state.framing);
+                      scene.setQuality(state.avatarLab.quality);
+                      scene.controller.setReducedMotion(
+                        state.avatarLab.reducedMotion,
+                      );
+                    }
+                    state.avatarScene = scene;
+                    attention.refresh();
+                    m.redraw();
+                  },
                   presentation,
-                })
-              : null,
-            m(
-              "p.assistant-description",
-              "The avatar stays with the desktop while applications open and close.",
+                }),
+              ],
             ),
-            m("div.desktop-status", [
-              m("span.status-indicator[aria-hidden=true]"),
-              m("p[role=status][aria-live=polite]", state.status),
+            m("aside.assistant-panel[aria-labelledby='assistant-title']", [
+              m("div.assistant-heading", [
+                m("h2#assistant-title", "Assistant"),
+              ]),
+              m("p.avatar-attribution", [
+                "Avatar model: ",
+                m(
+                  "a",
+                  {
+                    href: "https://github.com/met4citizen/TalkingHead/blob/v1.7.0/avatars/brunette.glb",
+                    target: "_blank",
+                    rel: "noreferrer",
+                  },
+                  "Ready Player Me brunette (TalkingHead example)",
+                ),
+                " · ",
+                m(
+                  "a",
+                  {
+                    href: "https://creativecommons.org/licenses/by-nc/4.0/",
+                    target: "_blank",
+                    rel: "noreferrer",
+                  },
+                  "CC BY-NC 4.0",
+                ),
+              ]),
+              import.meta.env.DEV
+                ? m(AvatarLab, {
+                    scene: state.avatarScene,
+                    attention,
+                    value: state.avatarLab,
+                    presentation,
+                  })
+                : null,
+              m(
+                "p.assistant-description",
+                "The avatar stays with the desktop while applications open and close.",
+              ),
+              m("div.desktop-status", [
+                m("span.status-indicator[aria-hidden=true]"),
+                m("p[role=status][aria-live=polite]", state.status),
+              ]),
+              state.error
+                ? m("p.connection-error[role=alert]", state.error)
+                : null,
+              state.presentationError
+                ? m("p.connection-error[role=alert]", state.presentationError)
+                : null,
+              m(
+                "p.assistant-note",
+                "Voice-first conversation and optional captions for spoken replies are planned for a later phase.",
+              ),
             ]),
-            state.error
-              ? m("p.connection-error[role=alert]", state.error)
-              : null,
-            state.presentationError
-              ? m("p.connection-error[role=alert]", state.presentationError)
-              : null,
-            m(
-              "p.assistant-note",
-              "Voice-first conversation and optional captions for spoken replies are planned for a later phase.",
-            ),
           ]),
-        ]),
-      ]),
+        ],
+      ),
   };
 };
 

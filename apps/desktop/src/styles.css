@@ -208,6 +208,8 @@ body {
   visibility: visible;
   transition:
     left var(--avatar-transition-duration, 360ms) ease,
+    top var(--avatar-transition-duration, 360ms) ease,
+    bottom var(--avatar-transition-duration, 360ms) ease,
     transform var(--avatar-transition-duration, 360ms) ease,
     opacity var(--avatar-transition-duration, 360ms) ease;
   pointer-events: none;
@@ -218,6 +220,8 @@ body {
   visibility: hidden;
   transition:
     left var(--avatar-transition-duration, 360ms) ease,
+    top var(--avatar-transition-duration, 360ms) ease,
+    bottom var(--avatar-transition-duration, 360ms) ease,
     transform var(--avatar-transition-duration, 360ms) ease,
     opacity var(--avatar-transition-duration, 360ms) ease,
     visibility 0s linear var(--avatar-transition-duration, 360ms);
@@ -227,10 +231,45 @@ body {
   pointer-events: auto;
 }
 
+.attention-highlight {
+  position: fixed;
+  z-index: 5;
+  border: 2px solid #f2a93b;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 3px rgb(242 169 59 / 24%),
+    0 0 20px rgb(242 169 59 / 36%);
+  pointer-events: none;
+  animation: attention-highlight-pulse 1.8s ease-in-out infinite alternate;
+}
+
+.attention-highlight[hidden] {
+  display: none;
+}
+
+@keyframes attention-highlight-pulse {
+  from {
+    box-shadow:
+      0 0 0 2px rgb(242 169 59 / 18%),
+      0 0 12px rgb(242 169 59 / 26%);
+  }
+  to {
+    box-shadow:
+      0 0 0 4px rgb(242 169 59 / 34%),
+      0 0 22px rgb(242 169 59 / 42%);
+  }
+}
+
+.attention-highlight[data-reduced-motion="true"] {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .desktop-avatar-layer .avatar-viewport,
-  .desktop-avatar-layer[data-visible="false"] .avatar-viewport {
+  .desktop-avatar-layer[data-visible="false"] .avatar-viewport,
+  .attention-highlight {
     transition: none;
+    animation: none;
   }
 }
 
