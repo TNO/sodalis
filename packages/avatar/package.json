@@ -1,0 +1,25 @@
+{
+  "name": "@sodalis/avatar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./internal/talkinghead": "./src/adapters/TalkingHeadAvatarController.ts",
+    "./internal/scene": "./src/scene/AvatarScene.ts",
+    "./internal/validation": "./src/validation/AvatarGlbValidator.ts",
+    "./testing": "./src/testing/MockVisemeSequence.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@met4citizen/talkinghead": "1.7.0",
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.180.0"
+  }
+}

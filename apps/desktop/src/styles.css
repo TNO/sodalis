@@ -182,15 +182,221 @@ body {
   font-size: 1.25rem;
 }
 
-.avatar-placeholder {
+.avatar-viewport {
+  position: relative;
   display: grid;
   min-height: 230px;
   place-items: center;
+  overflow: hidden;
   border: 1px dashed var(--shell-placeholder-border);
   border-radius: 12px;
   background: var(--shell-placeholder);
+}
+
+.avatar-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.avatar-viewport-status {
+  z-index: 1;
+  max-width: 34ch;
+  margin: 0;
+  padding: 1rem;
   color: var(--shell-muted);
   font-size: 0.9rem;
+  line-height: 1.45;
+  text-align: center;
+  pointer-events: none;
+}
+
+.avatar-viewport-status-ready {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.avatar-attribution {
+  margin: -0.5rem 0 0;
+  color: var(--shell-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.avatar-attribution a {
+  color: var(--shell-focus);
+  text-underline-offset: 0.15em;
+}
+
+.avatar-gaze-overlay {
+  position: absolute;
+  z-index: 2;
+  top: 0.5rem;
+  left: 0.5rem;
+  max-width: calc(100% - 1rem);
+  padding: 0.35rem 0.55rem;
+  overflow: hidden;
+  border: 1px solid var(--shell-subtle-border);
+  border-radius: 7px;
+  background: var(--shell-panel);
+  color: var(--shell-text);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.avatar-lab {
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--shell-subtle-border);
+}
+
+.avatar-lab summary {
+  min-height: 48px;
+  padding: 0.75rem 0.1rem;
+  color: var(--shell-text);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.avatar-lab-content {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0 0.1rem 0.35rem;
+}
+
+.avatar-lab-help {
+  margin: 0;
+  color: var(--shell-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.avatar-lab-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.avatar-lab-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+  color: var(--shell-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.avatar-lab-field select,
+.avatar-lab-field input[type="range"] {
+  width: 100%;
+  min-height: 44px;
+}
+
+.avatar-lab-field select {
+  opacity: 1;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--shell-border);
+  border-radius: 7px;
+  background: var(--shell-panel);
+  color: var(--shell-text);
+  font: inherit;
+}
+
+.avatar-lab-motion {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--shell-text);
+  font-size: 0.95rem;
+}
+
+.avatar-lab .avatar-lab-motion input[type="checkbox"] {
+  position: static;
+  appearance: auto;
+  opacity: 1;
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+}
+
+.avatar-lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.avatar-lab-actions button {
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--shell-border);
+  border-radius: 7px;
+  background: var(--shell-panel);
+  color: var(--shell-text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.avatar-lab-actions button:hover:not(:disabled) {
+  background: var(--shell-surface);
+}
+
+.avatar-lab-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.avatar-lab-actions .avatar-lab-primary {
+  border-color: var(--shell-focus);
+  background: var(--shell-focus);
+  color: var(--shell-panel);
+  font-weight: 600;
+}
+
+.avatar-lab-gaze {
+  margin: 0;
+  color: var(--shell-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.avatar-lab-fps {
+  margin: 0;
+  color: var(--shell-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.avatar-lab-error {
+  margin: 0;
+  color: var(--shell-error);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.avatar-viewport-retry {
+  z-index: 2;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--shell-border);
+  border-radius: 7px;
+  background: var(--shell-panel);
+  color: var(--shell-text);
+  font: inherit;
+  cursor: pointer;
 }
 
 .assistant-description,
@@ -263,7 +469,7 @@ body {
     padding: 1rem;
   }
 
-  .avatar-placeholder {
+  .avatar-viewport {
     min-height: 180px;
   }
 }
@@ -295,5 +501,15 @@ body {
     min-width: 680px;
     height: calc(64svh - 2.5rem);
     min-height: calc(64svh - 2.5rem);
+  }
+}
+
+@media (max-width: 420px) {
+  .avatar-lab-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .avatar-lab-actions button {
+    flex: 1 1 9rem;
   }
 }

@@ -1,8 +1,8 @@
 # Sodalis
 
-Sodalis is a local-first personal desktop with an embodied assistant. This
-initial slice hosts the MIT-licensed Aster desktop beside an accessible
-placeholder for the future assistant and 3D avatar.
+Sodalis is a local-first personal desktop with an embodied assistant. The
+initial avatar vertical slice hosts the MIT-licensed Aster desktop beside an
+optional Three.js/TalkingHead avatar runtime and an accessible assistant panel.
 
 ## Run locally
 
@@ -35,8 +35,15 @@ source, and fixture-dependent tests are removed from this snapshot. See
 
 ## Current scope
 
-This version includes the pnpm workspace, Aster baseline, typed desktop host
-adapter, and assistant/avatar host region. It does not yet include an avatar
-model, speech, an LLM, memory, or Mail integration. See `TASKS.md` and
-`docs/architecture/desktop-foundation.md` for implementation boundaries and
-next steps.
+Phase 1 includes the Aster desktop, typed host adapter, Sodalis-owned avatar
+scene, TalkingHead behavior adapter, developer-only Avatar Lab, and GLB
+profile/validator. The avatar uses `@met4citizen/talkinghead@1.7.0` and
+`three@0.180.0`; see
+[`docs/avatar/SODALIS_AVATAR_PROFILE.md`](docs/avatar/SODALIS_AVATAR_PROFILE.md)
+for rig, morph, asset provenance, quality, and validation requirements. No
+commercially approved avatar model is selected. The desktop includes the
+TalkingHead brunette example under its separate CC BY-NC 4.0 license as a
+non-commercial pipeline sample; actual model-render FPS is not yet measured.
+Speech, an LLM, memory, Mail, and Home Assistant remain out of scope. See
+`TASKS.md` and
+`docs/architecture/desktop-foundation.md` for boundaries and later work.

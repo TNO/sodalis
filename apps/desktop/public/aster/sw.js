@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'aster-desktop-2.4-catalog110-r2';
+const CACHE = 'aster-desktop-2.4-catalog110-r3';
 const FILES = [
     './src/input-models.js', './src/clipboard-service.js', './src/clipboard-ui.js',
     './src/clipboard-client.js', './src/clipboard.css', './sdk/aster-clipboard.js',

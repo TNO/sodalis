@@ -621,7 +621,7 @@
             setTimeout(() => OS.notify('Welcome to your new workspace', 'Open Start to explore built-in tools and ' + (OS.webCatalog?.apps.length || 0) + ' categorized web apps. ' + (OS.db.mode === 'IndexedDB' ? 'Your virtual files are saved in this browser.' : 'Export your work before closing this temporary session.'), 'info', { label: 'Meet Aster', fn: () => OS.openApp('welcome') }), 800);
         }
         return OS;
-    })().catch(error => { console.error('Aster startup:', error); const boot = $('#boot'); if (boot) {
-        boot.replaceChildren(OS.el('h1', { text: 'Aster could not start' }), OS.el('p', { text: error.message, style: 'max-width:550px;text-align:center;padding:20px' }), OS.el('button', { class: 'primary', text: 'Try again', onclick: () => location.reload() }));
-    } throw error; });
+    })().catch(error => { console.error('Aster startup:', error); const failure = error instanceof Error ? error : new Error(OS.startupErrorMessage(error)); const boot = $('#boot'); if (boot) {
+        boot.replaceChildren(OS.el('h1', { text: 'Aster could not start' }), OS.el('p', { text: failure.message, style: 'max-width:550px;text-align:center;padding:20px' }), OS.el('button', { class: 'primary', text: 'Try again', onclick: () => location.reload() }));
+    } throw failure; });
 })();

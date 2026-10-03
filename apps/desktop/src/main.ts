@@ -1,5 +1,12 @@
 import m from "mithril";
 import { Button, ThemeManager } from "mithril-materialized";
+import { createAvatarUiTargetRegistry } from "@sodalis/avatar";
+import { AvatarViewport } from "./avatar/AvatarViewport.js";
+import {
+  createAvatarLab,
+  createAvatarLabState,
+} from "./avatar/AvatarLab.js";
+import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import {
   createAsterDesktopHost,
   type DesktopApplication,
@@ -10,6 +17,8 @@ import "./styles.css";
 
 ThemeManager.initialize("auto");
 
+const avatarTargetRegistry = createAvatarUiTargetRegistry();
+const AvatarLab = createAvatarLab();
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -19,9 +28,12 @@ const DesktopShell = () => {
     applications: DesktopApplication[];
     status: string;
     error?: string;
+    avatarScene?: AvatarSceneHandle;
+    avatarLab: ReturnType<typeof createAvatarLabState>;
   } = {
     applications: [],
     status: "Connecting to the desktop…",
+    avatarLab: createAvatarLabState(),
   };
 
   const connect = async (frame: HTMLIFrameElement) => {
@@ -96,18 +108,53 @@ const DesktopShell = () => {
             m("div.assistant-heading", [
               m("h2#assistant-title", "Assistant and avatar"),
             ]),
-            m(
-              ".avatar-placeholder",
-              {
-                role: "img",
-                "aria-label":
-                  "Empty placeholder for the future three-dimensional avatar.",
+            m(AvatarViewport, {
+              targetRegistry: avatarTargetRegistry,
+              gazeOverlay: state.avatarLab.gazeOverlay,
+              onScene(scene) {
+                if (scene) {
+                  scene.setFraming(state.avatarLab.framing);
+                  scene.setQuality(state.avatarLab.quality);
+                  scene.controller.setReducedMotion(
+                    state.avatarLab.reducedMotion,
+                  );
+                }
+                state.avatarScene = scene;
+                m.redraw();
               },
-              m("span", "3D avatar will appear here."),
-            ),
+            }),
+            m("p.avatar-attribution", [
+              "Avatar model: ",
+              m(
+                "a",
+                {
+                  href: "https://github.com/met4citizen/TalkingHead/blob/v1.7.0/avatars/brunette.glb",
+                  target: "_blank",
+                  rel: "noreferrer",
+                },
+                "Ready Player Me brunette (TalkingHead example)",
+              ),
+              " · ",
+              m(
+                "a",
+                {
+                  href: "https://creativecommons.org/licenses/by-nc/4.0/",
+                  target: "_blank",
+                  rel: "noreferrer",
+                },
+                "CC BY-NC 4.0",
+              ),
+            ]),
+            import.meta.env.DEV
+              ? m(AvatarLab, {
+                  scene: state.avatarScene,
+                  registry: avatarTargetRegistry,
+                  value: state.avatarLab,
+                })
+              : null,
             m(
               "p.assistant-description",
-              "This desktop keeps the open application beside the future assistant and avatar.",
+              "This desktop keeps the open application beside the assistant and avatar.",
             ),
             m("div.desktop-status", [
               m("span.status-indicator[aria-hidden=true]"),

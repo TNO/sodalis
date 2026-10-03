@@ -26,6 +26,10 @@ dependent tests; omit the executable from the service-worker precache and
 increment the cache revision to purge any stale HTML fallback at that path.
 Do not attempt to bypass the host restriction.
 
+Also normalize non-`Error` startup rejections before Aster's boot-error screen
+reads their message. Bump the service-worker cache revision when applying the
+patch so clients do not continue running the older failure handler.
+
 ## Consequences
 
 - Aster is immediately usable and independently testable.
@@ -34,5 +38,8 @@ Do not attempt to bypass the host restriction.
 - Updates require reviewing upstream changes and bundled third-party
   components, then rerunning the baseline.
 - The Pad fixture-dependent demo and tests are removed from this snapshot.
+- Aster startup failures with null/non-`Error` rejection values produce a
+  visible retry screen instead of throwing a second TypeError in the failure
+  handler.
 - Local Aster patches must be documented and kept minimal; re-evaluate this
   compatibility patch when updating the pinned upstream snapshot.

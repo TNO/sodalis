@@ -12,6 +12,7 @@
         desktops: [{ id: 'desk-1', name: 'Desktop 1' }, { id: 'desk-2', name: 'Desktop 2' }],
         activeDesktop: 'desk-1', notifications: [], recent: [], customApps: [],
     };
+    OS.startupErrorMessage = error => error instanceof Error ? error.message : error == null ? 'Aster startup failed without an error object.' : String(error);
     const $ = OS.$ = (s, r = document) => r.querySelector(s);
     OS.$$ = (s, r = document) => Array.from(r.querySelectorAll(s));
     OS.esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

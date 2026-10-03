@@ -6,9 +6,11 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite --host 127.0.0.1",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sodalis/avatar": "workspace:*",
     "@sodalis/desktop-host": "workspace:*",
     "mithril": "^2.3.8",
     "mithril-materialized": "^4.0.0"

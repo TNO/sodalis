@@ -1,5 +1,9 @@
 # Sodalis implementation tasks
 
+> Active task status and resumable details are maintained in
+> [`TASKS/README.md`](TASKS/README.md). This file retains the original Phase 0
+> checklist and implementation boundaries.
+
 ## Initial repository slice
 
 - [x] Initialize a pnpm workspace with a strict TypeScript desktop app.
@@ -16,19 +20,12 @@
   tests without bypassing host protection; omit the missing executable from
   service-worker precaching and bump the cache revision.
 
-## Next
+## Phase 1 completion
 
-- [ ] Define `AvatarController` and test the initial avatar state transitions;
-  do not require WebGPU.
-- [ ] Record the runtime protocol/schema-validation decision before adding
-  cross-boundary messages.
-- [ ] Add a trusted-app SDK with semantic context and typed action definitions.
-- [ ] Add the deterministic mock Mail app and test search, read, draft, and
-  confirmation behavior without an LLM.
-- [ ] Add an attention manager that uses semantic targets and respects reduced
-  motion.
-- [ ] Introduce independent STT and TTS provider interfaces with cancellation
-  and deterministic mock providers.
+The sequential Phase 1 avatar implementation tasks are complete; see
+[`TASKS/README.md`](TASKS/README.md), the avatar profile, and ADR 0004. No
+licensed avatar model is included. Later protocol, trusted-app, Mail, speech,
+LLM, memory, and Home Assistant work is outside the Phase 1 scope.
 
 ## Findings and boundaries
 
