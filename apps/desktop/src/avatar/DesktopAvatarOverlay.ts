@@ -2,6 +2,7 @@ import m from "mithril";
 import type { Vnode } from "mithril";
 import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
+import { AvatarConversationCard } from "./AvatarConversationCard.js";
 import { AvatarViewport } from "./AvatarViewport.js";
 import type { AvatarPresentationController } from "./AvatarPresentationController.js";
 
@@ -32,6 +33,8 @@ export const DesktopAvatarOverlay =
     let windowMutationObserver: MutationObserver | undefined;
     let presentation: AvatarPresentationController | undefined;
     let onGeometryChange: (() => void) | undefined;
+    let conversationOpen = false;
+    let restoreAvatarFocus = false;
 
     const updateImportantRegions = () => {
       const document = frame?.contentDocument;
@@ -274,9 +277,17 @@ export const DesktopAvatarOverlay =
         onGeometryChange = vnode.attrs.onGeometryChange;
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
+        if (restoreAvatarFocus && !conversationOpen) {
+          restoreAvatarFocus = false;
+          layer
+            ?.querySelector<HTMLButtonElement>(".avatar-interaction-target")
+            ?.focus();
+        }
       },
 
       onremove() {
+        if (conversationOpen) presentation?.setMode("ambient");
+        conversationOpen = false;
         setPresentation(undefined);
         setFrame(undefined);
         layer = undefined;
@@ -289,6 +300,13 @@ export const DesktopAvatarOverlay =
           onScene: vnode.attrs.onScene,
           gazeOverlay: vnode.attrs.gazeOverlay,
           showGazeTarget: vnode.attrs.showGazeTarget,
+          interactive: true,
+          conversationOpen,
+          onActivate() {
+            conversationOpen = true;
+            presentation?.setMode("conversation");
+            m.redraw();
+          },
         };
         return m(
           ".desktop-avatar-layer",
@@ -296,7 +314,19 @@ export const DesktopAvatarOverlay =
             role: "group",
             "aria-label": "Desktop companion",
           },
-          m(AvatarViewport, viewportAttrs),
+          [
+            m(AvatarViewport, viewportAttrs),
+            conversationOpen
+              ? m(AvatarConversationCard, {
+                  onClose() {
+                    conversationOpen = false;
+                    restoreAvatarFocus = true;
+                    presentation?.setMode("ambient");
+                    m.redraw();
+                  },
+                })
+              : null,
+          ],
         );
       },
     };

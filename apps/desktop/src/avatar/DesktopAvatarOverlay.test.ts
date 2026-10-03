@@ -243,4 +243,81 @@ describe("DesktopAvatarOverlay", () => {
 
     expect(openApplication).toHaveBeenCalledOnce();
   });
+
+  it("opens an accessible conversation when the avatar is activated", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { presentation }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+
+    const activate = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Start a conversation with Sodalis"]',
+    );
+    expect(activate).not.toBeNull();
+    expect(activate?.getAttribute("aria-expanded")).toBe("false");
+    activate?.click();
+
+    expect(presentation.state.mode).toBe("conversation");
+    await vi.waitFor(() => {
+      expect(activate?.getAttribute("aria-expanded")).toBe("true");
+    });
+    await vi.waitFor(() => {
+      expect(
+        host.querySelector(
+          '[role="region"][aria-labelledby="avatar-conversation-title"]',
+        ),
+      ).not.toBeNull();
+    });
+    expect(host.textContent).toContain("How do I reply to this email?");
+
+    const input = host.querySelector<HTMLInputElement>(
+      "#avatar-conversation-input",
+    );
+    if (!input) throw new Error("The conversation input is unavailable.");
+    input.value = "Please show me the Reply button.";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    host
+      .querySelector("form")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Please show me the Reply button.");
+    });
+    expect(host.textContent).toContain(
+      "Live assistant replies are not connected yet.",
+    );
+
+    host
+      .querySelector<HTMLButtonElement>(".avatar-conversation-listening")
+      ?.click();
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Demo listening is stopped.");
+    });
+    expect(
+      host.querySelector(".avatar-conversation-listening")?.textContent,
+    ).toBe("Resume demo listening");
+
+    activate?.focus();
+    host
+      .querySelector<HTMLButtonElement>(".avatar-conversation-close")
+      ?.click();
+    await vi.waitFor(() => {
+      expect(
+        host.querySelector(".avatar-conversation-card"),
+      ).toBeNull();
+    });
+    expect(presentation.state.mode).toBe("ambient");
+    expect(document.activeElement).toBe(activate);
+    expect(activate?.getAttribute("aria-expanded")).toBe("false");
+  });
 });

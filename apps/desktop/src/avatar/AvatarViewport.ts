@@ -13,6 +13,9 @@ interface AvatarViewportAttrs {
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
   gazeOverlay?: string;
   showGazeTarget?: boolean;
+  interactive?: boolean;
+  conversationOpen?: boolean;
+  onActivate?: () => void;
 }
 
 export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
@@ -98,6 +101,21 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
             ? m(
                 "output.avatar-gaze-overlay[aria-live=polite]",
                 vnode.attrs.gazeOverlay ?? "Gaze target: User",
+              )
+            : null,
+          vnode.attrs.interactive &&
+          vnode.attrs.onActivate &&
+          status === `${DEFAULT_AVATAR_ASSET.name} avatar ready.`
+            ? m(
+                "button.avatar-interaction-target[type=button]",
+                {
+                  "aria-label": "Start a conversation with Sodalis",
+                  "aria-expanded": String(vnode.attrs.conversationOpen ?? false),
+                  ...(vnode.attrs.conversationOpen
+                    ? { "aria-controls": "avatar-conversation-card" }
+                    : {}),
+                  onclick: vnode.attrs.onActivate,
+                },
               )
             : null,
           m(

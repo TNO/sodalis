@@ -210,7 +210,7 @@ const DesktopShell = () => {
                 : null,
               m(
                 "p.assistant-note",
-                "Voice-first conversation and optional captions for spoken replies are planned for a later phase.",
+                "Live speech and assistant responses are planned for a later phase.",
               ),
             ]),
           ]),
