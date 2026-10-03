@@ -12,6 +12,7 @@ interface AvatarViewportAttrs {
   targetRegistry?: AvatarUiTargetRegistry;
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
   gazeOverlay?: string;
+  showGazeTarget?: boolean;
 }
 
 export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
@@ -93,7 +94,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
         },
         [
           m("canvas.avatar-canvas[aria-hidden=true]"),
-          import.meta.env.DEV
+          import.meta.env.DEV && vnode.attrs.showGazeTarget
             ? m(
                 "output.avatar-gaze-overlay[aria-live=polite]",
                 vnode.attrs.gazeOverlay ?? "Gaze target: User",

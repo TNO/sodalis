@@ -32,7 +32,9 @@ in this phase.
 ## Desktop avatar presentation
 
 Task 0016 uses the current avatar asset and can proceed independently of the
-asset pipeline and selector tasks. Task 0017 builds on the desktop overlay.
+asset pipeline and selector tasks. Tasks 0017 and 0018 build on the desktop
+overlay.
 
 - [x] 0016 Adding the persistent desktop avatar overlay
-- [ ] 0017 Adding avatar presentation modes *(needs 0016)*
+- [x] 0017 Adding avatar presentation modes *(needs 0016)*
+- [ ] 0018 Improving the avatar's ambient idle pose *(needs 0016)*

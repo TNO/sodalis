@@ -12,6 +12,13 @@ import {
   type AvatarUiTargetRegistry,
 } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
+import {
+  AVATAR_DOCK_POSITIONS,
+  AVATAR_PRESENTATION_MODES,
+  type AvatarDockPosition,
+  type AvatarPresentationController,
+  type AvatarPresentationMode,
+} from "./AvatarPresentationController.js";
 
 export interface AvatarLabState {
   state: AvatarState;
@@ -19,6 +26,7 @@ export interface AvatarLabState {
   framing: AvatarFramingName;
   quality: AvatarQuality;
   reducedMotion: boolean;
+  showGazeTarget: boolean;
   gazeOverlay: string;
   error?: string;
 }
@@ -27,6 +35,7 @@ interface AvatarLabAttrs {
   scene?: AvatarSceneHandle;
   registry: AvatarUiTargetRegistry;
   value: AvatarLabState;
+  presentation?: AvatarPresentationController;
 }
 
 function errorMessage(error: unknown): string {
@@ -64,6 +73,7 @@ export function createAvatarLabState(): AvatarLabState {
     framing: "upper-body",
     quality: "auto",
     reducedMotion: false,
+    showGazeTarget: false,
     gazeOverlay: "Gaze target: User",
   };
 }
@@ -79,12 +89,21 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
 
     view(vnode) {
       const { scene, registry, value } = vnode.attrs;
+      const presentation = vnode.attrs.presentation;
       const controller = scene?.controller;
       const run = (action: () => void) =>
         report(value, () => {
           if (!scene) throw new Error("Avatar scene is not ready.");
           action();
         });
+      const runPresentation = (action: () => void) =>
+        report(value, () => {
+          if (!presentation) {
+            throw new Error("Avatar presentation is not ready.");
+          }
+          action();
+        });
+      const presentationState = presentation?.state;
 
       return m("details.avatar-lab", [
         m("summary", "Avatar Lab"),
@@ -94,6 +113,42 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
             "Developer controls use deterministic motion only; no audio service is connected.",
           ),
           m(".avatar-lab-grid", [
+            m("label.avatar-lab-field", [
+              "Presentation",
+              m(
+                "select",
+                {
+                  value: presentationState?.mode ?? "ambient",
+                  disabled: !presentation,
+                  onchange: (event: Event) => {
+                    const mode = (event.currentTarget as HTMLSelectElement)
+                      .value as AvatarPresentationMode;
+                    runPresentation(() => presentation?.setMode(mode));
+                  },
+                },
+                AVATAR_PRESENTATION_MODES.map((mode) =>
+                  m("option", { value: mode }, mode),
+                ),
+              ),
+            ]),
+            m("label.avatar-lab-field", [
+              "Dock",
+              m(
+                "select",
+                {
+                  value: presentationState?.dock ?? "right",
+                  disabled: !presentation,
+                  onchange: (event: Event) => {
+                    const dock = (event.currentTarget as HTMLSelectElement)
+                      .value as AvatarDockPosition;
+                    runPresentation(() => presentation?.setDock(dock));
+                  },
+                },
+                AVATAR_DOCK_POSITIONS.map((dock) =>
+                  m("option", { value: dock }, dock),
+                ),
+              ),
+            ]),
             m("label.avatar-lab-field", [
               "State",
               m(
@@ -155,12 +210,16 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
               m(
                 "select",
                 {
-                  value: value.framing,
+                  value: presentationState?.framing ?? value.framing,
                   disabled: !scene,
                   onchange: (event: Event) => {
-                    value.framing = (event.currentTarget as HTMLSelectElement)
+                    const framing = (event.currentTarget as HTMLSelectElement)
                       .value as AvatarFramingName;
-                    run(() => scene?.setFraming(value.framing));
+                    value.framing = framing;
+                    run(() => {
+                      if (presentation) presentation.setFraming(framing);
+                      else scene?.setFraming(framing);
+                    });
                   },
                 },
                 AVATAR_FRAMINGS.map((framing) =>
@@ -195,10 +254,58 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
                 value.reducedMotion = (
                   event.currentTarget as HTMLInputElement
                 ).checked;
-                run(() => controller?.setReducedMotion(value.reducedMotion));
+                run(() => {
+                  controller?.setReducedMotion(value.reducedMotion);
+                  presentation?.setReducedMotion(value.reducedMotion);
+                });
               },
             }),
             " Reduce incidental motion",
+          ]),
+          m("label.avatar-lab-motion", [
+            m("input[type=checkbox]", {
+              checked: presentationState?.visible ?? true,
+              disabled: !presentation,
+              onchange: (event: Event) => {
+                const visible = (
+                  event.currentTarget as HTMLInputElement
+                ).checked;
+                runPresentation(() => {
+                  if (!presentation) return;
+                  if (visible) presentation.show();
+                  else presentation.hide();
+                });
+              },
+            }),
+            " Show avatar on desktop",
+          ]),
+          m("label.avatar-lab-field", [
+            `Size · ${(presentationState?.scale ?? 1).toFixed(2)}×`,
+            m("input[type=range]", {
+              min: 0.75,
+              max: 1.25,
+              step: 0.05,
+              value: presentationState?.scale ?? 1,
+              "aria-label": "Avatar presentation size",
+              disabled: !presentation,
+              oninput: (event: Event) => {
+                const scale = Number(
+                  (event.currentTarget as HTMLInputElement).value,
+                );
+                runPresentation(() => presentation?.setScale(scale));
+              },
+            }),
+          ]),
+          m("label.avatar-lab-motion", [
+            m("input[type=checkbox]", {
+              checked: value.showGazeTarget,
+              onchange: (event: Event) => {
+                value.showGazeTarget = (
+                  event.currentTarget as HTMLInputElement
+                ).checked;
+              },
+            }),
+            " Show gaze target on desktop",
           ]),
           m(
             "output.avatar-lab-fps[aria-live=polite]",

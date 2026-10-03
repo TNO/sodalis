@@ -7,6 +7,7 @@ import {
   createAvatarScene,
   type AvatarSceneHandle,
 } from "@sodalis/avatar/internal/scene";
+import { createAvatarPresentationController } from "./AvatarPresentationController.js";
 import { DesktopAvatarOverlay } from "./DesktopAvatarOverlay.js";
 
 vi.mock("@sodalis/avatar/internal/scene", () => ({
@@ -90,6 +91,118 @@ describe("DesktopAvatarOverlay", () => {
     m.mount(host, null);
     mountedHost = undefined;
     expect(scene.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("aligns the avatar floor with the live taskbar without reloading the avatar", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const frame = document.createElement("iframe");
+    document.body.append(frame);
+    const innerDocument = frame.contentDocument;
+    if (!innerDocument) throw new Error("The iframe document is unavailable.");
+    const taskbar = innerDocument.createElement("nav");
+    taskbar.id = "taskbar";
+    innerDocument.body.append(taskbar);
+    let taskbarBounds = new DOMRect(0, 700, 872, 48);
+    vi.spyOn(frame, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 872, 768),
+    );
+    vi.spyOn(taskbar, "getBoundingClientRect").mockImplementation(
+      () => taskbarBounds,
+    );
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { frame }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+
+    const layer = host.querySelector<HTMLElement>(".desktop-avatar-layer");
+    expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
+      "calc(100% - 700px - 3px)",
+    );
+
+    taskbarBounds = new DOMRect(0, 650, 872, 48);
+    frame.contentWindow?.dispatchEvent(new Event("resize"));
+    expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
+      "calc(100% - 650px - 3px)",
+    );
+
+    taskbarBounds = new DOMRect(0, 768, 0, 0);
+    frame.contentWindow?.dispatchEvent(new Event("resize"));
+    expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
+      "calc(100% - 768px - 3px)",
+    );
+
+    taskbarBounds = new DOMRect(0, 0, 48, 768);
+    frame.contentWindow?.dispatchEvent(new Event("resize"));
+    expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
+      "calc(100% - 768px - 3px)",
+    );
+
+    taskbarBounds = new DOMRect(0, 0, 872, 48);
+    frame.contentWindow?.dispatchEvent(new Event("resize"));
+    expect(layer?.style.getPropertyValue("--avatar-taskbar-bottom")).toBe(
+      "calc(100% - 48px - 3px)",
+    );
+    expect(scene.controller.load).toHaveBeenCalledOnce();
+  });
+
+  it("docks away from visible Aster windows", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const frame = document.createElement("iframe");
+    document.body.append(frame);
+    const innerDocument = frame.contentDocument;
+    if (!innerDocument) throw new Error("The iframe document is unavailable.");
+    const windowLayer = innerDocument.createElement("div");
+    windowLayer.id = "window-layer";
+    const desktopWindow = innerDocument.createElement("section");
+    desktopWindow.className = "window";
+    windowLayer.append(desktopWindow);
+    innerDocument.body.append(windowLayer);
+    vi.spyOn(frame, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 1000, 700),
+    );
+    vi.spyOn(desktopWindow, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(800, 280, 200, 350),
+    );
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: {
+        getItem: () => null,
+        setItem: vi.fn(),
+      },
+      onError: vi.fn(),
+    });
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { frame, presentation }),
+    });
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+
+    const layer = host.querySelector<HTMLElement>(".desktop-avatar-layer");
+    const viewport = host.querySelector<HTMLElement>(".avatar-viewport");
+    if (!layer || !viewport) throw new Error("The avatar layer is unavailable.");
+    vi.spyOn(layer, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 1000, 700),
+    );
+    vi.spyOn(viewport, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(800, 300, 180, 300),
+    );
+
+    presentation.setDock("auto");
+
+    expect(presentation.state.effectiveDock).toBe("left");
+    expect(layer.dataset.effectiveDock).toBe("left");
   });
 
   it("keeps desktop controls available when avatar initialization fails", async () => {

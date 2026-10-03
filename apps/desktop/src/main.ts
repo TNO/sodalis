@@ -2,6 +2,7 @@ import m from "mithril";
 import { Button, ThemeManager } from "mithril-materialized";
 import { createAvatarUiTargetRegistry } from "@sodalis/avatar";
 import { DesktopAvatarOverlay } from "./avatar/DesktopAvatarOverlay.js";
+import { createAvatarPresentationController } from "./avatar/AvatarPresentationController.js";
 import {
   createAvatarLab,
   createAvatarLabState,
@@ -28,15 +29,28 @@ const DesktopShell = () => {
     applications: DesktopApplication[];
     status: string;
     error?: string;
+    presentationError?: string;
     avatarScene?: AvatarSceneHandle;
+    desktopFrame?: HTMLIFrameElement;
     avatarLab: ReturnType<typeof createAvatarLabState>;
   } = {
     applications: [],
     status: "Connecting to the desktop…",
     avatarLab: createAvatarLabState(),
   };
+  const presentation = createAvatarPresentationController({
+    onChange: m.redraw,
+    onError(error) {
+      state.presentationError = error.message;
+      m.redraw();
+    },
+    onFramingChange(framing) {
+      state.avatarScene?.setFraming(framing);
+    },
+  });
 
   const connect = async (frame: HTMLIFrameElement) => {
+    state.desktopFrame = frame;
     state.status = "Connecting to the desktop…";
     state.error = undefined;
     try {
@@ -111,9 +125,11 @@ const DesktopShell = () => {
               m(DesktopAvatarOverlay, {
                 targetRegistry: avatarTargetRegistry,
                 gazeOverlay: state.avatarLab.gazeOverlay,
+                showGazeTarget: state.avatarLab.showGazeTarget,
+                frame: state.desktopFrame,
                 onScene(scene) {
                   if (scene) {
-                    scene.setFraming(state.avatarLab.framing);
+                    scene.setFraming(presentation.state.framing);
                     scene.setQuality(state.avatarLab.quality);
                     scene.controller.setReducedMotion(
                       state.avatarLab.reducedMotion,
@@ -122,6 +138,7 @@ const DesktopShell = () => {
                   state.avatarScene = scene;
                   m.redraw();
                 },
+                presentation,
               }),
             ],
           ),
@@ -156,6 +173,7 @@ const DesktopShell = () => {
                   scene: state.avatarScene,
                   registry: avatarTargetRegistry,
                   value: state.avatarLab,
+                  presentation,
                 })
               : null,
             m(
@@ -168,6 +186,9 @@ const DesktopShell = () => {
             ]),
             state.error
               ? m("p.connection-error[role=alert]", state.error)
+              : null,
+            state.presentationError
+              ? m("p.connection-error[role=alert]", state.presentationError)
               : null,
             m(
               "p.assistant-note",

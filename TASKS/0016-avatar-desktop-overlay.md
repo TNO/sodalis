@@ -35,6 +35,11 @@ tasks.
 - Existing Avatar Lab continues to work.
 - Avatar failure does not prevent normal desktop operation.
 - Existing avatar lifecycle/disposal behavior remains correct.
+- The avatar's visible floor aligns with the live taskbar or desktop edge, with
+  a small overlap and no fixed-resolution position.
+- Gaze diagnostics are hidden by default and can be enabled from Avatar Lab.
+- Preserve the existing avatar dimensions and pass pointer events through the
+  transparent overlay.
 
 ## Implementation Notes
 
@@ -50,6 +55,8 @@ tasks.
 - Avoid hard-coded pixel positioning that only works at the current desktop
   size.
 - Ensure touch and pointer-event behavior is tested.
+- Measure the same-origin Aster taskbar from its iframe and update on desktop
+  resize, taskbar resize, or dock-position changes.
 
 ## Agent Notes
 
@@ -66,3 +73,15 @@ tasks.
   interactive. Covered persistence, failure isolation, resize without another
   avatar load, app open/close, and mobile panning in tests and browser checks.
   Workspace tests, typecheck, and production build passed.
+- 2026-10-03: Reopened for follow-up presentation refinements: measure Aster's
+  live taskbar geometry for avatar floor placement, move it slightly closer to
+  the right edge without changing its size, and make gaze diagnostics opt-in.
+  The current controller only provides head motion and gestures; neutral body
+  idle variation is tracked separately in 0018.
+- 2026-10-03: Measured the live taskbar inside the Aster iframe and aligned the
+  avatar viewport floor to its inward edge with a 3px visual overlap. The
+  measurement responds to resizing and dock geometry, while preserving the
+  existing avatar dimensions and keeping the overlay pointer-transparent.
+  Added the Avatar Lab gaze-diagnostic toggle (off by default) and recorded
+  neutral ambient body animation as task 0018. Desktop tests, typecheck, build,
+  and browser checks passed.

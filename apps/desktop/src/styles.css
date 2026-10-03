@@ -189,20 +189,48 @@ body {
 
 .desktop-avatar-layer .avatar-viewport {
   position: absolute;
-  right: clamp(0.75rem, 2.5%, 1.5rem);
-  bottom: clamp(3.5rem, 9%, 5rem);
-  width: clamp(11rem, 31%, 19rem);
+  --avatar-width: clamp(11rem, 31%, 19rem);
+  --avatar-edge-margin: clamp(0.5rem, 1.5%, 1rem);
+  left: calc(100% - var(--avatar-width) - var(--avatar-edge-margin));
+  right: auto;
+  bottom: var(--avatar-taskbar-bottom, clamp(3.5rem, 9%, 5rem));
+  width: var(--avatar-width);
   height: clamp(13rem, 37%, 22rem);
   min-height: 0;
   overflow: visible;
   border: 0;
   border-radius: 0;
   background: transparent;
+  transform: scale(var(--avatar-presentation-scale, 1));
+  transform-origin: bottom right;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    left var(--avatar-transition-duration, 360ms) ease,
+    transform var(--avatar-transition-duration, 360ms) ease,
+    opacity var(--avatar-transition-duration, 360ms) ease;
   pointer-events: none;
+}
+
+.desktop-avatar-layer[data-visible="false"] .avatar-viewport {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    left var(--avatar-transition-duration, 360ms) ease,
+    transform var(--avatar-transition-duration, 360ms) ease,
+    opacity var(--avatar-transition-duration, 360ms) ease,
+    visibility 0s linear var(--avatar-transition-duration, 360ms);
 }
 
 .desktop-avatar-layer .avatar-viewport-retry {
   pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-avatar-layer .avatar-viewport,
+  .desktop-avatar-layer[data-visible="false"] .avatar-viewport {
+    transition: none;
+  }
 }
 
 .assistant-panel {

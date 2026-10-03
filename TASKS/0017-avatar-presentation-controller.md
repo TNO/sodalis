@@ -1,6 +1,6 @@
 # 0017 Avatar presentation controller
 
-Status: open
+Status: done
 Priority: high
 Subsystem: frontend
 Depends on: 0016
@@ -70,3 +70,11 @@ interface AvatarPresentationController {
 ## Agent Notes
 
 - 2026-10-03: Recorded as a follow-up to 0016. Not yet implemented.
+- 2026-10-03: Started the presentation controller and Avatar Lab integration.
+  The controller will own presentation mode, dock/visibility preferences,
+  scale, framing, important-region collision scoring, and motion-aware CSS
+  transitions; it will not subscribe to AvatarController behavioral states.
+- 2026-10-03: Implemented the presentation controller, Avatar Lab controls,
+  window-aware automatic docking, persisted dock/visibility preferences, and
+  reduced-motion transitions. Validated with the full workspace tests/build
+  and browser interaction; no significant code-review issues found.
