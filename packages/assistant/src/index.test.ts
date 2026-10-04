@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  createAssistantActionRuntime,
+  type AppActionDefinition,
+} from "./AssistantActions.js";
 import type {
   ConversationAudioOutput,
   ConversationMessage,
@@ -28,7 +32,181 @@ function createAudioOutput(
   };
 }
 
+function createSendAction(
+  execute: AppActionDefinition["execute"],
+): AppActionDefinition {
+  return {
+    id: "mail.send",
+    description: "Send one mock email.",
+    risk: "external-effect",
+    requiresConfirmation: true,
+    inputSchema: {
+      type: "object",
+      properties: {
+        to: { type: "string" },
+        subject: { type: "string" },
+        body: { type: "string" },
+      },
+      required: ["to", "subject", "body"],
+      additionalProperties: false,
+    },
+    confirmationPhrase: "confirm send",
+    confirmationSummary: ({ to, subject }) =>
+      `Send "${String(subject)}" to ${String(to)}?`,
+    execute,
+  };
+}
+
 describe("ConversationOrchestrator", () => {
+  it("holds model-requested external actions until explicit user confirmation", async () => {
+    const execute = vi.fn(async () => "Sent mock message to Anne.");
+    const actionRuntime = createAssistantActionRuntime([
+      createSendAction(execute),
+    ]);
+    let callCount = 0;
+    const audioOutput = createAudioOutput();
+    const orchestrator = new ConversationOrchestrator({
+      provider: createProvider(async function* (request) {
+        callCount += 1;
+        if (callCount === 1) {
+          yield {
+            sessionId: request.sessionId,
+            turnId: request.turnId,
+            sequence: 0,
+            text: JSON.stringify({
+              text: "I will send this now.",
+              affect: { expression: "warm", valence: 0.2, arousal: 0.2, intensity: 0.2 },
+              action: {
+                id: "mail.send",
+                arguments: {
+                  to: "anne@example.test",
+                  subject: "Project update",
+                  body: "The timeline is ready.",
+                },
+              },
+            }),
+          };
+          return;
+        }
+        yield {
+          sessionId: request.sessionId,
+          turnId: request.turnId,
+          sequence: 0,
+          text: JSON.stringify({
+            text: "What would you like to do?",
+            affect: { expression: "warm", valence: 0.2, arousal: 0.2, intensity: 0.2 },
+          }),
+        };
+      }),
+      audioOutput,
+      actionRuntime,
+    });
+
+    await orchestrator.submitUserMessage("Send Anne an update.");
+
+    const pending = orchestrator.state.pendingConfirmation;
+    expect(orchestrator.state.state).toBe("awaiting-confirmation");
+    expect(orchestrator.state.assistantText).toContain("confirm send");
+    expect(execute).not.toHaveBeenCalled();
+    expect(audioOutput.speak.mock.calls[0]?.[0].text).toBe(
+      orchestrator.state.assistantText,
+    );
+    if (!pending) throw new Error("The send action was not held for confirmation.");
+
+    await orchestrator.submitUserMessage("yes");
+
+    expect(actionRuntime.getPendingConfirmation()).toBeUndefined();
+    expect(execute).not.toHaveBeenCalled();
+    expect(orchestrator.state.assistantText).toBe("What would you like to do?");
+    expect(callCount).toBe(2);
+  });
+
+  it("executes only the stored action after GUI confirmation", async () => {
+    const execute = vi.fn(async () => "Sent mock message to Anne.");
+    const actionRuntime = createAssistantActionRuntime([
+      createSendAction(execute),
+    ]);
+    const orchestrator = new ConversationOrchestrator({
+      provider: createProvider(async function* (request) {
+        yield {
+          sessionId: request.sessionId,
+          turnId: request.turnId,
+          sequence: 0,
+          text: JSON.stringify({
+            text: "I will send this now.",
+            affect: { expression: "warm", valence: 0.2, arousal: 0.2, intensity: 0.2 },
+            action: {
+              id: "mail.send",
+              arguments: {
+                to: "anne@example.test",
+                subject: "Project update",
+                body: "The timeline is ready.",
+              },
+            },
+          }),
+        };
+      }),
+      audioOutput: createAudioOutput(),
+      actionRuntime,
+    });
+    await orchestrator.submitUserMessage("Send Anne an update.");
+    const pending = orchestrator.state.pendingConfirmation;
+    if (!pending) throw new Error("The send action was not held for confirmation.");
+
+    await orchestrator.confirmPendingAction(pending.id);
+
+    expect(execute).toHaveBeenCalledWith({
+      to: "anne@example.test",
+      subject: "Project update",
+      body: "The timeline is ready.",
+    });
+    expect(orchestrator.state.assistantText).toBe(
+      "Sent mock message to Anne.",
+    );
+    expect(orchestrator.state.pendingConfirmation).toBeUndefined();
+  });
+
+  it("executes the stored action from its explicit conversational confirmation phrase", async () => {
+    const execute = vi.fn(async () => "Sent mock message to Anne.");
+    const actionRuntime = createAssistantActionRuntime([
+      createSendAction(execute),
+    ]);
+    let providerCalls = 0;
+    const orchestrator = new ConversationOrchestrator({
+      provider: createProvider(async function* (request) {
+        providerCalls += 1;
+        yield {
+          sessionId: request.sessionId,
+          turnId: request.turnId,
+          sequence: 0,
+          text: JSON.stringify({
+            text: "I will send this now.",
+            affect: { expression: "warm", valence: 0.2, arousal: 0.2, intensity: 0.2 },
+            action: {
+              id: "mail.send",
+              arguments: {
+                to: "anne@example.test",
+                subject: "Project update",
+                body: "The timeline is ready.",
+              },
+            },
+          }),
+        };
+      }),
+      audioOutput: createAudioOutput(),
+      actionRuntime,
+    });
+
+    await orchestrator.submitUserMessage("Send Anne an update.");
+    await orchestrator.submitUserMessage("confirm send");
+
+    expect(execute).toHaveBeenCalledOnce();
+    expect(providerCalls).toBe(1);
+    expect(orchestrator.state.assistantText).toBe(
+      "Sent mock message to Anne.",
+    );
+  });
+
   it("validates structured utterances and uses the same text for captions and speech", async () => {
     const audioOutput = createAudioOutput();
     const utterances: unknown[] = [];

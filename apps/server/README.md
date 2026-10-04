@@ -82,3 +82,12 @@ validates and clamps affect before using the existing avatar controller; only
 the validated `text` is captioned, spoken, and retained in conversation
 history. Configure a local or otherwise trusted endpoint appropriate for the
 data Sodalis may send.
+
+The desktop also sends its registered semantic action descriptions to the LLM
+for discovery. Action execution remains in the desktop's trusted action
+registry; external-effect and destructive risks always require a separate
+confirmation, regardless of the LLM response. Confirmation is bound to the
+pending action and arguments, and conversational confirmation requires the
+action-specific phrase shown in the companion card. The initial Mail actions
+operate on deterministic in-memory fixtures only; mock sending never delivers
+real email.

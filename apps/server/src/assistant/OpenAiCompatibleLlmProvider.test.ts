@@ -43,6 +43,21 @@ describe("OpenAiCompatibleLlmProvider", () => {
         appName: "Mail",
         category: "Productivity",
       },
+      availableActions: [
+        {
+          id: "mail.send",
+          description: "Send a message.",
+          risk: "external-effect",
+          requiresConfirmation: true,
+          confirmationPhrase: "confirm send",
+          inputSchema: {
+            type: "object",
+            properties: { to: { type: "string" } },
+            required: ["to"],
+            additionalProperties: false,
+          },
+        },
+      ],
       signal: new AbortController().signal,
     })) {
       chunks.push(text);
@@ -65,6 +80,7 @@ describe("OpenAiCompatibleLlmProvider", () => {
         { role: "user", content: "Hallo." },
       ],
     });
+    expect(JSON.stringify(requestBody)).toContain("mail.send");
   });
 
   it("surfaces provider failures and rejects non-stream responses", async () => {

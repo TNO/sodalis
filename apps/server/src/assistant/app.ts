@@ -1,5 +1,9 @@
 import { Hono, type Context } from "hono";
 import type {
+  AppActionInputProperty,
+  AppActionInputSchema,
+  AppActionRisk,
+  AvailableAppAction,
   AssistantAppContext,
   ConversationMessage,
 } from "@sodalis/assistant";
@@ -12,9 +16,18 @@ interface AssistantAppOptions {
 
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_MESSAGES = 13;
+const MAX_AVAILABLE_ACTIONS = 32;
+const MAX_ACTION_DESCRIPTION = 1_000;
 const MAX_MESSAGE_LENGTH = 12_000;
 const MAX_CONTEXT_TEXT = 160;
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+const ACTION_RISKS = [
+  "read",
+  "navigate",
+  "draft",
+  "external-effect",
+  "destructive",
+] as const satisfies readonly AppActionRisk[];
 
 class BodyLimitError extends Error {}
 
@@ -103,6 +116,119 @@ function readAppContext(value: unknown): AssistantAppContext | undefined | null 
   };
 }
 
+function readAvailableActions(
+  value: unknown,
+): AvailableAppAction[] | undefined | null {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_AVAILABLE_ACTIONS) {
+    return null;
+  }
+  const actions: AvailableAppAction[] = [];
+  const ids = new Set<string>();
+  for (const item of value) {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== "string" ||
+      !ID_PATTERN.test(item.id) ||
+      ids.has(item.id) ||
+      typeof item.description !== "string" ||
+      !item.description.trim() ||
+      item.description.length > MAX_ACTION_DESCRIPTION ||
+      !ACTION_RISKS.includes(item.risk as AppActionRisk) ||
+      typeof item.requiresConfirmation !== "boolean" ||
+      !isRecord(item.inputSchema) ||
+      item.inputSchema.type !== "object" ||
+      !isRecord(item.inputSchema.properties) ||
+      Object.keys(item.inputSchema.properties).length > 64
+    ) {
+      return null;
+    }
+    const properties = Object.create(null) as Record<
+      string,
+      AppActionInputProperty
+    >;
+    for (const [name, property] of Object.entries(item.inputSchema.properties)) {
+      if (
+        !isRecord(property) ||
+        !["string", "number", "boolean"].includes(String(property.type)) ||
+        (property.description !== undefined &&
+          (typeof property.description !== "string" ||
+            property.description.length > MAX_ACTION_DESCRIPTION)) ||
+        (property.maxLength !== undefined &&
+          (typeof property.maxLength !== "number" ||
+            !Number.isInteger(property.maxLength) ||
+            property.maxLength < 0)) ||
+        (property.enum !== undefined &&
+          (!Array.isArray(property.enum) ||
+            property.enum.length > 32 ||
+            !property.enum.every(
+              (entry) =>
+                typeof entry === "string" ||
+                typeof entry === "boolean" ||
+                (typeof entry === "number" && Number.isFinite(entry)),
+            )))
+      ) {
+        return null;
+      }
+      properties[name] = {
+        type: property.type as AppActionInputProperty["type"],
+        ...(typeof property.description === "string"
+          ? { description: property.description }
+          : {}),
+        ...(typeof property.maxLength === "number"
+          ? { maxLength: property.maxLength }
+          : {}),
+        ...(Array.isArray(property.enum)
+          ? { enum: property.enum as AppActionInputProperty["enum"] }
+          : {}),
+      };
+    }
+    const required = item.inputSchema.required;
+    if (
+      (required !== undefined &&
+        (!Array.isArray(required) ||
+          required.length > 64 ||
+          !required.every(
+            (field) =>
+              typeof field === "string" &&
+              Object.hasOwn(properties, field),
+          ))) ||
+      (item.inputSchema.additionalProperties !== undefined &&
+        typeof item.inputSchema.additionalProperties !== "boolean") ||
+      (item.confirmationPhrase !== undefined &&
+        (typeof item.confirmationPhrase !== "string" ||
+          item.confirmationPhrase.length > 100))
+    ) {
+      return null;
+    }
+    ids.add(item.id);
+    const risk = item.risk as AppActionRisk;
+    actions.push({
+      id: item.id,
+      description: item.description,
+      risk,
+      requiresConfirmation:
+        item.requiresConfirmation ||
+        risk === "external-effect" ||
+        risk === "destructive",
+      inputSchema: {
+        type: "object",
+        properties,
+        ...(Array.isArray(required)
+          ? { required: required as string[] }
+          : {}),
+        ...(typeof item.inputSchema.additionalProperties === "boolean"
+          ? { additionalProperties: item.inputSchema.additionalProperties }
+          : {}),
+      } satisfies AppActionInputSchema,
+      ...(typeof item.confirmationPhrase === "string"
+        ? { confirmationPhrase: item.confirmationPhrase }
+        : {}),
+    });
+  }
+  return actions;
+}
+
 export function createAssistantApp(options: AssistantAppOptions = {}) {
   const maxConcurrentRequests = options.maxConcurrentRequests ?? 4;
   if (!Number.isInteger(maxConcurrentRequests) || maxConcurrentRequests < 1) {
@@ -149,13 +275,15 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
     const turnId = payload.turnId;
     const messages = readMessages(payload.messages);
     const appContext = readAppContext(payload.appContext);
+    const availableActions = readAvailableActions(payload.availableActions);
     if (
       typeof sessionId !== "string" ||
       !ID_PATTERN.test(sessionId) ||
       typeof turnId !== "string" ||
       !ID_PATTERN.test(turnId) ||
       !messages ||
-      appContext === null
+      appContext === null ||
+      availableActions === null
     ) {
       return errorResponse(context, "Assistant turn is invalid.", 400);
     }
@@ -181,6 +309,7 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
           for await (const text of provider.generate({
             messages,
             ...(appContext ? { appContext } : {}),
+            ...(availableActions ? { availableActions } : {}),
             signal: abortController.signal,
           })) {
             abortController.signal.throwIfAborted();

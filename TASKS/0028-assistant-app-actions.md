@@ -1,6 +1,6 @@
 # 0028 Assistant app actions
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0026, 0027

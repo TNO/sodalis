@@ -15,6 +15,7 @@ import {
   type DesktopApplication,
   type DesktopHost,
 } from "@sodalis/desktop-host";
+import { createDesktopAssistantActionRuntime } from "./assistant/createDesktopAssistantActions.js";
 import "mithril-materialized/index.css";
 import "./styles.css";
 
@@ -55,6 +56,10 @@ const DesktopShell = () => {
     registry: avatarTargetRegistry,
     presentation,
     getAvatarController: () => state.avatarScene?.controller,
+  });
+  const actionRuntime = createDesktopAssistantActionRuntime({
+    getHost: () => state.host,
+    attention,
   });
 
   const connect = async (frame: HTMLIFrameElement) => {
@@ -159,6 +164,7 @@ const DesktopShell = () => {
                     m.redraw();
                   },
                   presentation,
+                  actionRuntime,
                   onSpeechInput(controller) {
                     state.speechInput = controller;
                   },

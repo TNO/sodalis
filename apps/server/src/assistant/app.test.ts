@@ -43,6 +43,53 @@ describe("assistant turn API", () => {
     );
   });
 
+  it("passes validated semantic actions to generation and enforces risk metadata", async () => {
+    let availableActions: unknown;
+    const provider: LlmTextGenerationProvider = {
+      id: "fake-llm",
+      async *generate(request) {
+        availableActions = request.availableActions;
+        yield "structured";
+      },
+    };
+    const app = createAssistantApp({ provider });
+    const actions = [
+      {
+        id: "mail.send",
+        description: "Send a mock message.",
+        risk: "external-effect",
+        requiresConfirmation: false,
+        confirmationPhrase: "confirm send",
+        inputSchema: {
+          type: "object",
+          properties: { to: { type: "string" } },
+          required: ["to"],
+          additionalProperties: false,
+        },
+      },
+    ];
+    const response = await app.request("/api/assistant/turns", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...turn, availableActions: actions }),
+    });
+    await response.text();
+
+    expect(response.status).toBe(200);
+    expect(availableActions).toMatchObject([
+      { id: "mail.send", requiresConfirmation: true },
+    ]);
+    const invalid = await app.request("/api/assistant/turns", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...turn,
+        availableActions: [{ ...actions[0], inputSchema: { type: "array" } }],
+      }),
+    });
+    expect(invalid.status).toBe(400);
+  });
+
   it("validates request history and reports missing configuration", async () => {
     const generate = vi.fn(async function* () {
       yield "No.";

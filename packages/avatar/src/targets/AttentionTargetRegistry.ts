@@ -32,6 +32,7 @@ export interface AttentionTargetRegistry {
   readonly kind: "semantic";
   register(target: AttentionTargetRegistration): () => void;
   resolve(id: string): AttentionTarget | undefined;
+  list(): AttentionTarget[];
 }
 
 export interface AvatarUiTargetRegistry {
@@ -219,6 +220,12 @@ function createTargetStore() {
       };
     },
 
+    list(): AttentionTarget[] {
+      return Array.from(targets.keys(), (id) => this.resolve(id)).filter(
+        (target): target is AttentionTarget => target !== undefined,
+      );
+    },
+
     resolveLegacy(id: string): AvatarUiTargetBounds | undefined {
       const target = targets.get(id);
       if (!target) return undefined;
@@ -244,6 +251,7 @@ export function createAttentionTargetRegistry(): AttentionTargetRegistry {
     kind: "semantic",
     register: (target) => store.registerSemantic(target),
     resolve: (id) => store.resolve(id),
+    list: () => store.list(),
   };
 }
 

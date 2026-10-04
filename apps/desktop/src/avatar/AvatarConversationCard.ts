@@ -1,6 +1,9 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
-import type { ConversationState } from "@sodalis/assistant";
+import type {
+  ConversationState,
+  PendingActionConfirmation,
+} from "@sodalis/assistant";
 import type { SpeechInputController } from "@sodalis/speech";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
 
@@ -15,11 +18,14 @@ interface AvatarConversationCardAttrs {
   speechPlaying?: boolean;
   conversationState?: ConversationState;
   conversationError?: string;
+  pendingConfirmation?: PendingActionConfirmation;
   onSpeechError?: (error: Error) => void;
   onSpeechOutputError?: (error: Error) => void;
   onSpeak?: (text: string) => Promise<void>;
   onStopSpeaking?: () => void;
   onCancelTurn?: () => void;
+  onConfirmAction?: (confirmationId: string) => Promise<void>;
+  onCancelAction?: (confirmationId: string) => void;
   onSend?: (text: string) => Promise<void>;
   onConversationError?: (error: Error) => void;
   onClose: () => void;
@@ -116,6 +122,7 @@ export const AvatarConversationCard =
 
       view(vnode: Vnode<AvatarConversationCardAttrs>) {
         const speechInput = vnode.attrs.speechInput;
+        const pendingConfirmation = vnode.attrs.pendingConfirmation;
         const speechState = speechInput?.state;
         const requestingPermission =
           speechState?.status === "requesting-permission";
@@ -127,6 +134,8 @@ export const AvatarConversationCard =
               ? `Assistant error: ${vnode.attrs.conversationError}`
             : vnode.attrs.speechOutputError
               ? `Speech output error: ${vnode.attrs.speechOutputError}`
+            : vnode.attrs.conversationState === "awaiting-confirmation"
+              ? "An application action needs your confirmation."
             : vnode.attrs.conversationState === "thinking"
               ? "Sodalis is thinking."
               : vnode.attrs.conversationState === "transcribing"
@@ -307,6 +316,63 @@ export const AvatarConversationCard =
                     disabled: !vnode.attrs.onCancelTurn,
                   },
                   "Cancel response",
+                )
+              : null,
+            pendingConfirmation
+              ? m(
+                  "section.avatar-conversation-confirmation[role=group][aria-labelledby=avatar-action-confirmation-title]",
+                  [
+                    m(
+                      "h3#avatar-action-confirmation-title",
+                      "Confirm this action",
+                    ),
+                    m(
+                      "p.avatar-conversation-confirmation-summary",
+                      pendingConfirmation.summary,
+                    ),
+                    m(
+                      "p.avatar-conversation-confirmation-phrase",
+                      `By voice, say "${pendingConfirmation.confirmationPhrase}" to approve.`,
+                    ),
+                    m(
+                      "div.avatar-conversation-confirmation-actions",
+                      [
+                        m(
+                          "button[type=button]",
+                          {
+                            onclick: () => {
+                              const confirm = vnode.attrs.onConfirmAction;
+                              if (!confirm) return;
+                              void confirm(pendingConfirmation.id).catch(
+                                (error: unknown) => {
+                                  const normalized =
+                                    error instanceof Error
+                                      ? error
+                                      : new Error(String(error));
+                                  vnode.attrs.onConversationError?.(
+                                    normalized,
+                                  );
+                                },
+                              );
+                            },
+                            disabled: !vnode.attrs.onConfirmAction,
+                          },
+                          "Confirm action",
+                        ),
+                        m(
+                          "button[type=button]",
+                          {
+                            onclick: () =>
+                              vnode.attrs.onCancelAction?.(
+                                pendingConfirmation.id,
+                              ),
+                            disabled: !vnode.attrs.onCancelAction,
+                          },
+                          "Cancel action",
+                        ),
+                      ],
+                    ),
+                  ],
                 )
               : null,
             m(

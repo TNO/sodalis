@@ -89,6 +89,9 @@ export class ServerLlmProvider implements LlmProvider {
         turnId: request.turnId,
         messages: request.messages,
         ...(request.appContext ? { appContext: request.appContext } : {}),
+        ...(request.availableActions
+          ? { availableActions: request.availableActions }
+          : {}),
       }),
       signal: request.signal,
     });

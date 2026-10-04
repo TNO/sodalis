@@ -1,4 +1,5 @@
 import type {
+  AvailableAppAction,
   AssistantAppContext,
   ConversationMessage,
 } from "@sodalis/assistant";
@@ -6,6 +7,7 @@ import type {
 export interface LlmGenerationRequest {
   readonly messages: readonly ConversationMessage[];
   readonly appContext?: AssistantAppContext;
+  readonly availableActions?: readonly AvailableAppAction[];
   readonly signal: AbortSignal;
 }
 
@@ -117,10 +119,11 @@ export class OpenAiCompatibleLlmProvider
     const systemPrompt = [
       "You are Sodalis, a concise personal desktop assistant.",
       "Respond in the user's language using exactly one JSON object and no Markdown.",
-      'The object schema is {"text":string,"affect":{"expression":"neutral"|"warm"|"happy"|"concerned"|"sad"|"surprised"|"reassuring","valence":number,"arousal":number,"intensity":number},"gesture"?: "nod"|"shake-head"|"acknowledge"|"none","interruptible":boolean}.',
+      'The object schema is {"text":string,"affect":{"expression":"neutral"|"warm"|"happy"|"concerned"|"sad"|"surprised"|"reassuring","valence":number,"arousal":number,"intensity":number},"gesture"?: "nod"|"shake-head"|"acknowledge"|"none","interruptible":boolean,"action"?: {"id":string,"arguments":object}}.',
       "Keep affect restrained and use low arousal and intensity for normal conversation; use a gesture only when it adds clear value.",
       "The text field is the exact user-facing caption and spoken response.",
-      "You do not have tools or permission to operate applications; never claim to have taken an action.",
+      "Use at most one action per response and only an action ID from the available action list. Do not claim that an action succeeded before the application reports its result, and never claim user confirmation.",
+      `Available semantic actions: ${JSON.stringify(request.availableActions ?? [])}.`,
       appDescription,
     ].join(" ");
     const headers: Record<string, string> = {

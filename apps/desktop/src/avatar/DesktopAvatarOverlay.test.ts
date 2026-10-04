@@ -2,6 +2,10 @@
 
 import m from "mithril";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  createAssistantActionRuntime,
+  type AppActionDefinition,
+} from "@sodalis/assistant";
 import type { AvatarBehaviorController } from "@sodalis/avatar";
 import {
   createAvatarScene,
@@ -413,6 +417,131 @@ describe("DesktopAvatarOverlay", () => {
       expect(host.textContent).toContain("I can help with that.");
     });
     expect(setActiveOutput).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("shows a bound confirmation before allowing a mock send from the assistant", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+    const send = vi.fn(async () => "Sent mock message to Anne.");
+    const sendAction: AppActionDefinition = {
+      id: "mail.send",
+      description: "Send one message.",
+      risk: "external-effect",
+      requiresConfirmation: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          to: { type: "string" },
+          subject: { type: "string" },
+          body: { type: "string" },
+        },
+        required: ["to", "subject", "body"],
+        additionalProperties: false,
+      },
+      confirmationPhrase: "confirm send",
+      confirmationSummary: ({ to, subject, body }) =>
+        `Send a message to ${String(to)} with subject "${String(subject)}" and body:\n${String(body)}`,
+      execute: send,
+    };
+    const actionRuntime = createAssistantActionRuntime([sendAction]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).includes("/assistant/turns")) {
+          const request = JSON.parse(String(init?.body)) as {
+            sessionId: string;
+            turnId: string;
+          };
+          const delta = JSON.stringify({
+            sessionId: request.sessionId,
+            turnId: request.turnId,
+            sequence: 0,
+            text: JSON.stringify({
+              text: "I will send this message.",
+              affect: {
+                expression: "warm",
+                valence: 0.2,
+                arousal: 0.2,
+                intensity: 0.2,
+              },
+              action: {
+                id: "mail.send",
+                arguments: {
+                  to: "anne@example.test",
+                  subject: "Project update",
+                  body: "The timeline is ready.",
+                },
+              },
+            }),
+          });
+          return new Response(`data: ${delta}\n\ndata: [DONE]\n\n`, {
+            headers: {
+              "content-type": "text/event-stream",
+              "x-sodalis-session-id": request.sessionId,
+              "x-sodalis-turn-id": request.turnId,
+            },
+          });
+        }
+        return Response.json({ error: "TTS is not configured." }, { status: 503 });
+      }),
+    );
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { presentation, actionRuntime }),
+    });
+    await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Start a conversation with Sodalis"]',
+      )
+      ?.click();
+    await vi.waitFor(() => {
+      expect(
+        host.querySelector(
+          '[role=region][aria-labelledby=avatar-conversation-title]',
+        ),
+      ).not.toBeNull();
+    });
+    const input = host.querySelector<HTMLInputElement>(
+      "#avatar-conversation-input",
+    );
+    if (!input) throw new Error("The conversation input is unavailable.");
+    input.value = "Send Anne the update.";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    host
+      .querySelector("form")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain(
+        'Send a message to anne@example.test with subject "Project update"',
+      );
+      expect(host.textContent).toContain("The timeline is ready.");
+    });
+    expect(send).not.toHaveBeenCalled();
+    expect(
+      host.querySelector(".avatar-conversation-confirmation-phrase")?.textContent,
+    ).toContain("confirm send");
+    host
+      .querySelector<HTMLButtonElement>(
+        ".avatar-conversation-confirmation-actions button",
+      )
+      ?.click();
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(send).toHaveBeenCalledWith({
+      to: "anne@example.test",
+      subject: "Project update",
+      body: "The timeline is ready.",
+    });
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Sent mock message to Anne.");
+    });
   });
 
   it("opens one accessible summary for multiple user-controlled notifications", async () => {

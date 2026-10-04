@@ -6,6 +6,8 @@ import {
 } from "@sodalis/assistant";
 import type {
   AssistantAppContext,
+  AssistantActionRuntime,
+  PendingActionConfirmation,
   AssistantUtterance,
   ConversationSnapshot,
   ConversationState,
@@ -50,6 +52,7 @@ interface DesktopAvatarOverlayAttrs {
     | AssistantAppContext
     | undefined
     | Promise<AssistantAppContext | undefined>;
+  actionRuntime?: AssistantActionRuntime;
 }
 
 const TASKBAR_FLOOR_OVERLAP = 3;
@@ -144,6 +147,7 @@ export const DesktopAvatarOverlay =
     let conversationError: string | undefined;
     let conversationState: ConversationState = "idle";
     let conversationInterruptible = true;
+    let pendingConfirmation: PendingActionConfirmation | undefined;
     let userTranscript: string | undefined;
     let assistantText: string | undefined;
     let activeRecognition: ActiveSpeechRecognition | undefined;
@@ -213,6 +217,7 @@ export const DesktopAvatarOverlay =
     const updateConversationView = (snapshot: ConversationSnapshot) => {
       conversationState = snapshot.state;
       conversationInterruptible = snapshot.interruptible;
+      pendingConfirmation = snapshot.pendingConfirmation;
       conversationError = snapshot.error;
       userTranscript = snapshot.userTranscript;
       assistantText = snapshot.assistantText;
@@ -745,6 +750,7 @@ export const DesktopAvatarOverlay =
         conversation = new ConversationOrchestrator({
           provider: llmProvider,
           audioOutput: speechPlayback,
+          actionRuntime: vnode.attrs.actionRuntime,
           getAppContext: () => vnode.attrs.getAppContext?.(),
           onUtterance: applyAssistantUtterance,
           onChange: updateConversationView,
@@ -900,6 +906,7 @@ export const DesktopAvatarOverlay =
                   speechOutputError,
                   conversationError,
                   conversationState,
+                  pendingConfirmation,
                   userTranscript,
                   assistantText,
                   speechOutputActive,
@@ -909,6 +916,16 @@ export const DesktopAvatarOverlay =
                   onSpeak: speakAssistantText,
                   onStopSpeaking: stopConversationOrSpeech,
                   onCancelTurn: () => conversation?.cancelTurn(),
+                  onConfirmAction: (confirmationId) =>
+                    conversation?.confirmPendingAction(confirmationId) ??
+                    Promise.resolve(),
+                  onCancelAction: (confirmationId) => {
+                    try {
+                      conversation?.cancelPendingAction(confirmationId);
+                    } catch (error) {
+                      conversation?.reportError(error);
+                    }
+                  },
                   onSend: (text) =>
                     conversation?.submitUserMessage(text) ?? Promise.resolve(),
                   onConversationError: (error) => conversation?.reportError(error),

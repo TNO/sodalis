@@ -7,6 +7,21 @@ const request: LlmStreamRequest = {
   turnId: "turn-1",
   messages: [{ role: "user", content: "Help me." }],
   appContext: { appId: "mail", appName: "Mail" },
+  availableActions: [
+    {
+      id: "mail.send",
+      description: "Send a message.",
+      risk: "external-effect",
+      requiresConfirmation: true,
+      confirmationPhrase: "confirm send",
+      inputSchema: {
+        type: "object",
+        properties: { to: { type: "string" } },
+        required: ["to"],
+        additionalProperties: false,
+      },
+    },
+  ],
   signal: new AbortController().signal,
 };
 
@@ -69,6 +84,7 @@ describe("ServerLlmProvider", () => {
       turnId: "turn-1",
       messages: request.messages,
       appContext: request.appContext,
+      availableActions: request.availableActions,
     });
     expect(deltas).toEqual([
       {

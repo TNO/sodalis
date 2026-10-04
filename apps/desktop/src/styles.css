@@ -417,6 +417,40 @@ body {
   font-size: 0.9rem;
 }
 
+.avatar-conversation-confirmation {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--shell-focus);
+  border-radius: 8px;
+}
+
+.avatar-conversation-confirmation h3,
+.avatar-conversation-confirmation p {
+  margin: 0;
+}
+
+.avatar-conversation-confirmation-summary {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.avatar-conversation-confirmation h3 {
+  font-size: 1rem;
+}
+
+.avatar-conversation-confirmation-phrase {
+  margin-top: 0.45rem !important;
+  color: var(--shell-muted);
+  font-size: 0.9rem;
+}
+
+.avatar-conversation-confirmation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
 .avatar-conversation-listening {
   width: 100%;
 }

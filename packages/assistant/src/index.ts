@@ -1,4 +1,10 @@
 import type { SpeechRequest } from "@sodalis/speech";
+import type {
+  AssistantActionResult,
+  AssistantActionRuntime,
+  AvailableAppAction,
+  PendingActionConfirmation,
+} from "./AssistantActions.js";
 import {
   extractAssistantUtteranceTextPrefix,
   parseAssistantUtterance,
@@ -15,6 +21,19 @@ export {
   type AssistantGesture,
   type AssistantUtterance,
 } from "./AssistantUtterance.js";
+export {
+  createAssistantActionRuntime,
+  type AppActionDefinition,
+  type AppActionInputProperty,
+  type AppActionInputSchema,
+  type AppActionRisk,
+  type AssistantActionInvocation,
+  type AssistantActionResult,
+  type AssistantActionRuntime,
+  type AssistantActionRuntimeOptions,
+  type AvailableAppAction,
+  type PendingActionConfirmation,
+} from "./AssistantActions.js";
 
 export type ConversationState =
   | "idle"
@@ -22,6 +41,7 @@ export type ConversationState =
   | "transcribing"
   | "thinking"
   | "speaking"
+  | "awaiting-confirmation"
   | "interrupted"
   | "error";
 
@@ -41,6 +61,7 @@ export interface LlmStreamRequest {
   readonly turnId: string;
   readonly messages: readonly ConversationMessage[];
   readonly appContext?: AssistantAppContext;
+  readonly availableActions?: readonly AvailableAppAction[];
   readonly signal: AbortSignal;
 }
 
@@ -63,6 +84,7 @@ export interface ConversationSnapshot {
   readonly userTranscript: string;
   readonly assistantText: string;
   readonly interruptible: boolean;
+  readonly pendingConfirmation?: PendingActionConfirmation;
   readonly error?: string;
 }
 
@@ -75,6 +97,7 @@ export interface ConversationAudioOutput {
 export interface ConversationOrchestratorOptions {
   readonly provider: LlmProvider;
   readonly audioOutput: ConversationAudioOutput;
+  readonly actionRuntime?: AssistantActionRuntime;
   readonly getAppContext?: () =>
     | AssistantAppContext
     | undefined
@@ -110,6 +133,9 @@ export class ConversationOrchestrator {
 
   private readonly provider: LlmProvider;
   private readonly audioOutput: ConversationAudioOutput;
+  private readonly actionRuntime:
+    | ConversationOrchestratorOptions["actionRuntime"]
+    | undefined;
   private readonly getAppContext:
     | ConversationOrchestratorOptions["getAppContext"]
     | undefined;
@@ -133,6 +159,7 @@ export class ConversationOrchestrator {
   constructor(options: ConversationOrchestratorOptions) {
     this.provider = options.provider;
     this.audioOutput = options.audioOutput;
+    this.actionRuntime = options.actionRuntime;
     this.getAppContext = options.getAppContext;
     this.onChange = options.onChange;
     this.onUtterance = options.onUtterance;
@@ -217,6 +244,11 @@ export class ConversationOrchestrator {
     const userText = text.trim();
     if (!userText) return;
     if (userText.length > MAX_RESPONSE_LENGTH) {
+      const pending = this.actionRuntime?.getPendingConfirmation();
+      if (pending) {
+        this.actionRuntime?.cancel(pending.id);
+        this.update({ pendingConfirmation: undefined });
+      }
       this.update({
         state: "error",
         userTranscript: userText.slice(0, MAX_RESPONSE_LENGTH),
@@ -227,6 +259,17 @@ export class ConversationOrchestrator {
     }
 
     if (this.activeTurn) this.cancelTurn();
+    if (this.actionRuntime?.getPendingConfirmation()) {
+      const result =
+        await this.actionRuntime.respondToConfirmation(userText);
+      if (result) {
+        this.update({ userTranscript: userText });
+        this.appendHistoryMessage({ role: "user", content: userText });
+        await this.presentActionResult(result);
+        return;
+      }
+      this.update({ pendingConfirmation: undefined });
+    }
     const turn = {
       id: this.createTurnId(),
       abortController: new AbortController(),
@@ -238,6 +281,7 @@ export class ConversationOrchestrator {
       userTranscript: userText,
       assistantText: "",
       interruptible: true,
+      pendingConfirmation: undefined,
       error: undefined,
     });
 
@@ -256,6 +300,9 @@ export class ConversationOrchestrator {
         turnId: turn.id,
         messages,
         ...(appContext ? { appContext } : {}),
+        ...(this.actionRuntime
+          ? { availableActions: this.actionRuntime.getAvailableActions() }
+          : {}),
         signal: turn.abortController.signal,
       })) {
         turn.abortController.signal.throwIfAborted();
@@ -285,8 +332,26 @@ export class ConversationOrchestrator {
         throw new Error("Assistant returned an empty response.");
       }
       const utterance = parseAssistantUtterance(generatedResponse);
-      const assistantText = utterance.text;
-      this.update({ assistantText, interruptible: utterance.interruptible });
+      let assistantText = utterance.text;
+      let pendingConfirmation: PendingActionConfirmation | undefined;
+      if (utterance.action) {
+        if (!this.actionRuntime) {
+          throw new Error("Assistant actions are not available.");
+        }
+        const actionResult = await this.actionRuntime.invoke(utterance.action);
+        turn.abortController.signal.throwIfAborted();
+        if (actionResult.status === "confirmation-required") {
+          pendingConfirmation = actionResult.pending;
+          assistantText = `${actionResult.message} To approve by voice, say "${actionResult.pending.confirmationPhrase}".`;
+        } else {
+          assistantText = actionResult.message;
+        }
+      }
+      this.update({
+        assistantText,
+        interruptible: utterance.interruptible,
+        pendingConfirmation,
+      });
       this.onUtterance?.(utterance, turn.abortController.signal);
       const completedConversation: ConversationMessage[] = [
         ...this.history,
@@ -305,7 +370,9 @@ export class ConversationOrchestrator {
       );
       if (this.activeTurn === turn) {
         this.activeTurn = undefined;
-        this.update({ state: "idle" });
+        this.update({
+          state: pendingConfirmation ? "awaiting-confirmation" : "idle",
+        });
       }
     } catch (error) {
       if (this.activeTurn !== turn || turn.abortController.signal.aborted) {
@@ -329,6 +396,30 @@ export class ConversationOrchestrator {
     this.update({ state: "interrupted", error: undefined });
   }
 
+  async confirmPendingAction(confirmationId: string): Promise<void> {
+    if (!this.actionRuntime) {
+      throw new Error("Assistant actions are not available.");
+    }
+    if (this.activeTurn) this.cancelTurn();
+    const result = await this.actionRuntime.confirm(confirmationId);
+    await this.presentActionResult(result);
+  }
+
+  cancelPendingAction(confirmationId: string): void {
+    if (!this.actionRuntime) {
+      throw new Error("Assistant actions are not available.");
+    }
+    if (this.activeTurn) this.cancelTurn();
+    const result = this.actionRuntime.cancel(confirmationId);
+    this.appendHistoryMessage({ role: "assistant", content: result.message });
+    this.update({
+      state: "idle",
+      assistantText: result.message,
+      pendingConfirmation: undefined,
+      error: undefined,
+    });
+  }
+
   notifyPlaybackState(turnId: string, speaking: boolean): void {
     if (this.activeTurn?.id !== turnId) return;
     if (speaking) {
@@ -343,6 +434,71 @@ export class ConversationOrchestrator {
   ): void {
     this.snapshot = { ...this.snapshot, ...patch, sessionId: this.sessionId };
     this.onChange?.(this.snapshot);
+  }
+
+  private appendHistoryMessage(message: ConversationMessage): void {
+    this.history = [...this.history, message].slice(-this.historyMessageLimit);
+  }
+
+  private async presentActionResult(
+    result: AssistantActionResult,
+  ): Promise<void> {
+    if (result.status === "cancelled") {
+      this.appendHistoryMessage({ role: "assistant", content: result.message });
+      this.update({
+        state: "idle",
+        assistantText: result.message,
+        pendingConfirmation: undefined,
+        error: undefined,
+      });
+      return;
+    }
+    if (result.status === "confirmation-required") {
+      this.update({
+        state: "awaiting-confirmation",
+        assistantText: `${result.message} To approve by voice, say "${result.pending.confirmationPhrase}".`,
+        pendingConfirmation: result.pending,
+        error: undefined,
+      });
+      return;
+    }
+
+    this.appendHistoryMessage({ role: "assistant", content: result.message });
+    const turn = {
+      id: this.createTurnId(),
+      abortController: new AbortController(),
+    };
+    this.activeTurn = turn;
+    this.update({
+      turnId: turn.id,
+      state: "thinking",
+      assistantText: result.message,
+      interruptible: true,
+      pendingConfirmation: undefined,
+      error: undefined,
+    });
+    try {
+      await this.audioOutput.speak(
+        {
+          sessionId: this.sessionId,
+          speechId: turn.id,
+          text: result.message,
+          language: "nl-NL",
+        },
+        turn.abortController.signal,
+      );
+      if (this.activeTurn === turn) {
+        this.activeTurn = undefined;
+        this.update({ state: "idle" });
+      }
+    } catch (error) {
+      if (this.activeTurn !== turn || turn.abortController.signal.aborted) {
+        return;
+      }
+      this.activeTurn = undefined;
+      const normalized = normalizeError(error);
+      this.update({ state: "error", error: normalized.message });
+    }
   }
 }
 

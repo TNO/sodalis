@@ -1,3 +1,5 @@
+import type { AssistantActionInvocation } from "./AssistantActions.js";
+
 export const ASSISTANT_EXPRESSIONS = [
   "neutral",
   "warm",
@@ -31,6 +33,7 @@ export interface AssistantUtterance {
   readonly affect: AssistantAffect;
   readonly gesture?: AssistantGesture;
   readonly interruptible: boolean;
+  readonly action?: AssistantActionInvocation;
 }
 
 const DEFAULT_TEXT = "I'm sorry, I couldn't prepare a response.";
@@ -83,6 +86,18 @@ export function normalizeAssistantUtterance(
   const gesture = isOneOf(record?.gesture, ASSISTANT_GESTURES)
     ? record.gesture
     : undefined;
+  const actionRecord = isRecord(record?.action) ? record.action : undefined;
+  const action =
+    typeof actionRecord?.id === "string" &&
+    actionRecord.id.trim() === actionRecord.id &&
+    actionRecord.id.length > 0 &&
+    actionRecord.id.length <= 128 &&
+    Object.hasOwn(actionRecord, "arguments")
+      ? {
+          id: actionRecord.id,
+          arguments: actionRecord.arguments,
+        }
+      : undefined;
   return {
     text,
     affect: {
@@ -107,6 +122,7 @@ export function normalizeAssistantUtterance(
       ),
     },
     ...(gesture && gesture !== "none" ? { gesture } : {}),
+    ...(action ? { action } : {}),
     interruptible:
       typeof record?.interruptible === "boolean"
         ? record.interruptible

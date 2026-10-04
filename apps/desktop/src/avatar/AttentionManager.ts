@@ -18,6 +18,7 @@ export interface AttentionFocusOptions {
 export interface AttentionManager {
   register(target: AttentionTargetRegistration): () => void;
   resolve(id: string): AttentionTarget | undefined;
+  listTargets(): AttentionTarget[];
   focus(id: string, options?: AttentionFocusOptions): void;
   clear(): void;
   refresh(): void;
@@ -145,6 +146,10 @@ export function createAttentionManager(
 
     resolve(id) {
       return options.registry.resolve(id);
+    },
+
+    listTargets() {
+      return options.registry.list().filter((target) => target.visible);
     },
 
     focus(id, focusOptions = {}) {

@@ -108,6 +108,27 @@ describe("AssistantUtterance", () => {
     });
   });
 
+  it("retains only a well-formed semantic action request", () => {
+    expect(
+      parseAssistantUtterance(
+        '{"text":"Find this message.","action":{"id":"mail.search-messages","arguments":{"query":"invoice"}}}',
+      ).action,
+    ).toEqual({
+      id: "mail.search-messages",
+      arguments: { query: "invoice" },
+    });
+    expect(
+      parseAssistantUtterance(
+        '{"text":"Try this.","action":{"id":"mail.send","arguments":{}}}',
+      ).action,
+    ).toEqual({ id: "mail.send", arguments: {} });
+    expect(
+      parseAssistantUtterance(
+        '{"text":"No action.","action":{"id":"not trimmed ","arguments":{}}}',
+      ).action,
+    ).toBeUndefined();
+  });
+
   it("extracts decoded partial text for live captions without exposing JSON", () => {
     expect(
       extractAssistantUtteranceTextPrefix(
