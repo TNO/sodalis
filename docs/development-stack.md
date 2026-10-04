@@ -91,6 +91,10 @@ Open `http://127.0.0.1:4176` (or the `SODALIS_PORT` you chose). Each `stack:up`
 stops this worktree's previously selected profiles before rebuilding the
 current selection, so switching to an external endpoint does not leave a
 local engine running. It does not delete Home Assistant's named data volume.
+In a checkout named `sodalis`, containers and locally built images use
+`sodalis-*` names rather than `sodalis-sodalis-*`. The existing Compose
+project and Home Assistant data volume keep their names, so restarting an
+already configured simulator does not reset onboarding.
 Run `pnpm exec tsx scripts/dev-stack.ts ps` to inspect active services. The
 gateway's `/healthz` checks gateway liveness only, not provider readiness.
 

@@ -2,9 +2,11 @@ name: sodalis-dev
 
 services:
   gateway:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-gateway
     build:
       context: .
       dockerfile: services/gateway/Dockerfile
+    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-gateway:dev
     ports:
       - "127.0.0.1:${SODALIS_PORT:-4176}:8080"
     environment:
@@ -13,6 +15,7 @@ services:
       - ./services/gateway/${HOME_ADMIN_FILE:-Caddyfile.desktop}:/etc/caddy/Caddyfile:ro
 
   speech:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-speech
     build:
       context: .
       dockerfile: services/api/Dockerfile
@@ -27,6 +30,7 @@ services:
       PIPER_HTTP_URL: ${PIPER_HTTP_URL:-}
 
   ai:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-ai
     build:
       context: .
       dockerfile: services/api/Dockerfile
@@ -41,6 +45,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
 
   home:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-home
     profiles: ["home-api"]
     image: sodalis-api:dev
     command: ["pnpm", "--filter", "@sodalis/server", "start:home"]
@@ -54,6 +59,7 @@ services:
       HOME_SAFE_MAX_C: ${HOME_SAFE_MAX_C:-26}
 
   homeassistant:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-homeassistant
     profiles: ["home-simulator"]
     image: ${HOME_ASSISTANT_IMAGE:-ghcr.io/home-assistant/home-assistant:2026.9.4}
     volumes:
@@ -63,24 +69,29 @@ services:
       TZ: ${TZ:-Europe/Amsterdam}
 
   whisper:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-whisper
     profiles: ["whisper"]
     build:
       context: .
       dockerfile: services/whisper/Dockerfile
+    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-whisper:dev
     command: ["--host", "0.0.0.0", "--port", "8080", "-m", "/models/ggml-base.bin", "--convert", "--no-gpu"]
     volumes:
       - ./models/whisper:/models:ro
 
   piper:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-piper
     profiles: ["piper"]
     build:
       context: .
       dockerfile: services/piper/Dockerfile
+    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-piper:dev
     command: ["python", "-m", "piper.http_server", "-m", "nl_BE-nathalie-medium", "--data-dir", "/models", "--host", "0.0.0.0", "--port", "5000"]
     volumes:
       - ./models/piper:/models:ro
 
   llm:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-llm
     profiles: ["llm"]
     image: ghcr.io/ggml-org/llama.cpp:server
     entrypoint: ["llama-server"]

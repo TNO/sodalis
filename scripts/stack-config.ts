@@ -10,6 +10,12 @@ export const ALL_LOCAL_PROFILES = [
   "whisper", "piper", "llm", "home-simulator", "home-api",
 ] as const;
 
+export function serviceNamePrefix(directory: string): string {
+  const name = directory.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return name === "sodalis" || name.startsWith("sodalis-")
+    ? name : `sodalis-${name}`;
+}
+
 function endpoint(value: string | undefined, name: string, preserveTrailingSlash = false): string {
   if (!value?.trim()) throw new Error(`Set ${name} to an explicit HTTP endpoint.`);
   const url = new URL(value);

@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseEnv } from "node:util";
-import { ALL_LOCAL_PROFILES, resolveStack } from "./stack-config.js";
+import { ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix } from "./stack-config.js";
 
 const root = resolve(import.meta.dirname, "..");
 const envPath = resolve(root, ".env");
@@ -23,6 +23,7 @@ if (operation === "up") {
 
 const environment = { ...process.env, ...settings, ...selection.environment };
 environment.COMPOSE_PROJECT_NAME = `sodalis-${basename(root).toLowerCase().replace(/[^a-z0-9-]/g, "-")}`;
+environment.SODALIS_SERVICE_PREFIX = serviceNamePrefix(basename(root));
 environment.COMPOSE_PROFILES = "";
 const compose = spawnSync("docker", ["compose", "version"], { stdio: "ignore" }).status === 0
   ? { command: "docker", prefix: ["compose"] }

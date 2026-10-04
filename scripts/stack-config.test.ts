@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveStack } from "./stack-config.js";
+import { resolveStack, serviceNamePrefix } from "./stack-config.js";
 
 const base = {
   STT_PROVIDER: "whisper-cpp",
@@ -10,6 +10,12 @@ const base = {
 };
 
 describe("development stack selection", () => {
+  it("names root-checkout services without a repeated prefix while keeping worktrees distinct", () => {
+    expect(serviceNamePrefix("sodalis")).toBe("sodalis");
+    expect(serviceNamePrefix("silver-giggle")).toBe("sodalis-silver-giggle");
+    expect(serviceNamePrefix("sodalis-feature")).toBe("sodalis-feature");
+  });
+
   it("starts only selected local profiles with stable internal APIs", () => {
     const selected = resolveStack(base);
     expect(selected.profiles).toEqual(["whisper", "piper", "home-simulator"]);
