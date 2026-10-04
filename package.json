@@ -5,7 +5,8 @@
   "packageManager": "pnpm@12.4.1",
   "scripts": {
     "dev": "pnpm --filter @sodalis/desktop dev",
-    "dev:server": "pnpm --filter @sodalis/server dev",
+    "dev:speech": "pnpm --filter @sodalis/server dev:speech",
+    "dev:ai": "pnpm --filter @sodalis/server dev:ai",
     "build": "pnpm --recursive build",
     "test": "pnpm --filter @sodalis/desktop-host test && pnpm --filter @sodalis/avatar test && pnpm --filter @sodalis/speech test && pnpm --filter @sodalis/assistant test && pnpm --filter @sodalis/server test && pnpm --filter @sodalis/desktop test",
     "typecheck": "pnpm --recursive typecheck"

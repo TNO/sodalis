@@ -105,6 +105,12 @@ export function createSpeechApp(
   const sessions = new Map<string, RecognitionSession>();
   let activeTtsRequests = 0;
   const app = new Hono();
+  app.get("/healthz", (context) =>
+    context.json({ status: "ok", service: "speech" }),
+  );
+  app.get("/readyz", (context) =>
+    context.json({ status: "ready", service: "speech" }),
+  );
 
   const removeExpiredSessions = () => {
     const cutoff = now() - sessionTtlMs;

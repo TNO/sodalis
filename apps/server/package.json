@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
-    "dev": "tsx watch src/main.ts",
-    "start": "tsx src/main.ts",
+    "dev:speech": "tsx watch src/speech/main.ts",
+    "dev:ai": "tsx watch src/assistant/main.ts",
+    "start:speech": "tsx src/speech/main.ts",
+    "start:ai": "tsx src/assistant/main.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -14,6 +14,22 @@ const turn = {
 };
 
 describe("assistant turn API", () => {
+  it("reports AI health and readiness independently of speech", async () => {
+    const app = createAssistantApp({
+      provider: { id: "test", async *generate() { yield "ok"; } },
+    });
+    expect((await (await app.request("/healthz")).json())).toEqual({
+      status: "ok",
+      service: "ai",
+    });
+    expect((await (await app.request("/readyz")).json())).toEqual({
+      status: "ready",
+      service: "ai",
+    });
+    expect((await app.request("/api/speech/tts")).status).toBe(404);
+    expect((await createAssistantApp().request("/readyz")).status).toBe(503);
+  });
+
   it("streams sequenced text deltas with IDs for stale-turn rejection", async () => {
     const provider: LlmTextGenerationProvider = {
       id: "fake-llm",

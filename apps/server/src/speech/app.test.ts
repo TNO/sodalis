@@ -23,6 +23,19 @@ async function createSession(
 }
 
 describe("speech recognition API", () => {
+  it("reports speech health and readiness independently", async () => {
+    const app = createSpeechApp(createEngine());
+    expect((await (await app.request("/healthz")).json())).toEqual({
+      status: "ok",
+      service: "speech",
+    });
+    expect((await (await app.request("/readyz")).json())).toEqual({
+      status: "ready",
+      service: "speech",
+    });
+    expect((await app.request("/api/assistant/turns")).status).toBe(404);
+  });
+
   it("buffers bounded audio and returns the engine's final transcript", async () => {
     const engine = createEngine();
     const app = createSpeechApp(engine, { maxAudioBytes: 8 });

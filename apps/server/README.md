@@ -1,4 +1,16 @@
-# Sodalis speech server
+# Sodalis services
+
+Speech and AI run as separate Hono processes. The speech service owns
+`/api/speech/*` (STT session lifecycle and streamed TTS); the AI service owns
+`/api/assistant/turns` (streamed generation and future memory). Neither service
+calls the other. The browser uses the same-origin Vite proxy during development;
+it never receives provider URLs or credentials. Each service has `/healthz`
+(process liveness) and `/readyz` (configured API readiness); these do not probe
+the availability of external models. Speech listens on port 3001 and AI on
+3002 by default; use `HOST` and `PORT` to override either process. Start them
+in separate terminals with `pnpm dev:speech` and `pnpm dev:ai`.
+
+## Speech
 
 The speech API is implemented with Hono. Its STT route accepts bounded audio
 segments and delegates recognition to the Whisper.cpp HTTP server, keeping the
@@ -14,12 +26,11 @@ whisper-server -m /path/to/ggml-base.bin --host 127.0.0.1 --port 8081 --convert
 Then start the Sodalis server:
 
 ```sh
-WHISPER_CPP_URL=http://127.0.0.1:8081 pnpm --filter @sodalis/server dev
+WHISPER_CPP_URL=http://127.0.0.1:8081 pnpm dev:speech
 ```
 
-The desktop Vite development server proxies `/api` to `http://127.0.0.1:3000`.
-For a deployed environment, route `/api` to the Sodalis server using the
-deployment's same-origin reverse proxy.
+The desktop Vite development server proxies `/api/speech` to port 3001 and
+`/api/assistant` to port 3002.
 
 Whisper.cpp is used because its self-hosted multilingual models provide a
 privacy-preserving server-side path and support Dutch without binding Sodalis
@@ -51,7 +62,7 @@ executable path:
 ```sh
 PIPER_MODEL_PATH=/path/to/nl_BE-nathalie-medium.onnx \
 PIPER_EXECUTABLE=piper \
-pnpm --filter @sodalis/server dev
+pnpm dev:speech
 ```
 
 The endpoint streams mono, signed 16-bit little-endian PCM at 22,050 Hz. The
@@ -66,12 +77,12 @@ before redistributing them.
 
 ## Conversation assistant
 
-The server exposes an OpenAI Chat Completions-compatible streaming provider.
+The AI service exposes an OpenAI Chat Completions-compatible streaming provider.
 Set `LLM_BASE_URL` to the service's API base (for example,
 `http://127.0.0.1:1234/v1`) and `LLM_MODEL` to an enabled model. Set
 `LLM_API_KEY` only when that service requires it; the key remains on the server.
-The assistant endpoint is disabled when URL and model are both unset, and the
-server rejects a partial configuration.
+The assistant endpoint and AI readiness return 503 when URL and model are both
+unset, and the AI service rejects a partial configuration at startup.
 
 Conversation turns include a short in-memory history (at most 12 messages) and,
 when available, the current built-in Aster app's semantic identity (app ID,

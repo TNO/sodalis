@@ -236,6 +236,14 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
   }
   let activeRequests = 0;
   const app = new Hono();
+  app.get("/healthz", (context) =>
+    context.json({ status: "ok", service: "ai" }),
+  );
+  app.get("/readyz", (context) =>
+    options.provider
+      ? context.json({ status: "ready", service: "ai" })
+      : errorResponse(context, "LLM is not configured.", 503),
+  );
 
   app.post("/api/assistant/turns", async (context) => {
     const provider = options.provider;
