@@ -17,6 +17,7 @@ built-in apps and open them; it does not expose app DOM or inspect untrusted
 web apps.
 
 Speech and AI can run independently with `pnpm dev:speech` and `pnpm dev:ai`.
+The Home Assistant Core simulator API runs with `pnpm dev:home`.
 The desktop proxies their APIs by path; see
 [`apps/server/README.md`](apps/server/README.md) for model configuration.
 

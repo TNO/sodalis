@@ -70,6 +70,11 @@ web_modules/
 .env.*
 !.env.example
 
+# Local Home Assistant Core onboarding and state
+services/homeassistant/.storage/
+services/homeassistant/home-assistant_v2.db*
+services/homeassistant/home-assistant.log*
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

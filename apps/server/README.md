@@ -120,3 +120,47 @@ pending action and arguments, and conversational confirmation requires the
 action-specific phrase shown in the companion card. The initial Mail actions
 operate on deterministic in-memory fixtures only; mock sending never delivers
 real email.
+
+## Home Assistant simulator
+
+`pnpm dev:home` starts the independent Home API on port 3003. Set
+`HOME_PROVIDER=simulator`, `HOME_ASSISTANT_URL` to the Home Assistant Core
+instance (for example `http://127.0.0.1:8123`), and
+`HOME_ASSISTANT_TOKEN` to a dedicated non-admin user's long-lived token.
+The token stays in ignored local `.env` configuration, never in the browser.
+The bundled `services/homeassistant/configuration.yaml` enables Core's
+built-in demo integration: `light.bed_light` starts off,
+`fan.living_room_fan` starts off, `media_player.walkman` starts playing,
+and `climate.hvac` starts cooling at 21 °C. Core's demo also includes other
+fake entities; these four have repeatable initial state on a fresh Core
+configuration. Core owns the simulator; the Home API does not impersonate it.
+
+`GET /api/home/entities?q=...` discovers semantic entities,
+`GET /api/home/entities/:entityId` reads state, and
+`GET /api/home/actions` lists the typed operation descriptors. Submit
+`{ "id": "home.light.turn-on", "arguments": { "entityId": "light.bed_light" } }`
+to `POST /api/home/actions`. Light on/off and brightness 0–100%, fan on/off
+and speed 0–100%, media play/pause and volume 0–100%, and climate target
+temperature 16–26 °C are available without confirmation. Set
+`HOME_SAFE_MIN_C` and `HOME_SAFE_MAX_C` to change the climate range;
+the target-temperature operation requires a Celsius entity.
+HVAC mode, scripts, scenes, locks, alarms, and covers require a returned
+confirmation ID, submitted alone as
+`{ "confirmationId": "..." }` to `POST /api/home/confirm`. The existing
+assistant confirmation runtime binds it to one exact action and arguments;
+unknown domains/services are rejected, never forwarded as arbitrary HA calls.
+The Home API returns explicit errors if Core or a requested entity is
+unavailable. `/healthz` checks the process, `/readyz` checks Core connectivity.
+
+For first-time setup, run the desktop gateway with `HOME_ADMIN_UI=1` and
+`HOME_ASSISTANT_URL` pointing to Core. While enabled, the gateway's root
+route serves Core's admin UI instead of the desktop, on the **same local
+origin**; `/api/speech`, `/api/assistant`, and `/api/home` still route to their
+own services. Complete onboarding with an admin user, then
+create a separate **non-admin** user for Sodalis under Settings → People →
+Users. Sign in as that user and create a long-lived access token in its
+Profile → Security page. Put the token only in your ignored `.env`, restart
+the Home API, and unset `HOME_ADMIN_UI` after setup. Home Assistant
+Core's standard non-admin user can still control configured demo devices; it
+does not provide per-entity token scopes. Do not point the simulator provider
+at a real home. A real Home adapter is deferred to task 0038.

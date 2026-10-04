@@ -25,6 +25,7 @@ const ACTION_RISKS = [
   "read",
   "navigate",
   "draft",
+  "safe-control",
   "external-effect",
   "destructive",
 ] as const satisfies readonly AppActionRisk[];

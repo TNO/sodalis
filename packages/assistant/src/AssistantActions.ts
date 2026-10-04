@@ -2,6 +2,7 @@ export type AppActionRisk =
   | "read"
   | "navigate"
   | "draft"
+  | "safe-control"
   | "external-effect"
   | "destructive";
 
@@ -81,6 +82,7 @@ const ACTION_RISKS: readonly AppActionRisk[] = [
   "read",
   "navigate",
   "draft",
+  "safe-control",
   "external-effect",
   "destructive",
 ];
