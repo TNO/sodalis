@@ -42,3 +42,23 @@ asset pipeline and selector tasks. Task 0018 depends directly on 0016; tasks
 - [x] 0019 Adding semantic UI attention and avoidance *(needs 0017)*
 - [x] 0020 Adding the avatar conversation card *(needs 0017)*
 - [x] 0021 Adding avatar notification presentation *(needs 0017)*
+
+## Speech and voice runtime
+
+Task 0022 defines provider-neutral contracts and deterministic mocks only;
+production providers follow in 0024–0025 after microphone/VAD support in
+0023. Tasks 0024 and 0025 can proceed independently once 0023 is done.
+
+- [x] 0022 Defining provider-neutral STT and TTS contracts
+- [ ] 0023 Adding microphone VAD and barge-in *(needs 0022)*
+- [ ] 0024 Adding a server STT provider *(needs 0022, 0023)*
+- [ ] 0025 Adding server TTS and lip sync *(needs 0022, 0023)*
+
+## Conversation and app actions
+
+Task 0026 depends on both server speech paths; structured affect and trusted
+app actions follow the orchestrator.
+
+- [ ] 0026 Building the conversation orchestrator *(needs 0024, 0025)*
+- [ ] 0027 Adding structured assistant affect *(needs 0026)*
+- [ ] 0028 Connecting assistant app actions *(needs 0026, 0027)*
