@@ -76,5 +76,9 @@ server rejects a partial configuration.
 Conversation turns include a short in-memory history (at most 12 messages) and,
 when available, the current built-in Aster app's semantic identity (app ID,
 name, and category). Document contents are not included. No history is
-persisted. The server streams plain-text response deltas; configure a local or
-otherwise trusted endpoint appropriate for the data Sodalis may send.
+persisted. The server requests streamed JSON with a semantic utterance
+(`text`, `affect`, optional `gesture`, and `interruptible`). The desktop
+validates and clamps affect before using the existing avatar controller; only
+the validated `text` is captioned, spoken, and retained in conversation
+history. Configure a local or otherwise trusted endpoint appropriate for the
+data Sodalis may send.

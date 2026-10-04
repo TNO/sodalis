@@ -1,6 +1,6 @@
 # 0027 Structured assistant affect
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: assistant
 Depends on: 0026

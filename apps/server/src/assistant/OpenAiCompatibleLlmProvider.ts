@@ -116,7 +116,10 @@ export class OpenAiCompatibleLlmProvider
       : "No trusted application context is currently available.";
     const systemPrompt = [
       "You are Sodalis, a concise personal desktop assistant.",
-      "Respond in the user's language with plain text.",
+      "Respond in the user's language using exactly one JSON object and no Markdown.",
+      'The object schema is {"text":string,"affect":{"expression":"neutral"|"warm"|"happy"|"concerned"|"sad"|"surprised"|"reassuring","valence":number,"arousal":number,"intensity":number},"gesture"?: "nod"|"shake-head"|"acknowledge"|"none","interruptible":boolean}.',
+      "Keep affect restrained and use low arousal and intensity for normal conversation; use a gesture only when it adds clear value.",
+      "The text field is the exact user-facing caption and spoken response.",
       "You do not have tools or permission to operate applications; never claim to have taken an action.",
       appDescription,
     ].join(" ");
@@ -131,6 +134,7 @@ export class OpenAiCompatibleLlmProvider
       body: JSON.stringify({
         model: this.model,
         stream: true,
+        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
           ...request.messages,

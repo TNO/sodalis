@@ -6,6 +6,7 @@ import {
 } from "@sodalis/assistant";
 import type {
   AssistantAppContext,
+  AssistantUtterance,
   ConversationSnapshot,
   ConversationState,
 } from "@sodalis/assistant";
@@ -142,6 +143,7 @@ export const DesktopAvatarOverlay =
     let speechOutputError: string | undefined;
     let conversationError: string | undefined;
     let conversationState: ConversationState = "idle";
+    let conversationInterruptible = true;
     let userTranscript: string | undefined;
     let assistantText: string | undefined;
     let activeRecognition: ActiveSpeechRecognition | undefined;
@@ -171,11 +173,38 @@ export const DesktopAvatarOverlay =
       },
     });
 
+    const applyAssistantUtterance = (
+      utterance: AssistantUtterance,
+      signal: AbortSignal,
+    ) => {
+      const controller = avatarScene?.controller;
+      if (!controller) return;
+      controller.setAffect({
+        expression: utterance.affect.expression,
+        valence: utterance.affect.valence,
+        arousal: utterance.affect.arousal,
+        intensity: utterance.affect.intensity,
+      });
+      if (utterance.gesture) {
+        void controller.playGesture(utterance.gesture, signal).catch(
+          (error: unknown) => {
+            if (!signal.aborted) {
+              console.error("Unable to play assistant gesture:", error);
+            }
+          },
+        );
+      }
+    };
+
     const syncActiveSpeechOutput = () => {
-      const conversationActive =
+      const assistantTurnActive =
         conversationState === "thinking" || conversationState === "speaking";
+      const interruptible = !assistantTurnActive || conversationInterruptible;
+      const conversationActive = assistantTurnActive && conversationInterruptible;
       speechInput?.setActiveOutput(
-        speechPlayback && (speechOutputActive || conversationActive)
+        speechPlayback &&
+            interruptible &&
+            (speechOutputActive || conversationActive)
           ? speechPlayback
           : undefined,
       );
@@ -183,6 +212,7 @@ export const DesktopAvatarOverlay =
 
     const updateConversationView = (snapshot: ConversationSnapshot) => {
       conversationState = snapshot.state;
+      conversationInterruptible = snapshot.interruptible;
       conversationError = snapshot.error;
       userTranscript = snapshot.userTranscript;
       assistantText = snapshot.assistantText;
@@ -716,6 +746,7 @@ export const DesktopAvatarOverlay =
           provider: llmProvider,
           audioOutput: speechPlayback,
           getAppContext: () => vnode.attrs.getAppContext?.(),
+          onUtterance: applyAssistantUtterance,
           onChange: updateConversationView,
         });
         setSpeechInputListener(vnode.attrs.onSpeechInput);

@@ -46,6 +46,7 @@ describe("DesktopAvatarOverlay", () => {
     if (mountedHost) m.mount(mountedHost, null);
     mountedHost = undefined;
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     document.body.replaceChildren();
   });
 
@@ -322,6 +323,96 @@ describe("DesktopAvatarOverlay", () => {
     expect(presentation.state.mode).toBe("ambient");
     expect(document.activeElement).toBe(activate);
     expect(activate?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("applies validated semantic affect and gestures from assistant responses", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+    const onSpeechInput = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          sessionId: string;
+          turnId: string;
+        };
+        const utterance = JSON.stringify({
+          text: "I can help with that.",
+          affect: {
+            expression: "reassuring",
+            valence: 0.4,
+            arousal: 0.2,
+            intensity: 0.3,
+          },
+          gesture: "nod",
+          interruptible: false,
+        });
+        const delta = JSON.stringify({
+          sessionId: request.sessionId,
+          turnId: request.turnId,
+          sequence: 0,
+          text: utterance,
+        });
+        return new Response(`data: ${delta}\n\ndata: [DONE]\n\n`, {
+          headers: {
+            "content-type": "text/event-stream",
+            "x-sodalis-session-id": request.sessionId,
+            "x-sodalis-turn-id": request.turnId,
+          },
+        });
+      }),
+    );
+
+    m.mount(host, {
+      view: () => m(DesktopAvatarOverlay, { presentation, onSpeechInput }),
+    });
+    await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(onSpeechInput).toHaveBeenCalled());
+    const speechInput = onSpeechInput.mock.calls.at(-1)?.[0];
+    if (!speechInput) throw new Error("The speech input controller is unavailable.");
+    const setActiveOutput = vi.spyOn(speechInput, "setActiveOutput");
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Start a conversation with Sodalis"]',
+      )
+      ?.click();
+    await vi.waitFor(() => {
+      expect(
+        host.querySelector(
+          '[role="region"][aria-labelledby="avatar-conversation-title"]',
+        ),
+      ).not.toBeNull();
+    });
+    const input = host.querySelector<HTMLInputElement>(
+      "#avatar-conversation-input",
+    );
+    if (!input) throw new Error("The conversation input is unavailable.");
+    input.value = "Can you help?";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    host
+      .querySelector("form")
+      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(scene.controller.setAffect).toHaveBeenCalledWith({
+        expression: "reassuring",
+        valence: 0.4,
+        arousal: 0.2,
+        intensity: 0.3,
+      });
+      expect(scene.controller.playGesture).toHaveBeenCalledWith(
+        "nod",
+        expect.any(AbortSignal),
+      );
+      expect(host.textContent).toContain("I can help with that.");
+    });
+    expect(setActiveOutput).toHaveBeenLastCalledWith(undefined);
   });
 
   it("opens one accessible summary for multiple user-controlled notifications", async () => {

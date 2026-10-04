@@ -29,6 +29,82 @@ function createAudioOutput(
 }
 
 describe("ConversationOrchestrator", () => {
+  it("validates structured utterances and uses the same text for captions and speech", async () => {
+    const audioOutput = createAudioOutput();
+    const utterances: unknown[] = [];
+    const orchestrator = new ConversationOrchestrator({
+      provider: createProvider(async function* (request) {
+        const response = JSON.stringify({
+          text: "I can help with that.",
+          affect: {
+            expression: "reassuring",
+            valence: 0.4,
+            arousal: 0.2,
+            intensity: 0.3,
+          },
+          gesture: "nod",
+          interruptible: false,
+        });
+        for (const [sequence, text] of [
+          response.slice(0, 52),
+          response.slice(52),
+        ].entries()) {
+          yield {
+            sessionId: request.sessionId,
+            turnId: request.turnId,
+            sequence,
+            text,
+          };
+        }
+      }),
+      audioOutput,
+      onUtterance(utterance) {
+        utterances.push(utterance);
+      },
+    });
+
+    await orchestrator.submitUserMessage("Can you help?");
+
+    expect(orchestrator.state.assistantText).toBe("I can help with that.");
+    expect(orchestrator.state.interruptible).toBe(false);
+    expect(audioOutput.speak.mock.calls[0]?.[0].text).toBe(
+      orchestrator.state.assistantText,
+    );
+    expect(utterances).toEqual([
+      {
+        text: "I can help with that.",
+        affect: {
+          expression: "reassuring",
+          valence: 0.4,
+          arousal: 0.2,
+          intensity: 0.3,
+        },
+        gesture: "nod",
+        interruptible: false,
+      },
+    ]);
+  });
+
+  it("keeps malformed structured output safe and displays only its text", async () => {
+    const audioOutput = createAudioOutput();
+    const orchestrator = new ConversationOrchestrator({
+      provider: createProvider(async function* (request) {
+        yield {
+          sessionId: request.sessionId,
+          turnId: request.turnId,
+          sequence: 0,
+          text: '{"text":"A safe answer","affect":{"expression":"raw ARKit value"}}',
+        };
+      }),
+      audioOutput,
+    });
+
+    await orchestrator.submitUserMessage("Question?");
+
+    expect(orchestrator.state.assistantText).toBe("A safe answer");
+    expect(audioOutput.speak.mock.calls[0]?.[0].text).toBe("A safe answer");
+  });
+
   it("streams a turn with trusted app context and speaks the final caption", async () => {
     const requests: LlmStreamRequest[] = [];
     let finishSpeech: (() => void) | undefined;

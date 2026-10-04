@@ -56,6 +56,7 @@ describe("OpenAiCompatibleLlmProvider", () => {
     expect(requestBody).toMatchObject({
       model: "local-model",
       stream: true,
+      response_format: { type: "json_object" },
       messages: [
         expect.objectContaining({
           role: "system",

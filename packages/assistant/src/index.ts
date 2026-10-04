@@ -1,4 +1,20 @@
 import type { SpeechRequest } from "@sodalis/speech";
+import {
+  extractAssistantUtteranceTextPrefix,
+  parseAssistantUtterance,
+} from "./AssistantUtterance.js";
+import type { AssistantUtterance } from "./AssistantUtterance.js";
+
+export {
+  ASSISTANT_EXPRESSIONS,
+  ASSISTANT_GESTURES,
+  normalizeAssistantUtterance,
+  parseAssistantUtterance,
+  type AssistantAffect,
+  type AssistantExpression,
+  type AssistantGesture,
+  type AssistantUtterance,
+} from "./AssistantUtterance.js";
 
 export type ConversationState =
   | "idle"
@@ -46,6 +62,7 @@ export interface ConversationSnapshot {
   readonly state: ConversationState;
   readonly userTranscript: string;
   readonly assistantText: string;
+  readonly interruptible: boolean;
   readonly error?: string;
 }
 
@@ -63,6 +80,10 @@ export interface ConversationOrchestratorOptions {
     | undefined
     | Promise<AssistantAppContext | undefined>;
   readonly onChange?: (snapshot: ConversationSnapshot) => void;
+  readonly onUtterance?: (
+    utterance: AssistantUtterance,
+    signal: AbortSignal,
+  ) => void;
   readonly createSessionId?: () => string;
   readonly createTurnId?: () => string;
   readonly historyMessageLimit?: number;
@@ -95,6 +116,9 @@ export class ConversationOrchestrator {
   private readonly onChange:
     | ConversationOrchestratorOptions["onChange"]
     | undefined;
+  private readonly onUtterance:
+    | ConversationOrchestratorOptions["onUtterance"]
+    | undefined;
   private readonly createTurnId: () => string;
   private readonly historyMessageLimit: number;
   private history: ConversationMessage[] = [];
@@ -111,6 +135,7 @@ export class ConversationOrchestrator {
     this.audioOutput = options.audioOutput;
     this.getAppContext = options.getAppContext;
     this.onChange = options.onChange;
+    this.onUtterance = options.onUtterance;
     this.sessionId = (options.createSessionId ?? (() => createId("session")))();
     this.createTurnId = options.createTurnId ?? (() => createId("turn"));
     this.historyMessageLimit = options.historyMessageLimit ?? 12;
@@ -128,6 +153,7 @@ export class ConversationOrchestrator {
       state: "idle",
       userTranscript: "",
       assistantText: "",
+      interruptible: true,
     };
   }
 
@@ -149,6 +175,7 @@ export class ConversationOrchestrator {
         state: "transcribing",
         userTranscript: "",
         assistantText: "",
+        interruptible: true,
         error: undefined,
       });
     }
@@ -210,6 +237,7 @@ export class ConversationOrchestrator {
       state: "thinking",
       userTranscript: userText,
       assistantText: "",
+      interruptible: true,
       error: undefined,
     });
 
@@ -217,7 +245,7 @@ export class ConversationOrchestrator {
       const appContext = await this.getAppContext?.();
       turn.abortController.signal.throwIfAborted();
       if (this.activeTurn !== turn) return;
-      let assistantText = "";
+      let generatedResponse = "";
       let expectedSequence = 0;
       const messages: ConversationMessage[] = [
         ...this.history,
@@ -242,18 +270,24 @@ export class ConversationOrchestrator {
           throw new Error("Assistant returned a stale or invalid text chunk.");
         }
         expectedSequence += 1;
-        assistantText += delta.text;
-        if (assistantText.length > MAX_RESPONSE_LENGTH) {
+        generatedResponse += delta.text;
+        if (generatedResponse.length > MAX_RESPONSE_LENGTH) {
           throw new Error("Assistant response exceeded the length limit.");
         }
-        this.update({ assistantText });
+        this.update({
+          assistantText: extractAssistantUtteranceTextPrefix(generatedResponse),
+        });
       }
 
       turn.abortController.signal.throwIfAborted();
       if (this.activeTurn !== turn) return;
-      if (!assistantText.trim()) {
+      if (!generatedResponse.trim()) {
         throw new Error("Assistant returned an empty response.");
       }
+      const utterance = parseAssistantUtterance(generatedResponse);
+      const assistantText = utterance.text;
+      this.update({ assistantText, interruptible: utterance.interruptible });
+      this.onUtterance?.(utterance, turn.abortController.signal);
       const completedConversation: ConversationMessage[] = [
         ...this.history,
         { role: "user", content: userText },
