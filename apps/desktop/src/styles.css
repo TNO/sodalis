@@ -427,6 +427,11 @@ body {
   touch-action: none;
 }
 
+.avatar-conversation-speak {
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
 .avatar-conversation-push-to-talk[aria-pressed="true"] {
   border-color: var(--shell-focus);
   background: var(--shell-focus);

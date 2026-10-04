@@ -1,6 +1,6 @@
 # 0025 Server TTS and lip sync
 
-Status: open
+Status: done
 Priority: high
 Subsystem: speech
 Depends on: 0022, 0023
@@ -63,3 +63,13 @@ The avatar should enter speaking when playback actually begins rather than when 
 ## Agent Notes
 
 - Natural Dutch pronunciation and latency are more important than maximizing the number of available voices.
+- The user requested a comparative test of Piper, XTTS-v2, Chatterbox, KugelAudio, and Kokoro where Dutch is supported.
+- A local four-phrase Dutch check used the same utterances for Piper and Chatterbox, with Whisper.cpp as a rough intelligibility check (not a human pronunciation evaluation):
+  - Piper `nl_NL-pim-medium` was the strongest measured candidate: warm synthesis took about 52–390 ms per phrase and Whisper recognized three phrases accurately, mishearing “afspraak” once as “aspraak.”
+  - Piper `nl_BE-nathalie-medium` synthesized in about 34–88 ms. Whisper recognized the first and third phrases accurately, misheard “afspraak” once, and also made an error on the fourth phrase when transcribing the macOS reference. Piper yields audio chunks, but these short utterances each yielded one chunk.
+  - Chatterbox Multilingual V2 (MIT) synthesized complete waveforms rather than streaming chunks. On Apple M4 Max/MPS, these 4–5 second utterances took about 10–35 seconds; Whisper recognized the first phrase well but made multiple errors in the other three.
+  - XTTS-v2 supports Dutch and streaming but was not run: its model download stopped at an interactive CPML non-commercial-license confirmation. Do not accept those terms or select XTTS for production without resolving licensing.
+  - KugelAudio lists Dutch but has no Dutch preset voice, warns that Dutch quality may be reduced, has no documented streaming, and its approximately 18.7 GB model / 19 GB VRAM requirement prevented a practical local test.
+  - Kokoro 82M has no Dutch language or voice and was excluded.
+- The user chose to try Piper but specified a female voice for the female avatar. Use `nl_BE-nathalie-medium` (female Belgian Dutch; its model card lists CC0 for the source dataset), not the male `nl_NL-pim-medium` voice. Nathalie measured about 34–88 ms per phrase in the local warm run; this is a preliminary Whisper-based check, not a subjective voice-quality approval.
+- Piper's GPLv3 engine licensing still needs to be respected in packaging and deployment.

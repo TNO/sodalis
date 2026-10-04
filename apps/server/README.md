@@ -36,3 +36,30 @@ was fast, but the first call included a 5-second model setup/download; Whisper
 processed both clips in 0.67 seconds. Whistle's Python package enabled
 anonymous function/version/OS telemetry by default; the evaluation disabled
 it. These measurements are specific to synthetic samples and that machine.
+
+## Text-to-speech
+
+The streamed TTS endpoint uses the Piper CLI and the female Belgian-Dutch
+`nl_BE-nathalie-medium` voice. Install Piper separately, then download both the
+`.onnx` model and its matching `.onnx.json` configuration from the
+[official Piper voice catalog](https://huggingface.co/rhasspy/piper-voices/tree/main/nl/nl_BE/nathalie/medium).
+The model is not bundled with Sodalis.
+
+Configure the server with the model path and, if `piper` is not on `PATH`, its
+executable path:
+
+```sh
+PIPER_MODEL_PATH=/path/to/nl_BE-nathalie-medium.onnx \
+PIPER_EXECUTABLE=piper \
+pnpm --filter @sodalis/server dev
+```
+
+The endpoint streams mono, signed 16-bit little-endian PCM at 22,050 Hz. The
+desktop's “Read aloud” control plays the response and drives approximate,
+amplitude-based mouth movement; Piper's CLI does not provide phoneme or viseme
+timing. When `PIPER_MODEL_PATH` is unset, TTS responds with service unavailable
+while STT remains usable.
+
+Piper is GPL-3.0. The voice card lists the underlying training dataset under
+CC0; check the upstream voice repository's terms for the separate model files
+before redistributing them.

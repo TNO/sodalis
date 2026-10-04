@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import m from "mithril";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
 import { AvatarConversationCard } from "./AvatarConversationCard.js";
 
@@ -102,6 +102,96 @@ describe("positionAvatarConversationCard", () => {
       expect(
         host.querySelector('[aria-live="polite"]')?.textContent,
       ).toContain("Waar is mijn afspraak?");
+
+      m.render(host, null);
+    });
+
+    it("can read the visible assistant caption aloud on request", async () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const onSpeak = vi.fn(async () => undefined);
+
+      m.render(
+        host,
+        m(AvatarConversationCard, {
+          assistantText: "Je afspraak staat morgen om tien uur.",
+          onSpeak,
+          onStopSpeaking: () => undefined,
+          onClose: () => undefined,
+        }),
+      );
+      host.querySelector<HTMLButtonElement>(".avatar-conversation-speak")?.click();
+      await vi.waitFor(() =>
+        expect(onSpeak).toHaveBeenCalledWith(
+          "Je afspraak staat morgen om tien uur.",
+        ),
+      );
+
+      m.render(host, null);
+    });
+
+    it("reports read-aloud failures separately from microphone failures", async () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const onSpeechError = vi.fn();
+      const onSpeechOutputError = vi.fn();
+
+      m.render(
+        host,
+        m(AvatarConversationCard, {
+          assistantText: "Je afspraak staat morgen om tien uur.",
+          onSpeak: async () => {
+            throw new Error("Piper is unavailable.");
+          },
+          onSpeechError,
+          onSpeechOutputError,
+          onClose: () => undefined,
+        }),
+      );
+      host.querySelector<HTMLButtonElement>(".avatar-conversation-speak")?.click();
+      await vi.waitFor(() => expect(onSpeechOutputError).toHaveBeenCalledOnce());
+
+      expect(onSpeechOutputError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "Piper is unavailable." }),
+      );
+      expect(onSpeechError).not.toHaveBeenCalled();
+
+      m.render(host, null);
+    });
+
+    it("offers cancellation while speech is still being prepared", () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const onStopSpeaking = vi.fn();
+      const onSpeak = vi.fn(async () => new Promise<void>(() => undefined));
+      m.render(
+        host,
+        m(AvatarConversationCard, {
+          assistantText: "Een bericht.",
+          onSpeak,
+          onStopSpeaking,
+          onClose: () => undefined,
+        }),
+      );
+
+      host.querySelector<HTMLButtonElement>(".avatar-conversation-speak")?.click();
+      m.render(
+        host,
+        m(AvatarConversationCard, {
+          assistantText: "Een bericht.",
+          onSpeak,
+          onStopSpeaking,
+          speechOutputActive: true,
+          onClose: () => undefined,
+        }),
+      );
+
+      const button = host.querySelector<HTMLButtonElement>(
+        ".avatar-conversation-speak",
+      );
+      expect(button?.textContent).toBe("Stop speaking");
+      button?.click();
+      expect(onStopSpeaking).toHaveBeenCalledOnce();
 
       m.render(host, null);
     });

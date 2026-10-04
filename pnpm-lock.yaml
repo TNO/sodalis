@@ -205,6 +205,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.19.9
         version: 1.19.17(hono@4.13.12)
+      '@sodalis/speech':
+        specifier: workspace:*
+        version: link:../../packages/speech
       hono:
         specifier: ^4.11.7
         version: 4.13.12

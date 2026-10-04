@@ -7,9 +7,15 @@ interface AvatarConversationCardAttrs {
   speechInput?: SpeechInputController;
   speechActivityMessage?: string;
   speechError?: string;
+  speechOutputError?: string;
   userTranscript?: string;
   assistantText?: string;
+  speechOutputActive?: boolean;
+  speechPlaying?: boolean;
   onSpeechError?: (error: Error) => void;
+  onSpeechOutputError?: (error: Error) => void;
+  onSpeak?: (text: string) => Promise<void>;
+  onStopSpeaking?: () => void;
   onClose: () => void;
 }
 
@@ -109,18 +115,24 @@ export const AvatarConversationCard =
           speechState?.status === "requesting-permission";
         const listening = speechState?.status === "listening";
         const statusMessage =
-          vnode.attrs.speechError
-            ? `Microphone error: ${vnode.attrs.speechError}`
-            : speechState?.status === "error"
-              ? `Microphone unavailable: ${speechState.error ?? "Unknown error."}`
-              : actionError
-                ? `Microphone error: ${actionError}`
-              : requestingPermission
-                ? "Requesting microphone permission…"
-                : listening
-                  ? vnode.attrs.speechActivityMessage ??
-                    "Microphone is on. Speak to start a turn."
-                  : "Microphone is off. Hold to talk or type a message.";
+          vnode.attrs.speechOutputError
+            ? `Speech output error: ${vnode.attrs.speechOutputError}`
+            : vnode.attrs.speechOutputActive
+              ? vnode.attrs.speechPlaying
+                ? "Sodalis is speaking."
+                : "Preparing speech."
+            : vnode.attrs.speechError
+              ? `Microphone error: ${vnode.attrs.speechError}`
+              : speechState?.status === "error"
+                ? `Microphone unavailable: ${speechState.error ?? "Unknown error."}`
+                : actionError
+                  ? `Microphone error: ${actionError}`
+                  : requestingPermission
+                    ? "Requesting microphone permission…"
+                    : listening
+                      ? vnode.attrs.speechActivityMessage ??
+                        "Microphone is on. Speak to start a turn."
+                      : "Microphone is off. Hold to talk or type a message.";
 
         const startPushToTalk = () => {
           if (pushToTalkActive || requestingPermission) return;
@@ -231,6 +243,38 @@ export const AvatarConversationCard =
                 onblur: stopPushToTalk,
               },
               pushToTalkActive ? "Release to stop" : "Hold to talk",
+            ),
+            m(
+              "button.avatar-conversation-speak[type=button]",
+              {
+                disabled: vnode.attrs.speechOutputActive
+                  ? !vnode.attrs.onStopSpeaking
+                  : !vnode.attrs.onSpeak,
+                onclick: () => {
+                  if (vnode.attrs.speechOutputActive) {
+                    vnode.attrs.onStopSpeaking?.();
+                    return;
+                  }
+                  const text = (
+                    vnode.attrs.assistantText ?? caption
+                  ).trim();
+                  if (!text) return;
+                  const speak = vnode.attrs.onSpeak;
+                  if (!speak) return;
+                  void speak(text).catch((error: unknown) => {
+                    const normalized =
+                      error instanceof Error
+                        ? error
+                        : new Error(String(error));
+                    if (vnode.attrs.onSpeechOutputError) {
+                      vnode.attrs.onSpeechOutputError(normalized);
+                    } else {
+                      handleActionError(normalized, vnode.attrs);
+                    }
+                  });
+                },
+              },
+              vnode.attrs.speechOutputActive ? "Stop speaking" : "Read aloud",
             ),
             m(
               "form.avatar-conversation-form",

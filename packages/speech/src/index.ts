@@ -140,6 +140,11 @@ export {
   type SpeechToTextLatency,
   type ServerSpeechToTextProviderOptions,
 } from "./ServerSpeechToTextProvider.js";
+export {
+  ServerTextToSpeechProvider,
+  type ServerTextToSpeechLatency,
+  type ServerTextToSpeechProviderOptions,
+} from "./ServerTextToSpeechProvider.js";
 
 export type SpeechId = string;
 

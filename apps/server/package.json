@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sodalis/speech": "workspace:*",
     "@hono/node-server": "^1.19.9",
     "hono": "^4.11.7"
   },

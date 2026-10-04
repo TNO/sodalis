@@ -6,11 +6,13 @@ import {
   createEnergyVoiceActivityDetector,
   createSpeechInputController,
   ServerSpeechToTextProvider,
+  ServerTextToSpeechProvider,
 } from "@sodalis/speech";
 import type {
   SpeechAudioChunk,
   SpeechInputController,
   SpeechInputState,
+  SpeechRequest,
   SpeechSessionId,
   SpeechToTextSession,
 } from "@sodalis/speech";
@@ -19,6 +21,10 @@ import { AvatarNotificationPanel } from "./AvatarNotificationPanel.js";
 import type { AvatarNotification } from "./AvatarNotificationPanel.js";
 import { AvatarViewport } from "./AvatarViewport.js";
 import type { AvatarPresentationController } from "./AvatarPresentationController.js";
+import {
+  createSpeechPlaybackController,
+  type SpeechPlaybackController,
+} from "./SpeechPlaybackController.js";
 
 interface DesktopAvatarOverlayAttrs {
   targetRegistry?: AttentionTargetRegistry;
@@ -65,6 +71,15 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+let speechRequestSequence = 0;
+
+function createSpeechRequestId(prefix: string): string {
+  speechRequestSequence += 1;
+  const unique = globalThis.crypto?.randomUUID?.() ??
+    `${Date.now().toString(36)}-${speechRequestSequence.toString(36)}`;
+  return `${prefix}:${unique}`;
+}
+
 interface ActiveSpeechRecognition {
   readonly microphoneSessionId: SpeechSessionId;
   readonly recognitionSessionId: SpeechSessionId;
@@ -90,6 +105,7 @@ export const DesktopAvatarOverlay =
     let windowMutationObserver: MutationObserver | undefined;
     let presentation: AvatarPresentationController | undefined;
     let speechInput: SpeechInputController | undefined;
+    let speechPlayback: SpeechPlaybackController | undefined;
     let speechInputListener:
       | ((controller: SpeechInputController | undefined) => void)
       | undefined;
@@ -105,22 +121,39 @@ export const DesktopAvatarOverlay =
     let restoreAvatarFocus = false;
     let restoreNotificationFocus = false;
     let microphoneWasActive = false;
+    let speechOutputActive = false;
+    let speechIsPlaying = false;
     let speechActivityMessage: string | undefined;
     let speechError: string | undefined;
+    let speechOutputError: string | undefined;
     let userTranscript: string | undefined;
     let assistantText: string | undefined;
     let activeRecognition: ActiveSpeechRecognition | undefined;
+    const speechApiBaseUrl = import.meta.env.VITE_SODALIS_API_URL ?? "/api";
     const speechToTextProvider = new ServerSpeechToTextProvider({
-      baseUrl: import.meta.env.VITE_SODALIS_API_URL ?? "/api",
+      baseUrl: speechApiBaseUrl,
       onLatency(metric) {
         if (import.meta.env.DEV) {
           console.debug("Speech recognition latency:", metric);
         }
       },
     });
+    const textToSpeechProvider = new ServerTextToSpeechProvider({
+      baseUrl: speechApiBaseUrl,
+      onLatency(metric) {
+        if (import.meta.env.DEV) {
+          console.debug("Speech synthesis latency:", metric);
+        }
+      },
+    });
 
     const reportSpeechError = (error: Error) => {
       speechError = error.message;
+      m.redraw();
+    };
+
+    const reportSpeechOutputError = (error: Error) => {
+      speechOutputError = error.message;
       m.redraw();
     };
 
@@ -297,6 +330,42 @@ export const DesktopAvatarOverlay =
         onError: reportSpeechError,
       });
 
+    const createSpeechPlayback = (): SpeechPlaybackController =>
+      createSpeechPlaybackController({
+        provider: textToSpeechProvider,
+        getAvatarController: () => avatarScene?.controller,
+        isListening: () => microphoneWasActive,
+        onOutputChange(active) {
+          speechOutputActive = active;
+          speechInput?.setActiveOutput(active ? speechPlayback : undefined);
+          if (layer) m.redraw();
+        },
+        onStateChange(speaking) {
+          speechIsPlaying = speaking;
+          if (layer) m.redraw();
+        },
+      });
+
+    const speakAssistantText = async (text: string) => {
+      if (!speechPlayback) {
+        throw new Error("Speech playback is unavailable.");
+      }
+      speechOutputError = undefined;
+      const request: SpeechRequest = {
+        sessionId: createSpeechRequestId("desktop"),
+        speechId: createSpeechRequestId("speech"),
+        text,
+        language: "nl-NL",
+      };
+      await speechPlayback.speak(request);
+    };
+
+    const stopAssistantSpeech = () => {
+      speechPlayback?.stopPlayback();
+      speechPlayback?.cancelTts();
+      speechInput?.setActiveOutput(undefined);
+    };
+
     const setSpeechInputListener = (
       listener:
         | ((controller: SpeechInputController | undefined) => void)
@@ -311,7 +380,9 @@ export const DesktopAvatarOverlay =
     const closeConversation = () => {
       conversationOpen = false;
       restoreAvatarFocus = true;
+      speechOutputError = undefined;
       presentation?.setMode("ambient");
+      stopAssistantSpeech();
       cancelRecognition();
       void speechInput?.stop().catch((error: unknown) => {
         reportSpeechError(
@@ -566,6 +637,7 @@ export const DesktopAvatarOverlay =
         layer = vnode.dom as HTMLElement;
         onGeometryChange = vnode.attrs.onGeometryChange;
         speechInput = createSpeechInput();
+        speechPlayback = createSpeechPlayback();
         setSpeechInputListener(vnode.attrs.onSpeechInput);
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
@@ -601,6 +673,9 @@ export const DesktopAvatarOverlay =
         }
         conversationOpen = false;
         notificationOpen = false;
+        stopAssistantSpeech();
+        speechPlayback?.dispose();
+        speechPlayback = undefined;
         cancelRecognition();
         setSpeechInputListener(undefined);
         void speechInput?.dispose().catch((error: unknown) => {
@@ -709,9 +784,15 @@ export const DesktopAvatarOverlay =
                   speechInput,
                   speechActivityMessage,
                   speechError,
+                  speechOutputError,
                   userTranscript,
                   assistantText,
+                  speechOutputActive,
+                  speechPlaying: speechIsPlaying,
                   onSpeechError: reportSpeechError,
+                  onSpeechOutputError: reportSpeechOutputError,
+                  onSpeak: speakAssistantText,
+                  onStopSpeaking: stopAssistantSpeech,
                   onClose: closeConversation,
                 })
               : null,

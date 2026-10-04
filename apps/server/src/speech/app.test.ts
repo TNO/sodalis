@@ -48,6 +48,7 @@ describe("speech recognition API", () => {
     await expect(finished.json()).resolves.toEqual({
       text: "Waar is mijn afspraak?",
     });
+
     expect(engine.transcribe).toHaveBeenCalledWith(
       expect.objectContaining({
         audio,
