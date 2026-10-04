@@ -26,7 +26,9 @@ whisper-server -m /path/to/ggml-base.bin --host 127.0.0.1 --port 8081 --convert
 Then start the Sodalis server:
 
 ```sh
-WHISPER_CPP_URL=http://127.0.0.1:8081 pnpm dev:speech
+STT_PROVIDER=whisper-cpp WHISPER_CPP_URL=http://127.0.0.1:8081 \
+TTS_PROVIDER=piper PIPER_MODEL_PATH=/path/to/nl_BE-nathalie-medium.onnx \
+pnpm dev:speech
 ```
 
 The desktop Vite development server proxies `/api/speech` to port 3001 and
@@ -60,7 +62,8 @@ Configure the server with the model path and, if `piper` is not on `PATH`, its
 executable path:
 
 ```sh
-PIPER_MODEL_PATH=/path/to/nl_BE-nathalie-medium.onnx \
+STT_PROVIDER=whisper-cpp WHISPER_CPP_URL=http://127.0.0.1:8081 \
+TTS_PROVIDER=piper PIPER_MODEL_PATH=/path/to/nl_BE-nathalie-medium.onnx \
 PIPER_EXECUTABLE=piper \
 pnpm dev:speech
 ```
@@ -68,8 +71,18 @@ pnpm dev:speech
 The endpoint streams mono, signed 16-bit little-endian PCM at 22,050 Hz. The
 desktop's “Read aloud” control plays the response and drives approximate,
 amplitude-based mouth movement; Piper's CLI does not provide phoneme or viseme
-timing. When `PIPER_MODEL_PATH` is unset, TTS responds with service unavailable
-while STT remains usable.
+timing. `STT_PROVIDER` defaults to `whisper-cpp` (requires `WHISPER_CPP_URL`);
+`TTS_PROVIDER` defaults to `piper` (requires `PIPER_MODEL_PATH` and the
+matching `.onnx.json`). The speech service fails startup for missing settings
+or unknown provider IDs rather than falling back. Either role can instead
+select `mock`, a deterministic fixture with no engine dependencies.
+`TTS_PROVIDER=piper-http` uses an explicitly configured `PIPER_HTTP_URL`;
+that Piper HTTP service must return standard 22,050 Hz mono PCM16 WAV for a
+JSON `{"text": "..."}` request. STT's Whisper.cpp URL can likewise point to
+a remote/native host instance; keep such endpoints private and trusted.
+Piper HTTP's format is specific to that adapter, not a generic engine
+protocol. STT and TTS can be mixed freely, retain the existing browser
+session/stream contract, and require no GPU; model CPU performance varies.
 
 Piper is GPL-3.0. The voice card lists the underlying training dataset under
 CC0; check the upstream voice repository's terms for the separate model files
