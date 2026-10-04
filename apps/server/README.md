@@ -90,12 +90,17 @@ before redistributing them.
 
 ## Conversation assistant
 
-The AI service exposes an OpenAI Chat Completions-compatible streaming provider.
-Set `LLM_BASE_URL` to the service's API base (for example,
+The AI service requires `LLM_PROVIDER=mock` for deterministic local development,
+or `LLM_PROVIDER=openai-compatible` for an OpenAI Chat Completions-compatible
+streaming provider. For the latter, set `LLM_BASE_URL` to the service's API base (for example,
 `http://127.0.0.1:1234/v1`) and `LLM_MODEL` to an enabled model. Set
 `LLM_API_KEY` only when that service requires it; the key remains on the server.
-The assistant endpoint and AI readiness return 503 when URL and model are both
-unset, and the AI service rejects a partial configuration at startup.
+Local, remote, and cloud endpoints can use this adapter when they implement
+its protocol; unsupported vendors need their own explicit adapter. Missing
+or unknown provider IDs and incomplete model configuration fail startup rather
+than silently switching to another endpoint. Generation remains behind the AI
+service's provider interface, where future memory can be added without a
+browser API change.
 
 Conversation turns include a short in-memory history (at most 12 messages) and,
 when available, the current built-in Aster app's semantic identity (app ID,
