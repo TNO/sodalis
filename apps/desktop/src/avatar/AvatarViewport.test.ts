@@ -66,14 +66,42 @@ describe("AvatarViewport", () => {
         id: "talkinghead-brunette",
         name: "Brunette",
         modelUrl: expect.stringContaining("avatars/talkinghead-brunette.glb"),
+        hiddenNodes: ["Wolf3D_Glasses"],
+        behavior: {
+          expressionScale: 6,
+          headMotionScale: 3,
+        },
       }),
     );
     await vi.waitFor(() => {
       expect(host.textContent).toContain("Brunette avatar ready.");
     });
+    expect(host.querySelector(".avatar-gaze-overlay")).toBeNull();
     expect(
       host.querySelector(".avatar-viewport-status-ready")?.textContent,
     ).toBe("Brunette avatar ready.");
+  });
+
+  it("shows gaze diagnostics only when explicitly enabled", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, {
+      view: () =>
+        m(AvatarViewport, {
+          showGazeTarget: true,
+          gazeOverlay: "Gaze target: Read message",
+        }),
+    });
+
+    await vi.waitFor(() => {
+      expect(scene.controller.load).toHaveBeenCalledOnce();
+    });
+    expect(host.querySelector(".avatar-gaze-overlay")?.textContent).toBe(
+      "Gaze target: Read message",
+    );
   });
 
   it("offers retry when the selected avatar cannot be loaded", async () => {

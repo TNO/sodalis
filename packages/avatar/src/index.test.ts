@@ -104,6 +104,7 @@ describe("public avatar contract", () => {
         preferred: "upper-body",
         cameraDistanceScale: 1.1,
       },
+      hiddenNodes: ["Wolf3D_Glasses"],
       behavior: {
         blinkScale: 0.9,
       },
@@ -137,6 +138,24 @@ describe("public avatar contract", () => {
         { path: "framing.preferred" },
         { path: "framing.cameraDistanceScale" },
         { path: "behavior.blinkScale" },
+      ],
+    });
+  });
+
+  it("rejects empty or duplicate hidden model node names", () => {
+    const validation = validateAvatarAsset({
+      id: "companion",
+      name: "Companion",
+      modelUrl: "/avatars/companion.glb",
+      profile: "sodalis-avatar-0.1",
+      hiddenNodes: [" ", "Wolf3D_Glasses", "Wolf3D_Glasses"],
+    });
+
+    expect(validation).toMatchObject({
+      ok: false,
+      issues: [
+        { path: "hiddenNodes.0" },
+        { path: "hiddenNodes.2" },
       ],
     });
   });

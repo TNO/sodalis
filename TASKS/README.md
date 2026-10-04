@@ -26,16 +26,19 @@ in this phase.
 ## Avatar assets and selection
 
 - [x] 0013 Adding the TalkingHead brunette avatar
-- [ ] 0014 Generating a Blender/MPFB avatar
-- [ ] 0015 Building in-app avatar selection *(needs 0013, 0014)*
+- [ ] 0014 Building the native Sodalis avatar asset pipeline
+  *(needs 0010, 0012)*
+- [ ] 0015 Building in-app avatar selection *(needs 0014)*
 
 ## Desktop avatar presentation
 
 Task 0016 uses the current avatar asset and can proceed independently of the
-asset pipeline and selector tasks. Tasks 0017 and 0018 build on the desktop
-overlay.
+asset pipeline and selector tasks. Task 0018 depends directly on 0016; tasks
+0017 and 0019–0021 build on the desktop presentation.
 
 - [x] 0016 Adding the persistent desktop avatar overlay
 - [x] 0017 Adding avatar presentation modes *(needs 0016)*
 - [x] 0018 Improving the avatar's ambient idle pose *(needs 0016)*
 - [x] 0019 Adding semantic UI attention and avoidance *(needs 0017)*
+- [x] 0020 Adding the avatar conversation card *(needs 0017)*
+- [x] 0021 Adding avatar notification presentation *(needs 0017)*

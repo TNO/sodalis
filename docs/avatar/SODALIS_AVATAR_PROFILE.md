@@ -45,6 +45,7 @@ measurements.
 The desktop currently loads the TalkingHead `brunette.glb` example by default:
 
 - Local path: `apps/desktop/public/avatars/talkinghead-brunette.glb`
+- The `Wolf3D_Glasses` node is hidden by the desktop's `AvatarAsset` metadata.
 - Source: [TalkingHead v1.7.0 brunette.glb](https://github.com/met4citizen/TalkingHead/blob/v1.7.0/avatars/brunette.glb)
 - Creator attribution: Ready Player Me, as identified by the TalkingHead README
 - License: [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
@@ -100,6 +101,11 @@ profile names above.
 | `preferred` | `head`, `upper-body`, or `half-body`; default framing for the runtime |
 | `cameraTargetYOffset` | Optional finite offset in meters added to the measured framing target |
 | `cameraDistanceScale` | Optional finite positive multiplier for the bounds-derived camera distance |
+
+`AvatarAsset.behavior` may scale expression and head movement. The controller
+caps expression scaling at 6 and head-motion scaling at 3. The desktop sets
+these higher values only in development builds to make Avatar Lab behavior
+easier to inspect; production keeps the default restrained behavior.
 
 The scene measures the loaded model's bounds, uses the `Head` joint for head
 framing when present, and derives camera distance from the chosen vertical and

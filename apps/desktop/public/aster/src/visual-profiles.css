@@ -288,6 +288,9 @@ body.theme-managed[data-profile=ubuntu]{--shadow:0 12px 28px #0004,0 2px 8px #00
 .theme-managed[data-profile=macos26]:not(.theme-contrast) :is(.explorer-sidebar,.settings-sidebar) .nav-item.active{background:color-mix(in srgb,var(--accent) 86%,#000);color:#fff}
 .theme-managed[data-profile=macos26]:not(.theme-contrast) :is(.explorer-sidebar,.settings-sidebar) .nav-item.active .icon{color:#fff}
 @media(max-width:540px){.theme-managed[data-profile=windows] .window[data-app=files] .explorer-tabs{right:122px;left:5px}.theme-managed[data-profile=windows] .window[data-app=files]>.titlebar .window-controls>button{width:40px}}
+/* Keep the unused combined-tab strip draggable without disabling its buttons. */
+.theme-managed[data-profile=windows] .window[data-app=files] .explorer-tabs{pointer-events:none}
+.theme-managed[data-profile=windows] .window[data-app=files] .explorer-tabs button{pointer-events:auto}
 /* The Dock's existing ID-level blur rule must not override the live optical
    filter. Keep the specificity explicit rather than globally forcing filters. */
 .theme-managed[data-profile=macos26] #taskbar.liquid-surface{backdrop-filter:var(--optical-filter,blur(18px) saturate(1.4));-webkit-backdrop-filter:var(--optical-filter,blur(18px) saturate(1.4));background:color-mix(in srgb,var(--shell-glass) 68%,transparent)}

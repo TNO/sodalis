@@ -48,3 +48,13 @@ if one is present; otherwise create only the minimal registry needed.
   could not be rendered in the browser; the harness reports `Avatar is not
   loaded.` rather than silently failing. The production build still warns
   about the 560 kB lazy AvatarScene chunk; address under task 0011.
+- 2026-10-03 follow-up: raised the development Avatar Lab's default expression
+  intensity and enabled development-only expression/head-motion scaling. The
+  production default remains unchanged; `headMotionScale` now affects
+  TalkingHead motion options. The debug-scale ceilings make a maximum-weight
+  expression and ordinary head movement easier to inspect without treating
+  the preview setting as production emotion policy.
+- 2026-10-03 follow-up: task 0013 later integrated a profile-compatible,
+  non-commercial brunette GLB for local Avatar Lab testing. The earlier
+  no-model limitation is historical; the asset is still not approved for
+  commercial distribution.

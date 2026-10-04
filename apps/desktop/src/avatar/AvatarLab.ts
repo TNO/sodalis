@@ -68,7 +68,7 @@ export function createAvatarLabState(): AvatarLabState {
       valence: 0,
       arousal: 0.3,
       expression: "neutral",
-      intensity: 0.4,
+      intensity: 0.7,
     },
     framing: "upper-body",
     quality: "auto",

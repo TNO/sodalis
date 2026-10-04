@@ -602,8 +602,6 @@
             }
             OS.switchDesktop(OS.desktops[0].id);
         }
-        else
-            OS.openApp('files');
         await OS.runStartup?.();
         clockInterval = setInterval(() => { updateClock(); timerTick(); }, 1000);
         setInterval(() => calendarTick().catch(console.warn), 5000);

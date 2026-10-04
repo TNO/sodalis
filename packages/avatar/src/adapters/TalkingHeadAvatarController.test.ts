@@ -1,4 +1,11 @@
-import { Bone, PerspectiveCamera, Scene } from "three";
+import {
+  BoxGeometry,
+  Bone,
+  Mesh,
+  MeshStandardMaterial,
+  PerspectiveCamera,
+  Scene,
+} from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createTalkingHeadAvatarController } from "./TalkingHeadAvatarController.js";
 import { createAvatarUiTargetRegistry } from "../index.js";
@@ -107,6 +114,36 @@ describe("TalkingHead avatar controller", () => {
       expect.objectContaining({ url: "/test.glb" }),
     );
     expect(runtime.lookAhead).toHaveBeenLastCalledWith(650);
+  });
+
+  it("hides configured model nodes after the avatar loads", async () => {
+    const { scene, runtime, controller } = createHarness();
+    const glasses = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
+    glasses.name = "Wolf3D_Glasses";
+    const head = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
+    head.name = "Wolf3D_Head";
+    runtime.showAvatar.mockImplementation(async () => {
+      scene.add(glasses, head);
+    });
+
+    await controller.load({
+      ...testAsset,
+      hiddenNodes: ["Wolf3D_Glasses"],
+    });
+
+    expect(glasses.visible).toBe(false);
+    expect(head.visible).toBe(true);
+  });
+
+  it("reports when a configured model node is missing", async () => {
+    const { controller } = createHarness();
+
+    await expect(
+      controller.load({
+        ...testAsset,
+        hiddenNodes: ["MissingNode"],
+      }),
+    ).rejects.toThrow('Avatar model node "MissingNode" was not found.');
   });
 
   it("advances TalkingHead from the external loop in milliseconds", async () => {
@@ -245,6 +282,33 @@ describe("TalkingHead avatar controller", () => {
       0.0675,
       220,
     );
+  });
+
+  it("applies development behavior scales to expression and head motion", async () => {
+    const { runtime, controller } = createHarness();
+    await controller.load({
+      ...testAsset,
+      behavior: {
+        expressionScale: 6,
+        headMotionScale: 3,
+      },
+    });
+
+    expect(runtime.opt.avatarIdleHeadMove).toBeCloseTo(0.45);
+    expect(runtime.opt.avatarSpeakingHeadMove).toBeCloseTo(0.45);
+
+    runtime.setValue.mockClear();
+    controller.setAffect({
+      valence: 0,
+      arousal: 0.3,
+      expression: "happy",
+      intensity: 0.7,
+    });
+
+    const smileWeight = runtime.setValue.mock.calls.find(
+      ([morph]) => morph === "mouthSmileLeft",
+    )?.[1];
+    expect(smileWeight).toBeCloseTo(0.6237);
   });
 
   it("biases listening state toward eye contact", async () => {

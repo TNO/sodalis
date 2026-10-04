@@ -45,3 +45,7 @@ asset, and do not imply that commercial use is permitted.
   TalkingHead's unused default `lipsyncModules` stopped its dynamic locale
   module 404s; restore locale loading with proper bundling when speech is
   integrated. Typecheck, all 51 tests, production build, and diff checks pass.
+- 2026-10-03: Follow-up: hide the model's `Wolf3D_Glasses` node through avatar
+  metadata at load time; leave the bundled GLB unchanged. Added controller and
+  metadata tests and verified the avatar still loads in the desktop without
+  glasses.

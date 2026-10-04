@@ -263,6 +263,7 @@ export function createTalkingHeadAvatarController({
   let releaseFromWeights = silenceWeights();
   let reducedMotion = false;
   let expressionScale = 1;
+  let headMotionScale = 1;
   let ambientPose: AmbientPose | undefined;
 
   const getAmbientPoseJoint = (name: string): AmbientPoseJoint | undefined => {
@@ -363,7 +364,7 @@ export function createTalkingHeadAvatarController({
   const applyAffect = (runtime: TalkingHeadRuntime) => {
     const weights = expressionWeights(
       affect,
-      Math.min(expressionScale, 1.5),
+      Math.min(expressionScale, 6),
     );
     for (const morph of EXPRESSION_MORPHS) {
       runtime.setValue(morph, weights[morph], 220);
@@ -371,7 +372,7 @@ export function createTalkingHeadAvatarController({
   };
 
   const applyHeadMotionPreference = (runtime?: TalkingHeadRuntime) => {
-    const headMove = reducedMotion ? 0 : 0.15;
+    const headMove = reducedMotion ? 0 : 0.15 * headMotionScale;
     talkingHeadOptions.avatarIdleHeadMove = headMove;
     talkingHeadOptions.avatarSpeakingHeadMove = headMove;
     if (runtime) {
@@ -530,6 +531,10 @@ export function createTalkingHeadAvatarController({
       if (!validation.ok) throw validationError(validation.issues);
       signal?.throwIfAborted();
       expressionScale = validation.asset.behavior?.expressionScale ?? 1;
+      headMotionScale = Math.min(
+        validation.asset.behavior?.headMotionScale ?? 1,
+        3,
+      );
 
       releaseCurrent(new Error("Avatar load was superseded."));
       const currentOperation = operation;
@@ -569,6 +574,15 @@ export function createTalkingHeadAvatarController({
           throw cancellationError();
         }
         if (loaded?.instance === runtime) {
+          for (const nodeName of validation.asset.hiddenNodes ?? []) {
+            const node = scene.getObjectByName(nodeName);
+            if (!node) {
+              throw new Error(
+                `Avatar model node "${nodeName}" was not found.`,
+              );
+            }
+            node.visible = false;
+          }
           captureAmbientPose();
           cancelPendingLoad = undefined;
           applyHeadMotionPreference(runtime);

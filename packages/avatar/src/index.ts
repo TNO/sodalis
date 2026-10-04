@@ -145,6 +145,7 @@ export interface AvatarAsset {
   name: string;
   modelUrl: string;
   profile: typeof AVATAR_PROFILE_ID;
+  hiddenNodes?: readonly string[];
   framing?: {
     preferred: AvatarFramingName;
     cameraTargetYOffset?: number;
@@ -323,6 +324,44 @@ function validateBehavior(
   };
 }
 
+function validateHiddenNodes(
+  value: unknown,
+  issues: AvatarAssetIssue[],
+): readonly string[] | undefined {
+  if (!Array.isArray(value)) {
+    issues.push({
+      path: "hiddenNodes",
+      message: "Must be an array of non-empty node names.",
+    });
+    return undefined;
+  }
+
+  const names = new Set<string>();
+  const hiddenNodes: string[] = [];
+  for (const [index, valueAtIndex] of value.entries()) {
+    if (typeof valueAtIndex !== "string" || !valueAtIndex.trim()) {
+      issues.push({
+        path: `hiddenNodes.${index}`,
+        message: "Must be a non-empty node name.",
+      });
+      continue;
+    }
+
+    const name = valueAtIndex.trim();
+    if (names.has(name)) {
+      issues.push({
+        path: `hiddenNodes.${index}`,
+        message: `Node "${name}" is listed more than once.`,
+      });
+      continue;
+    }
+    names.add(name);
+    hiddenNodes.push(name);
+  }
+
+  return hiddenNodes;
+}
+
 export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
   const issues: AvatarAssetIssue[] = [];
   if (!isRecord(value)) {
@@ -360,6 +399,10 @@ export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
     value.behavior === undefined
       ? undefined
       : validateBehavior(value.behavior, issues);
+  const hiddenNodes =
+    value.hiddenNodes === undefined
+      ? undefined
+      : validateHiddenNodes(value.hiddenNodes, issues);
 
   if (issues.length > 0) return { ok: false, issues };
 
@@ -370,6 +413,7 @@ export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
       name,
       modelUrl,
       profile: AVATAR_PROFILE_ID,
+      ...(hiddenNodes ? { hiddenNodes } : {}),
       ...(framing ? { framing } : {}),
       ...(behavior ? { behavior } : {}),
     },

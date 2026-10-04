@@ -24,7 +24,9 @@
 
 The sequential Phase 1 avatar implementation tasks are complete; see
 [`TASKS/README.md`](TASKS/README.md), the avatar profile, and ADR 0004. No
-licensed avatar model is included. Later protocol, trusted-app, Mail, speech,
+commercially approved avatar model is included. A CC BY-NC TalkingHead
+brunette is bundled as a non-commercial pipeline sample; a native MPFB/Blender
+collection is tracked as task 0014. Later protocol, trusted-app, Mail, speech,
 LLM, memory, and Home Assistant work is outside the Phase 1 scope.
 
 ## Findings and boundaries

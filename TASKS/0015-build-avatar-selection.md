@@ -3,7 +3,7 @@
 Status: open
 Priority: medium
 Subsystem: frontend
-Depends on: 0013, 0014
+Depends on: 0014
 Owner: Copilot
 Agent: unassigned
 
@@ -11,7 +11,7 @@ Agent: unassigned
 
 The user wants to preview and choose among several avatars inside Sodalis,
 rather than choosing a model only from a written list. This task starts after
-the TalkingHead brunette and an MPFB-authored avatar are available as local,
+the native Sodalis avatar collection in 0014 is available as local,
 profile-validated assets.
 
 ## Acceptance Criteria
@@ -20,13 +20,17 @@ profile-validated assets.
   profile-validated avatar assets.
 - A user can preview and select an avatar; each option shows its name and
   applicable license/attribution.
+- The production chooser includes only assets approved for the intended
+  distribution model. The CC BY-NC TalkingHead sample from 0013 is excluded
+  unless its non-commercial restriction is explicitly acceptable.
 - Invalid or unavailable assets do not prevent the rest of the desktop from
   working.
 - Decide whether selection persists across reloads before implementing storage.
 
 ## Implementation Notes
 
-- Depends on the locally available assets produced by 0013 and 0014.
+- Depends on the native collection produced by 0014; 0013's non-commercial
+  sample is not a prerequisite.
 - Keep the model catalogue separate from the renderer so adding a model does
   not require changing the selection UI.
 

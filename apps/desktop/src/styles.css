@@ -215,6 +215,10 @@ body {
   pointer-events: none;
 }
 
+.desktop-avatar-layer[data-effective-dock="left"] .avatar-viewport {
+  --avatar-edge-margin: clamp(0.25rem, 0.6%, 0.5rem);
+}
+
 .desktop-avatar-layer[data-visible="false"] .avatar-viewport {
   opacity: 0;
   visibility: hidden;
@@ -465,6 +469,11 @@ body {
   font-weight: 650;
   pointer-events: auto;
   cursor: pointer;
+}
+
+.desktop-avatar-layer[data-effective-dock="left"] .avatar-notification-indicator {
+  right: auto;
+  left: 0.35rem;
 }
 
 .avatar-notification-dot {

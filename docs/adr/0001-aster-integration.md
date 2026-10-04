@@ -30,6 +30,15 @@ Also normalize non-`Error` startup rejections before Aster's boot-error screen
 reads their message. Bump the service-worker cache revision when applying the
 patch so clients do not continue running the older failure handler.
 
+## Local compatibility patches
+
+- `src/shell.js` leaves a clean desktop empty instead of opening File Explorer;
+  explicit startup-app preferences and restored sessions remain in effect.
+- `src/visual-profiles.css` passes pointer events through unused space in the
+  Windows File Explorer tab strip while keeping its tab buttons interactive,
+  preserving access to the underlying window-drag handler.
+- `sw.js` cache revisions are bumped when these vendored assets change.
+
 ## Consequences
 
 - Aster is immediately usable and independently testable.
