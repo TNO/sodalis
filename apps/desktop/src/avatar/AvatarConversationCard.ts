@@ -1,5 +1,6 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
+import type { ConversationState } from "@sodalis/assistant";
 import type { SpeechInputController } from "@sodalis/speech";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
 
@@ -12,10 +13,15 @@ interface AvatarConversationCardAttrs {
   assistantText?: string;
   speechOutputActive?: boolean;
   speechPlaying?: boolean;
+  conversationState?: ConversationState;
+  conversationError?: string;
   onSpeechError?: (error: Error) => void;
   onSpeechOutputError?: (error: Error) => void;
   onSpeak?: (text: string) => Promise<void>;
   onStopSpeaking?: () => void;
+  onCancelTurn?: () => void;
+  onSend?: (text: string) => Promise<void>;
+  onConversationError?: (error: Error) => void;
   onClose: () => void;
 }
 
@@ -115,15 +121,23 @@ export const AvatarConversationCard =
           speechState?.status === "requesting-permission";
         const listening = speechState?.status === "listening";
         const statusMessage =
-          vnode.attrs.speechOutputError
-            ? `Speech output error: ${vnode.attrs.speechOutputError}`
+          vnode.attrs.speechError
+            ? `Microphone error: ${vnode.attrs.speechError}`
+            : vnode.attrs.conversationError
+              ? `Assistant error: ${vnode.attrs.conversationError}`
+            : vnode.attrs.speechOutputError
+              ? `Speech output error: ${vnode.attrs.speechOutputError}`
+            : vnode.attrs.conversationState === "thinking"
+              ? "Sodalis is thinking."
+              : vnode.attrs.conversationState === "transcribing"
+                ? "Transcribing speech…"
+                : vnode.attrs.conversationState === "interrupted"
+                  ? "Response interrupted."
             : vnode.attrs.speechOutputActive
               ? vnode.attrs.speechPlaying
                 ? "Sodalis is speaking."
                 : "Preparing speech."
-            : vnode.attrs.speechError
-              ? `Microphone error: ${vnode.attrs.speechError}`
-              : speechState?.status === "error"
+            : speechState?.status === "error"
                 ? `Microphone unavailable: ${speechState.error ?? "Unknown error."}`
                 : actionError
                   ? `Microphone error: ${actionError}`
@@ -155,10 +169,19 @@ export const AvatarConversationCard =
           event.preventDefault();
           const message = draft.trim();
           if (!message) return;
-          transcript = message;
-          caption =
-            "Thanks for telling me. Live assistant replies are not connected yet.";
           draft = "";
+          const send = vnode.attrs.onSend;
+          if (send) {
+            void send(message).catch((error: unknown) => {
+              const normalized =
+                error instanceof Error ? error : new Error(String(error));
+              vnode.attrs.onConversationError?.(normalized);
+            });
+          } else {
+            transcript = message;
+            caption =
+              "Thanks for telling me. Live assistant replies are not connected yet.";
+          }
         };
 
         return m(
@@ -276,6 +299,16 @@ export const AvatarConversationCard =
               },
               vnode.attrs.speechOutputActive ? "Stop speaking" : "Read aloud",
             ),
+            vnode.attrs.conversationState === "thinking"
+              ? m(
+                  "button.avatar-conversation-cancel[type=button]",
+                  {
+                    onclick: vnode.attrs.onCancelTurn,
+                    disabled: !vnode.attrs.onCancelTurn,
+                  },
+                  "Cancel response",
+                )
+              : null,
             m(
               "form.avatar-conversation-form",
               { onsubmit: sendMessage },

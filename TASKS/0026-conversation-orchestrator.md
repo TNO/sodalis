@@ -1,6 +1,6 @@
 # 0026 Conversation orchestrator
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0024, 0025

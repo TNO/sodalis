@@ -293,10 +293,9 @@ describe("DesktopAvatarOverlay", () => {
     await vi.waitFor(() => {
       expect(host.textContent).toContain("Please show me the Reply button.");
     });
-    expect(host.textContent).toContain(
-      "Live assistant replies are not connected yet.",
-    );
-    expect(host.textContent).toContain("Microphone is off.");
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Assistant error:");
+    });
     expect(
       host.querySelector(".avatar-conversation-push-to-talk")?.textContent,
     ).toBe("Hold to talk");

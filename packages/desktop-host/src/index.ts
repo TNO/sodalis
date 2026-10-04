@@ -6,7 +6,14 @@ export interface DesktopApplication {
 
 export interface DesktopHost {
   listApplications(): Promise<DesktopApplication[]>;
+  getCurrentAppContext(): Promise<DesktopAppContext | undefined>;
   openApplication(appId: string): Promise<void>;
+}
+
+export interface DesktopAppContext {
+  appId: string;
+  appName: string;
+  category?: string;
 }
 
 interface AsterApplication extends DesktopApplication {
@@ -21,10 +28,20 @@ interface AsterWindowHandle {
   body?: Pick<HTMLElement, "querySelector">;
 }
 
+interface AsterWindow extends AsterWindowHandle {
+  appId: string;
+  minimized?: boolean;
+  closed?: boolean;
+  desktop?: string;
+}
+
 interface AsterRuntime {
   booted: boolean;
   ready: Promise<unknown>;
   apps: Map<string, AsterApplication>;
+  windows?: Map<string, AsterWindow>;
+  focused?: string | null;
+  activeDesktop?: string;
   openApp(
     appId: string,
   ):
@@ -77,6 +94,31 @@ export function createAsterDesktopHost(frame: HTMLIFrameElement): DesktopHost {
           title,
           ...(category ? { category } : {}),
         }));
+    },
+
+    async getCurrentAppContext() {
+      const runtime = await readyRuntime(frame);
+      const focusedWindow =
+        typeof runtime.focused === "string"
+          ? runtime.windows?.get(runtime.focused)
+          : undefined;
+      if (
+        !focusedWindow ||
+        focusedWindow.closed ||
+        focusedWindow.minimized ||
+        (focusedWindow.desktop &&
+          runtime.activeDesktop &&
+          focusedWindow.desktop !== runtime.activeDesktop)
+      ) {
+        return undefined;
+      }
+      const app = runtime.apps.get(focusedWindow.appId);
+      if (!isAvailableApplication(app)) return undefined;
+      return {
+        appId: app.id,
+        appName: app.title,
+        ...(app.category ? { category: app.category } : {}),
+      };
     },
 
     async openApplication(appId) {

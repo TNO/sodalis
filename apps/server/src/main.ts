@@ -1,4 +1,7 @@
+import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+import { createAssistantApp } from "./assistant/app.js";
+import { OpenAiCompatibleLlmProvider } from "./assistant/OpenAiCompatibleLlmProvider.js";
 import { createSpeechApp } from "./speech/app.js";
 import { PiperTtsEngine } from "./speech/PiperTtsEngine.js";
 import { WhisperCppHttpEngine } from "./speech/WhisperCppHttpEngine.js";
@@ -23,10 +26,35 @@ const ttsEngine = piperModelPath
       modelPath: piperModelPath,
     })
   : undefined;
-const app = createSpeechApp(
-  new WhisperCppHttpEngine({ serverUrl: whisperServerUrl }),
-  ttsEngine ? { ttsEngine } : {},
-);
+const llmBaseUrl = process.env.LLM_BASE_URL;
+const llmModel = process.env.LLM_MODEL;
+if (Boolean(llmBaseUrl) !== Boolean(llmModel)) {
+  throw new Error("Set both LLM_BASE_URL and LLM_MODEL to enable the assistant.");
+}
+if (!llmBaseUrl || !llmModel) {
+  console.warn(
+    "LLM_BASE_URL and LLM_MODEL are unset; assistant responses are disabled.",
+  );
+}
+const llmProvider =
+  llmBaseUrl && llmModel
+    ? new OpenAiCompatibleLlmProvider({
+        baseUrl: llmBaseUrl,
+        model: llmModel,
+        ...(process.env.LLM_API_KEY
+          ? { apiKey: process.env.LLM_API_KEY }
+          : {}),
+      })
+    : undefined;
+const app = new Hono()
+  .route(
+    "/",
+    createSpeechApp(
+      new WhisperCppHttpEngine({ serverUrl: whisperServerUrl }),
+      ttsEngine ? { ttsEngine } : {},
+    ),
+  )
+  .route("/", createAssistantApp({ provider: llmProvider }));
 serve(
   {
     fetch: app.fetch,
@@ -34,6 +62,8 @@ serve(
     port,
   },
   (info) => {
-    console.log(`Sodalis speech server listening on ${info.address}:${info.port}`);
+    console.log(
+      `Sodalis speech and assistant server listening on ${info.address}:${info.port}`,
+    );
   },
 );

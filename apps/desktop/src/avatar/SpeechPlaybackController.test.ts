@@ -134,7 +134,7 @@ describe("SpeechPlaybackController", () => {
     const speaking = player.speak(request);
     await vi.waitFor(() => expect(context.sources).toHaveLength(1));
     expect(avatar.setState).toHaveBeenCalledWith("speaking");
-    expect(onStateChange).toHaveBeenCalledWith(true);
+    expect(onStateChange).toHaveBeenCalledWith(true, request);
     expect(onOutputChange).toHaveBeenCalledWith(true);
 
     context.sources[0]?.finish();
@@ -142,7 +142,7 @@ describe("SpeechPlaybackController", () => {
 
     expect(avatar.setState).toHaveBeenLastCalledWith("idle");
     expect(avatar.setViseme).toHaveBeenLastCalledWith("viseme_sil", 1);
-    expect(onStateChange).toHaveBeenLastCalledWith(false);
+    expect(onStateChange).toHaveBeenLastCalledWith(false, request);
     expect(onOutputChange).toHaveBeenLastCalledWith(false);
     expect(context.close).toHaveBeenCalledOnce();
     expect(onLatency).toHaveBeenCalledWith(

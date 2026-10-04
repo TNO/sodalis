@@ -162,6 +162,8 @@ const DesktopShell = () => {
                   onSpeechInput(controller) {
                     state.speechInput = controller;
                   },
+                  getAppContext: () =>
+                    state.host?.getCurrentAppContext(),
                   async onOpenApplication(appId) {
                     if (!state.host) {
                       throw new Error("The desktop connection is unavailable.");
@@ -221,7 +223,7 @@ const DesktopShell = () => {
                 : null,
               m(
                 "p.assistant-note",
-                "Speech recognition and assistant responses are planned for a later phase.",
+                "Ask a question by voice or text in the companion card; responses use the configured assistant service.",
               ),
             ]),
           ]),

@@ -29,7 +29,11 @@ export interface SpeechPlaybackControllerOptions {
   > | undefined;
   readonly isListening: () => boolean;
   readonly onOutputChange?: (active: boolean) => void;
-  readonly onStateChange?: (speaking: boolean) => void;
+  readonly onStateChange?: (
+    speaking: boolean,
+    request: SpeechRequest,
+  ) => void;
+  readonly onCancelGeneration?: () => void;
   readonly onLatency?: (metric: SpeechPlaybackLatency) => void;
   readonly createAudioContext?: () => SpeechAudioContext;
   readonly requestFrame?: (callback: FrameRequestCallback) => number;
@@ -38,7 +42,7 @@ export interface SpeechPlaybackControllerOptions {
 }
 
 export interface SpeechPlaybackController extends ActiveSpeechOutput {
-  speak(request: SpeechRequest): Promise<void>;
+  speak(request: SpeechRequest, signal?: AbortSignal): Promise<void>;
   dispose(): void;
 }
 
@@ -187,8 +191,12 @@ export function createSpeechPlaybackController(
     playback.frameHandle = requestFrame(update);
   };
 
-  const speak = async (request: SpeechRequest): Promise<void> => {
+  const speak = async (
+    request: SpeechRequest,
+    signal?: AbortSignal,
+  ): Promise<void> => {
     if (disposed) throw new Error("Speech playback has been disposed.");
+    signal?.throwIfAborted();
     if (active) {
       stopPlayback();
       cancelTts();
@@ -206,6 +214,13 @@ export function createSpeechPlaybackController(
     };
     active = playback;
     options.onOutputChange?.(true);
+    const cancelForSignal = () => {
+      if (active !== playback) return;
+      stopPlayback();
+      cancelTts();
+    };
+    signal?.addEventListener("abort", cancelForSignal, { once: true });
+    if (signal?.aborted) cancelForSignal();
 
     let streamFailed = false;
     try {
@@ -257,7 +272,7 @@ export function createSpeechPlaybackController(
         if (!playback.speaking) {
           playback.speaking = true;
           setAvatarState(true);
-          options.onStateChange?.(true);
+          options.onStateChange?.(true, request);
           startLipSync(playback);
           options.onLatency?.({
             sessionId: request.sessionId,
@@ -275,6 +290,7 @@ export function createSpeechPlaybackController(
         throw error;
       }
     } finally {
+      signal?.removeEventListener("abort", cancelForSignal);
       if (streamFailed || playback.stopped) stopSources(playback);
       stopAnimation(playback);
       playback.lipSync?.reset();
@@ -293,7 +309,7 @@ export function createSpeechPlaybackController(
         options.onOutputChange?.(false);
         if (playback.speaking) {
           setAvatarState(false);
-          options.onStateChange?.(false);
+          options.onStateChange?.(false, request);
         }
       }
     }
@@ -303,7 +319,9 @@ export function createSpeechPlaybackController(
     speak,
     stopPlayback,
     cancelTts,
-    cancelGeneration() {},
+    cancelGeneration() {
+      options.onCancelGeneration?.();
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

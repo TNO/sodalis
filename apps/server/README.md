@@ -63,3 +63,18 @@ while STT remains usable.
 Piper is GPL-3.0. The voice card lists the underlying training dataset under
 CC0; check the upstream voice repository's terms for the separate model files
 before redistributing them.
+
+## Conversation assistant
+
+The server exposes an OpenAI Chat Completions-compatible streaming provider.
+Set `LLM_BASE_URL` to the service's API base (for example,
+`http://127.0.0.1:1234/v1`) and `LLM_MODEL` to an enabled model. Set
+`LLM_API_KEY` only when that service requires it; the key remains on the server.
+The assistant endpoint is disabled when URL and model are both unset, and the
+server rejects a partial configuration.
+
+Conversation turns include a short in-memory history (at most 12 messages) and,
+when available, the current built-in Aster app's semantic identity (app ID,
+name, and category). Document contents are not included. No history is
+persisted. The server streams plain-text response deltas; configure a local or
+otherwise trusted endpoint appropriate for the data Sodalis may send.

@@ -1,5 +1,14 @@
 import m from "mithril";
 import type { Vnode } from "mithril";
+import {
+  ConversationOrchestrator,
+  ServerLlmProvider,
+} from "@sodalis/assistant";
+import type {
+  AssistantAppContext,
+  ConversationSnapshot,
+  ConversationState,
+} from "@sodalis/assistant";
 import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import {
@@ -36,6 +45,10 @@ interface DesktopAvatarOverlayAttrs {
   presentation?: AvatarPresentationController;
   onSpeechInput?: (controller: SpeechInputController | undefined) => void;
   onOpenApplication?: (appId: string) => Promise<void>;
+  getAppContext?: () =>
+    | AssistantAppContext
+    | undefined
+    | Promise<AssistantAppContext | undefined>;
 }
 
 const TASKBAR_FLOOR_OVERLAP = 3;
@@ -106,6 +119,7 @@ export const DesktopAvatarOverlay =
     let presentation: AvatarPresentationController | undefined;
     let speechInput: SpeechInputController | undefined;
     let speechPlayback: SpeechPlaybackController | undefined;
+    let conversation: ConversationOrchestrator | undefined;
     let speechInputListener:
       | ((controller: SpeechInputController | undefined) => void)
       | undefined;
@@ -126,6 +140,8 @@ export const DesktopAvatarOverlay =
     let speechActivityMessage: string | undefined;
     let speechError: string | undefined;
     let speechOutputError: string | undefined;
+    let conversationError: string | undefined;
+    let conversationState: ConversationState = "idle";
     let userTranscript: string | undefined;
     let assistantText: string | undefined;
     let activeRecognition: ActiveSpeechRecognition | undefined;
@@ -146,9 +162,37 @@ export const DesktopAvatarOverlay =
         }
       },
     });
+    const llmProvider = new ServerLlmProvider({
+      baseUrl: speechApiBaseUrl,
+      onLatency(metric) {
+        if (import.meta.env.DEV) {
+          console.debug("Assistant generation latency:", metric);
+        }
+      },
+    });
+
+    const syncActiveSpeechOutput = () => {
+      const conversationActive =
+        conversationState === "thinking" || conversationState === "speaking";
+      speechInput?.setActiveOutput(
+        speechPlayback && (speechOutputActive || conversationActive)
+          ? speechPlayback
+          : undefined,
+      );
+    };
+
+    const updateConversationView = (snapshot: ConversationSnapshot) => {
+      conversationState = snapshot.state;
+      conversationError = snapshot.error;
+      userTranscript = snapshot.userTranscript;
+      assistantText = snapshot.assistantText;
+      syncActiveSpeechOutput();
+      if (layer) m.redraw();
+    };
 
     const reportSpeechError = (error: Error) => {
       speechError = error.message;
+      conversation?.reportInputError(error);
       m.redraw();
     };
 
@@ -231,6 +275,9 @@ export const DesktopAvatarOverlay =
                   event.type === "final"
                     ? "Transcript ready."
                     : "Transcribing speech…";
+                if (event.type === "final") {
+                  void conversation?.submitUserMessage(event.text);
+                }
                 if (layer) m.redraw();
               }
             } catch (error) {
@@ -257,17 +304,28 @@ export const DesktopAvatarOverlay =
             avatarScene?.controller.setState("idle");
           }
           if (state.status !== "error") speechError = undefined;
+          if (state.status === "listening") conversation?.setListening(true);
+          else if (state.status === "idle") conversation?.setListening(false);
+          else if (state.status === "error") {
+            conversation?.reportInputError(
+              new Error(state.error ?? "Microphone input failed."),
+            );
+          }
           if (layer) m.redraw();
         },
         onAssistantStateChange(state) {
-          if (!avatarScene) return;
-          if (state === "interrupted") avatarScene.controller.interrupt();
-          avatarScene.controller.setState(state);
+          if (avatarScene) {
+            if (state === "interrupted") avatarScene.controller.interrupt();
+            avatarScene.controller.setState(state);
+          }
+          if (state === "interrupted") conversation?.setInterrupted();
+          else conversation?.setListening(true);
         },
         onSpeechStart(event) {
           speechActivityMessage =
             "Speech detected. Starting speech recognition…";
           beginRecognition(event.sessionId, event.segmentId);
+          conversation?.setTranscribing();
           if (layer) m.redraw();
         },
         onSpeechEnd(event) {
@@ -337,12 +395,16 @@ export const DesktopAvatarOverlay =
         isListening: () => microphoneWasActive,
         onOutputChange(active) {
           speechOutputActive = active;
-          speechInput?.setActiveOutput(active ? speechPlayback : undefined);
+          syncActiveSpeechOutput();
           if (layer) m.redraw();
         },
-        onStateChange(speaking) {
+        onStateChange(speaking, request) {
           speechIsPlaying = speaking;
+          conversation?.notifyPlaybackState(request.speechId, speaking);
           if (layer) m.redraw();
+        },
+        onCancelGeneration() {
+          conversation?.cancelTurn();
         },
       });
 
@@ -366,6 +428,17 @@ export const DesktopAvatarOverlay =
       speechInput?.setActiveOutput(undefined);
     };
 
+    const stopConversationOrSpeech = () => {
+      if (
+        conversationState === "thinking" ||
+        conversationState === "speaking"
+      ) {
+        conversation?.cancelTurn();
+      } else {
+        stopAssistantSpeech();
+      }
+    };
+
     const setSpeechInputListener = (
       listener:
         | ((controller: SpeechInputController | undefined) => void)
@@ -381,6 +454,7 @@ export const DesktopAvatarOverlay =
       conversationOpen = false;
       restoreAvatarFocus = true;
       speechOutputError = undefined;
+      conversation?.cancelTurn();
       presentation?.setMode("ambient");
       stopAssistantSpeech();
       cancelRecognition();
@@ -638,6 +712,12 @@ export const DesktopAvatarOverlay =
         onGeometryChange = vnode.attrs.onGeometryChange;
         speechInput = createSpeechInput();
         speechPlayback = createSpeechPlayback();
+        conversation = new ConversationOrchestrator({
+          provider: llmProvider,
+          audioOutput: speechPlayback,
+          getAppContext: () => vnode.attrs.getAppContext?.(),
+          onChange: updateConversationView,
+        });
         setSpeechInputListener(vnode.attrs.onSpeechInput);
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
@@ -671,6 +751,8 @@ export const DesktopAvatarOverlay =
         if (conversationOpen || notificationOpen) {
           presentation?.setMode("ambient");
         }
+        conversation?.cancelTurn();
+        conversation = undefined;
         conversationOpen = false;
         notificationOpen = false;
         stopAssistantSpeech();
@@ -785,6 +867,8 @@ export const DesktopAvatarOverlay =
                   speechActivityMessage,
                   speechError,
                   speechOutputError,
+                  conversationError,
+                  conversationState,
                   userTranscript,
                   assistantText,
                   speechOutputActive,
@@ -792,7 +876,11 @@ export const DesktopAvatarOverlay =
                   onSpeechError: reportSpeechError,
                   onSpeechOutputError: reportSpeechOutputError,
                   onSpeak: speakAssistantText,
-                  onStopSpeaking: stopAssistantSpeech,
+                  onStopSpeaking: stopConversationOrSpeech,
+                  onCancelTurn: () => conversation?.cancelTurn(),
+                  onSend: (text) =>
+                    conversation?.submitUserMessage(text) ?? Promise.resolve(),
+                  onConversationError: (error) => conversation?.reportError(error),
                   onClose: closeConversation,
                 })
               : null,

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sodalis/assistant": "workspace:*",
     "@sodalis/avatar": "workspace:*",
     "@sodalis/desktop-host": "workspace:*",
     "@sodalis/speech": "workspace:*",

@@ -35,6 +35,44 @@ describe("Aster desktop host", () => {
     ]);
   });
 
+  it("returns semantic context only for the focused trusted app", async () => {
+    const host = connect({
+      booted: true,
+      ready: Promise.resolve(),
+      activeDesktop: "desk-1",
+      focused: "window-1",
+      windows: new Map([
+        ["window-1", { appId: "mail", desktop: "desk-1" }],
+      ]),
+      apps: new Map([
+        ["mail", { id: "mail", title: "Mail", category: "Productivity" }],
+        ["web", { id: "web", title: "Untrusted", webApp: true }],
+      ]),
+      openApp: vi.fn(),
+    });
+
+    await expect(host.getCurrentAppContext()).resolves.toEqual({
+      appId: "mail",
+      appName: "Mail",
+      category: "Productivity",
+    });
+  });
+
+  it("omits context when the focused window belongs to an untrusted app", async () => {
+    const host = connect({
+      booted: true,
+      ready: Promise.resolve(),
+      focused: "window-1",
+      windows: new Map([["window-1", { appId: "web" }]]),
+      apps: new Map([
+        ["web", { id: "web", title: "Untrusted", webApp: true }],
+      ]),
+      openApp: vi.fn(),
+    });
+
+    await expect(host.getCurrentAppContext()).resolves.toBeUndefined();
+  });
+
   it("waits for Aster and the app window before reporting a launch", async () => {
     let markWindowReady!: () => void;
     const windowReady = new Promise<void>((resolve) => {
