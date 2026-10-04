@@ -20,6 +20,9 @@ Speech and AI can run independently with `pnpm dev:speech` and `pnpm dev:ai`.
 The Home Assistant Core simulator API runs with `pnpm dev:home`.
 The desktop proxies their APIs by path; see
 [`apps/server/README.md`](apps/server/README.md) for model configuration.
+First-party desktop apps can register scoped semantic actions and avatar
+targets with [`@sodalis/app-sdk`](packages/app-sdk/README.md); the bundled
+Sample Notes panel is an example.
 
 ## Checks
 

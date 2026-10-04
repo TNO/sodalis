@@ -1,6 +1,7 @@
 import m from "mithril";
 import { Button, ThemeManager } from "mithril-materialized";
 import { createAttentionTargetRegistry } from "@sodalis/avatar";
+import { createAppIntegrationRegistry } from "@sodalis/app-sdk";
 import { DesktopAvatarOverlay } from "./avatar/DesktopAvatarOverlay.js";
 import { createAttentionManager } from "./avatar/AttentionManager.js";
 import { createAvatarPresentationController } from "./avatar/AvatarPresentationController.js";
@@ -16,6 +17,7 @@ import {
   type DesktopHost,
 } from "@sodalis/desktop-host";
 import { createDesktopAssistantActionRuntime } from "./assistant/createDesktopAssistantActions.js";
+import { createSampleNotes } from "./integrations/SampleNotes.js";
 import "mithril-materialized/index.css";
 import "./styles.css";
 
@@ -37,10 +39,12 @@ const DesktopShell = () => {
     speechInput?: SpeechInputController;
     desktopFrame?: HTMLIFrameElement;
     avatarLab: ReturnType<typeof createAvatarLabState>;
+    sampleNotesFocused: boolean;
   } = {
     applications: [],
     status: "Connecting to the desktop…",
     avatarLab: createAvatarLabState(),
+    sampleNotesFocused: false,
   };
   const presentation = createAvatarPresentationController({
     onChange: m.redraw,
@@ -57,9 +61,18 @@ const DesktopShell = () => {
     presentation,
     getAvatarController: () => state.avatarScene?.controller,
   });
+  const integrations = createAppIntegrationRegistry({
+    attention,
+    getHost: () => state.host,
+    getFocusedAppId: () => state.sampleNotesFocused ? "sample-notes" : undefined,
+  });
+  const sampleNotes = createSampleNotes(integrations, (focused) => {
+    state.sampleNotesFocused = focused;
+  });
   const actionRuntime = createDesktopAssistantActionRuntime({
     getHost: () => state.host,
     attention,
+    integrations,
   });
 
   const connect = async (frame: HTMLIFrameElement) => {
@@ -101,6 +114,7 @@ const DesktopShell = () => {
             attention.attach(vnode.dom as HTMLElement);
           },
           onremove() {
+            sampleNotes.dispose();
             attention.detach();
           },
         },
@@ -169,7 +183,7 @@ const DesktopShell = () => {
                     state.speechInput = controller;
                   },
                   getAppContext: () =>
-                    state.host?.getCurrentAppContext(),
+                    integrations.getCurrentAppContext(),
                   async onOpenApplication(appId) {
                     if (!state.host) {
                       throw new Error("The desktop connection is unavailable.");
@@ -221,6 +235,7 @@ const DesktopShell = () => {
                 m("span.status-indicator[aria-hidden=true]"),
                 m("p[role=status][aria-live=polite]", state.status),
               ]),
+              m(sampleNotes.Panel),
               state.error
                 ? m("p.connection-error[role=alert]", state.error)
                 : null,

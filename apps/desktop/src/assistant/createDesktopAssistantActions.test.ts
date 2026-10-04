@@ -8,11 +8,48 @@ import {
 import { createAttentionManager } from "../avatar/AttentionManager.js";
 import { createAvatarPresentationController } from "../avatar/AvatarPresentationController.js";
 import type { DesktopHost } from "@sodalis/desktop-host";
+import { createAppIntegrationRegistry } from "@sodalis/app-sdk";
 import { MockMailApplication } from "./MockMailApplication.js";
 import { createDesktopAssistantActionRuntime } from "./createDesktopAssistantActions.js";
 
 describe("desktop assistant actions", () => {
   afterEach(() => document.body.replaceChildren());
+
+  it("exposes registered first-party actions only while their app is focused", async () => {
+    let focused: string | undefined;
+    const attention = createAttentionManager({
+      registry: createAttentionTargetRegistry(),
+      presentation: createAvatarPresentationController({
+        storage: { getItem: () => null, setItem: vi.fn() },
+      }),
+      getAvatarController: () => undefined,
+    });
+    const integrations = createAppIntegrationRegistry({
+      attention, getFocusedAppId: () => focused, getHost: () => undefined,
+    });
+    integrations.register({
+      id: "sample-notes", name: "Sample Notes",
+      actions: [{
+        id: "sample-notes.read", description: "Read sample notes.",
+        risk: "read", requiresConfirmation: false,
+        inputSchema: { type: "object", properties: {} },
+        execute: () => "A sample note.",
+      }],
+    });
+    const actions = createDesktopAssistantActionRuntime({
+      attention, getHost: () => undefined, integrations,
+    });
+    expect(actions.getAvailableActions().some((item) => item.id === "sample-notes.read")).toBe(false);
+    focused = "sample-notes";
+    expect(actions.getAvailableActions().some((item) => item.id === "sample-notes.read")).toBe(true);
+    expect((await actions.invoke({
+      id: "sample-notes.read", arguments: {},
+    })).message).toBe("A sample note.");
+    focused = undefined;
+    await expect(actions.invoke({
+      id: "sample-notes.read", arguments: {},
+    })).rejects.toThrow("not available");
+  });
 
   it("provides semantic mock Mail list, search, open, read, and draft actions", async () => {
     const mail = new MockMailApplication();

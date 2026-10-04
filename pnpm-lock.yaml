@@ -184,6 +184,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@sodalis/app-sdk':
+        specifier: workspace:*
+        version: link:../../packages/app-sdk
       '@sodalis/assistant':
         specifier: workspace:*
         version: link:../../packages/assistant
@@ -224,6 +227,18 @@ importers:
       tsx:
         specifier: ^4.21.0
         version: 4.23.15
+
+  packages/app-sdk:
+    dependencies:
+      '@sodalis/assistant':
+        specifier: workspace:*
+        version: link:../assistant
+      '@sodalis/avatar':
+        specifier: workspace:*
+        version: link:../avatar
+      '@sodalis/desktop-host':
+        specifier: workspace:*
+        version: link:../desktop-host
 
   packages/assistant:
     dependencies:

@@ -9,7 +9,7 @@
     "dev:ai": "pnpm --filter @sodalis/server dev:ai",
     "dev:home": "pnpm --filter @sodalis/server dev:home",
     "build": "pnpm --recursive build",
-    "test": "pnpm --filter @sodalis/desktop-host test && pnpm --filter @sodalis/avatar test && pnpm --filter @sodalis/speech test && pnpm --filter @sodalis/assistant test && pnpm --filter @sodalis/server test && pnpm --filter @sodalis/desktop test",
+    "test": "pnpm --filter @sodalis/desktop-host test && pnpm --filter @sodalis/avatar test && pnpm --filter @sodalis/speech test && pnpm --filter @sodalis/assistant test && pnpm --filter @sodalis/app-sdk test && pnpm --filter @sodalis/server test && pnpm --filter @sodalis/desktop test",
     "typecheck": "pnpm --recursive typecheck"
   },
   "devDependencies": {

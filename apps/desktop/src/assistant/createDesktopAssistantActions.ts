@@ -6,6 +6,7 @@ import {
   type AssistantActionRuntime,
 } from "@sodalis/assistant";
 import type { DesktopHost } from "@sodalis/desktop-host";
+import type { createAppIntegrationRegistry } from "@sodalis/app-sdk";
 import type { AttentionManager } from "../avatar/AttentionManager.js";
 import { MockMailApplication } from "./MockMailApplication.js";
 
@@ -13,6 +14,7 @@ interface DesktopAssistantActionsOptions {
   readonly getHost: () => DesktopHost | undefined;
   readonly attention: AttentionManager;
   readonly mail?: MockMailApplication;
+  readonly integrations?: Pick<ReturnType<typeof createAppIntegrationRegistry>, "getAvailableActions">;
 }
 
 function objectSchema(
@@ -250,7 +252,7 @@ export function createDesktopAssistantActionRuntime(
         },
       });
     }
-    return actions;
+    return [...actions, ...(options.integrations?.getAvailableActions() ?? [])];
   };
   return createAssistantActionRuntime(definitions);
 }

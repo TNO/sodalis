@@ -855,6 +855,32 @@ body {
   line-height: 1.45;
 }
 
+.sample-notes {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid var(--shell-border);
+  border-radius: 9px;
+}
+
+.sample-notes h3,
+.sample-notes p {
+  margin: 0;
+}
+
+.sample-notes p {
+  color: var(--shell-muted);
+  font-size: 0.85rem;
+}
+
+.sample-notes textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 5rem;
+  resize: vertical;
+  font: inherit;
+}
+
 .status-indicator {
   flex: 0 0 auto;
   width: 10px;
