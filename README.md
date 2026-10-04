@@ -40,7 +40,10 @@ Profile > Security. In your ignored `.env`, set `HOME_ASSISTANT_TOKEN` to that
 token and change `HOME_ADMIN_UI=1` to `HOME_ADMIN_UI=0`; then run
 `pnpm stack:up` again. The same URL now serves the desktop, with the Home
 simulator behind its own API. Do not commit `.env` or use this simulator
-configuration to control a real home.
+configuration to control a real home. If Core onboarding disconnects or
+returns 400, pull the latest stack, run `pnpm stack:up`, and reopen the
+gateway root; the Core data volume is retained. See the
+[onboarding and troubleshooting guide](docs/development-stack.md#first-time-home-assistant-simulator-onboarding).
 
 ```sh
 pnpm stack:smoke  # check the running gateway and selected services

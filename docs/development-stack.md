@@ -104,16 +104,28 @@ With `HOME_PROVIDER=simulator`, leave `HOME_ADMIN_UI=1` and
 `HOME_ASSISTANT_TOKEN=` empty. Start the stack and open the gateway URL: its
 root serves Core's onboarding UI instead of the desktop. Core's bundled
 `demo:` configuration supplies fake entities; never point this setup at your
-real home. Create the admin account, then create a **separate non-admin**
-Sodalis user under Settings > People > Users. Sign in as that user and create
-a long-lived access token under Profile > Security. Put the token into your
-ignored `.env` as `HOME_ASSISTANT_TOKEN`, set `HOME_ADMIN_UI=0`, and run
-`pnpm stack:up` again. The desktop and `/api/home/*` will now use the
-simulator through the private Home API. `HOME_SAFE_MIN_C` and
-`HOME_SAFE_MAX_C` bound climate controls. The admin UI is intentionally
-localhost-only and intended solely for onboarding. `stack:smoke` in admin
-mode checks the Core UI rather than an authenticated Home API; authenticated
-entity/control checks require completing onboarding.
+real home.
+
+1. At `http://127.0.0.1:4176/`, create a Core administrator and complete
+   onboarding (including location and units). If setup takes a moment,
+   revisit the gateway root rather than a stale `/onboarding.html` URL.
+2. Under **Settings > People > Users**, create a separate **non-admin**
+   Sodalis user. Sign out of the admin account, sign in as that user, and
+   create a long-lived access token in **Profile > Security**.
+3. Put the token only in your ignored `.env` as `HOME_ASSISTANT_TOKEN=...`,
+   set `HOME_ADMIN_UI=0`, and run `pnpm stack:up` again. The same gateway
+   root now serves the Sodalis desktop, and `/api/home/*` uses Core's
+   simulated devices through the private Home API.
+4. Run `pnpm stack:smoke`. This checks the Home route, speech, AI, and
+   gateway; it does not exercise authenticated Home controls or replace
+   checking the dedicated user's access in Core.
+
+`HOME_SAFE_MIN_C` and `HOME_SAFE_MAX_C` bound climate controls. The admin
+UI is intentionally localhost-only and intended solely for onboarding.
+`stack:smoke` in admin mode checks the Core UI rather than an authenticated
+Home API. Core's HTTP settings are UI-managed in 2026.8 and later; the
+development gateway does not send `X-Forwarded-For` to Core, so no proxy
+trust configuration or broad trusted-network allowlist is needed.
 
 ## Troubleshooting
 
@@ -135,6 +147,15 @@ entity/control checks require completing onboarding.
   user's token, disable admin mode, and restart. If using `external-api`,
   verify that service implements Sodalis's semantic Home API rather than
   Core's raw REST API.
+- **Core onboarding disconnects or returns 400:** Older stack versions
+  included YAML `http:` proxy settings. Core 2026.8+ migrates those to a
+  pending UI setting and can revert after five minutes, rejecting requests
+  forwarded by the old gateway. Pull the current stack and run
+  `pnpm stack:up` again; it keeps the named Core data volume. Return to
+  `http://127.0.0.1:4176/` instead of reloading `/onboarding.html`.
+  If it still returns 400, inspect the Home Assistant container log for
+  `not set-up for reverse proxies`; do not delete the volume or disable
+  proxy checks globally.
 - **Podman image/platform failure:** The Whisper profile builds locally
   instead of pulling an ARM64-incompatible prebuilt image. Confirm enough
   disk/RAM for model builds; optional GPU acceleration is not required.
