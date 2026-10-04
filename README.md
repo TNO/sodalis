@@ -25,6 +25,25 @@ curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/natha
 
 If the three files already exist in this checkout, skip the downloads. Then:
 
+Install and start [Ollama](https://ollama.com/download) on your Mac and
+download the example LLM (it is not included in this repository):
+
+```sh
+ollama pull llama3.2:3b
+```
+
+Ollama's app normally starts its local server. If it is not running, use
+`ollama serve` in another terminal. The AI API runs in Compose and calls
+Ollama on the host; Ollama itself does not run in a container by default.
+If you already have an ignored `.env`, pulling these changes will not
+update it: set `LLM_PROVIDER=openai-compatible`,
+`LLM_BASE_URL=http://host.docker.internal:11434/v1`, and
+`LLM_MODEL=llama3.2:3b` there before restarting the stack. To use the
+deterministic mock instead, set `LLM_PROVIDER=mock` and clear
+`LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` in `.env`.
+
+Then start the stack:
+
 ```sh
 pnpm install
 cp .env.example .env
@@ -35,9 +54,11 @@ pnpm stack:up
 Open **http://127.0.0.1:4176**. On the first launch the gateway shows Home
 Assistant Core onboarding, **not** the Sodalis desktop. Create an admin
 account, then a separate non-admin Sodalis user under Settings > People >
-Users. Sign in as the Sodalis user and create a long-lived token under
-Profile > Security. In your ignored `.env`, set `HOME_ASSISTANT_TOKEN` to that
-token and change `HOME_ADMIN_UI=1` to `HOME_ADMIN_UI=0`; then run
+Users. The dedicated user can be non-admin and **Local access only**;
+Docker's private network counts as local. Sign in as that user and create
+a long-lived token under Profile > Security. In your ignored `.env`, set
+`HOME_ASSISTANT_TOKEN` to that token and change `HOME_ADMIN_UI=1` to
+`HOME_ADMIN_UI=0`; then run
 `pnpm stack:up` again. The same URL now serves the desktop, with the Home
 simulator behind its own API. Do not commit `.env` or use this simulator
 configuration to control a real home. If Core onboarding disconnects or
@@ -50,21 +71,28 @@ pnpm stack:smoke  # check the running gateway and selected services
 pnpm stack:down   # stop containers without deleting Core's data volume
 ```
 
-The example `.env` uses local CPU Whisper.cpp and Piper for speech and a
-**mock LLM**, not a real model or cloud service. See the
+The example `.env` uses local CPU Whisper.cpp and Piper for speech and the
+host's `llama3.2:3b` via Ollama for AI. To exercise the full chain, wait for
+the avatar to load, click it to open **Talk with Sodalis**, then click
+**Start microphone** and allow the browser prompt. Speak, pause for
+transcription, and listen for the spoken reply. Microphone permission is
+requested on activation, never on page load. You can type a message first
+to test AI and TTS without STT. See the
 [development stack guide](docs/development-stack.md) for model downloads,
-Docker/Podman setup, external provider options, other platforms, and
-troubleshooting.
+Docker/Podman setup, individual-service development, and troubleshooting.
 
 ## Frontend-only development
 
-`pnpm dev` starts the Vite desktop without the Compose services; it is
-useful for UI work, but speech, assistant, and Home API calls need their
-respective services. For manual service development, run `pnpm dev:speech`,
-`pnpm dev:ai`, and `pnpm dev:home` with the settings in
+`pnpm dev` starts the Vite desktop. To use the already running Compose
+backends while editing the desktop, run
+`SODALIS_API_GATEWAY_URL=http://127.0.0.1:4176 pnpm dev` and open Vite's
+printed URL (usually port 5173). For manual service development, run
+`pnpm dev:speech`, `pnpm dev:ai`, or `pnpm dev:home` with the settings in
 [`apps/server/README.md`](apps/server/README.md). The desktop proxies their
-APIs by path. Aster runs in a same-origin iframe and retains its app
-sandboxing; the host bridge does not expose app DOM or untrusted web apps.
+APIs by path; see the
+[service development guide](docs/development-stack.md#develop-one-service-at-a-time)
+for per-service overrides. Aster runs in a same-origin iframe and retains
+its app sandboxing; the host bridge does not expose app DOM or untrusted web apps.
 First-party desktop apps can register scoped semantic actions and avatar
 targets with [`@sodalis/app-sdk`](packages/app-sdk/README.md); the bundled
 Sample Notes panel is an example.
@@ -98,6 +126,7 @@ commercially approved avatar model is selected. The desktop includes the
 TalkingHead brunette example under its separate CC BY-NC 4.0 license as a
 non-commercial pipeline sample; actual model-render FPS is not yet measured.
 Speech, AI, and the simulated Home API are available as separate services.
-The default LLM is a mock; real Home Assistant integration, long-term memory,
-and real Mail delivery remain future work. See `TASKS/README.md` and
+The example connects AI to a host Ollama model; real Home Assistant
+integration, long-term memory, and real Mail delivery remain future work.
+See `TASKS/README.md` and
 `docs/architecture/desktop-foundation.md` for boundaries and later work.

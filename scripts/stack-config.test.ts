@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { parseEnv } from "node:util";
 import { describe, expect, it } from "vitest";
 import { resolveStack, serviceNamePrefix } from "./stack-config.js";
 
@@ -10,6 +13,19 @@ const base = {
 };
 
 describe("development stack selection", () => {
+  it("wires the example to host Ollama without activating a local LLM container", () => {
+    const example = parseEnv(
+      readFileSync(resolve(import.meta.dirname, "../.env.example"), "utf8"),
+    );
+    const selected = resolveStack(example);
+    expect(selected.profiles).toEqual(["whisper", "piper", "home-simulator"]);
+    expect(selected.environment).toMatchObject({
+      LLM_PROVIDER: "openai-compatible",
+      LLM_BASE_URL: "http://host.docker.internal:11434/v1",
+      LLM_MODEL: "llama3.2:3b",
+    });
+  });
+
   it("names root-checkout services without a repeated prefix while keeping worktrees distinct", () => {
     expect(serviceNamePrefix("sodalis")).toBe("sodalis");
     expect(serviceNamePrefix("silver-giggle")).toBe("sodalis-silver-giggle");

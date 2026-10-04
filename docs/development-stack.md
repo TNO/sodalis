@@ -25,21 +25,23 @@ PowerShell). Never commit `.env`, downloaded models, or access tokens.
 ## Choose providers
 
 Edit `.env` before each launch. `LLM_PROVIDER` and `HOME_PROVIDER` **must** be
-explicit. The example uses a deterministic local LLM mock and the Home
+explicit. The example uses host Ollama with `llama3.2:3b` and the Home
 Assistant simulator. `STT_PROVIDER` defaults to `whisper-cpp` and
-`TTS_PROVIDER` to `piper`, both running on CPU without a GPU.
+`TTS_PROVIDER` to `piper`, both running in Compose on CPU without a GPU.
 
 | Role | Local selection | External selection |
 | --- | --- | --- |
 | STT | `whisper-cpp` (blank `WHISPER_CPP_URL`) or `mock` | `whisper-cpp` with `WHISPER_CPP_URL` |
 | TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL` |
-| LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; optional `LLM_API_KEY` |
+| LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; the example targets host Ollama |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
 
 External URLs must be reachable **from the containers**, not just the host.
-For a host-native service, use `host.docker.internal` with Docker Desktop or
-`host.containers.internal` with Podman (verify your host's resolution); Linux
-Docker Engine may need its own host gateway or a reachable network address.
+For a host-native service, use `host.docker.internal` with Docker Desktop;
+Podman on macOS resolves both `host.docker.internal` and
+`host.containers.internal`. Linux Docker Engine may need a configured host
+gateway or another reachable address. Never expose an unauthenticated
+Ollama endpoint on a public network.
 An external STT endpoint must speak the Whisper.cpp server protocol; TTS must
 speak Piper HTTP (`POST /synthesize` with a WAV response); the LLM endpoint
 must stream OpenAI-compatible Chat Completions; and the Home endpoint must
@@ -78,6 +80,47 @@ version `1.8.0`. The local llama.cpp server image is CPU-capable; GPU
 acceleration and hardware-specific builds are optional, not configured here.
 CPU latency and RAM needs depend on the selected model, especially the LLM.
 
+### Host Ollama (the example LLM)
+
+Install [Ollama](https://ollama.com/download) for your host OS and keep its
+server running. Download the model separately; it is not in the repository
+or Compose image:
+
+```sh
+ollama pull llama3.2:3b
+curl -fsS http://127.0.0.1:11434/api/tags
+```
+
+The example `.env` sets `LLM_PROVIDER=openai-compatible`,
+`LLM_BASE_URL=http://host.docker.internal:11434/v1`, and
+`LLM_MODEL=llama3.2:3b`. The **Sodalis AI API still runs in Compose**;
+only Ollama runs natively on the Mac, allowing it to use host acceleration
+instead of the CPU-limited Podman VM. On Docker Desktop, the same host alias
+is available. On other hosts, change the URL to an address reachable from
+the AI container and secure that endpoint. `LLM_API_KEY` is only needed if
+the selected endpoint requires one. Ollama's local API does not.
+
+If you already created `.env`, a Git pull does not change it: set those
+three values in your existing file and run `pnpm stack:up` to switch from
+the mock provider. The service does not silently fall back if Ollama is
+stopped or the model is missing.
+
+To opt out of the model download, edit your ignored `.env`:
+
+```dotenv
+LLM_PROVIDER=mock
+LLM_BASE_URL=
+LLM_MODEL=
+LLM_API_KEY=
+```
+
+`pnpm stack:up` then selects the deterministic mock without starting a
+local LLM engine or connecting to Ollama. For a different local GGUF model,
+clear `LLM_BASE_URL` and set `LLM_MODEL` to the file in `models/llm/`;
+the stack selects its CPU llama.cpp profile. STT and TTS can also be
+selected independently: `STT_PROVIDER=mock` skips Whisper, and
+`TTS_PROVIDER=mock` skips Piper; leave the other role unchanged.
+
 ## Start, smoke, and stop
 
 ```sh
@@ -98,6 +141,74 @@ already configured simulator does not reset onboarding.
 Run `pnpm exec tsx scripts/dev-stack.ts ps` to inspect active services. The
 gateway's `/healthz` checks gateway liveness only, not provider readiness.
 
+### Exercise speech, AI, and speech output
+
+After Home Assistant onboarding and `HOME_ADMIN_UI=0`, open the desktop at
+`http://127.0.0.1:4176/` (not `/aster/index.html`). Wait until the avatar is
+ready, then click it or focus **Start a conversation with Sodalis** to open
+the **Talk with Sodalis** card. Type and send a short message first: the
+card should show a generated reply and Piper should speak it. This checks
+AI -> TTS without requiring microphone access. For STT -> AI -> TTS,
+click **Start microphone** (or hold **Hold to talk**), allow the browser
+permission prompt, speak a short Dutch phrase, and pause. The card should
+show the transcript, reply, and playback. The browser never requests mic
+access just because the desktop loaded; use the top-level localhost URL so
+the browser grants microphone access to the Sodalis origin.
+
+`pnpm stack:smoke` checks the gateway, selected UI, streamed AI turn,
+synthetic STT transcript, TTS PCM, and Home route. It does **not** test a
+physical microphone, Dutch transcription accuracy, browser autoplay, or
+the full spoken conversation. If the avatar is not ready, check its status
+in the desktop. If a reply is shown without audio, use **Read aloud** to
+isolate TTS and browser playback. To diagnose model errors, check that
+Ollama is running and `llama3.2:3b` appears in `ollama list`.
+
+### Develop one service at a time
+
+The Compose gateway publishes only port 4176; API and engine containers
+remain private. For desktop hot reload against those running APIs:
+
+```sh
+SODALIS_API_GATEWAY_URL=http://127.0.0.1:4176 pnpm dev
+```
+
+Open the URL printed by Vite (usually `http://127.0.0.1:5173/`). Do not
+set `HOME_ADMIN_UI=1` in the Vite process; complete simulator onboarding
+at the Compose gateway first.
+
+To develop one API outside Compose, start it on its usual host port in
+another terminal, then override only that Vite proxy while keeping the
+other two APIs behind the Compose gateway:
+
+```sh
+STT_PROVIDER=mock TTS_PROVIDER=mock pnpm dev:speech
+# In a separate terminal:
+SODALIS_API_GATEWAY_URL=http://127.0.0.1:4176 \
+SODALIS_SPEECH_API_URL=http://127.0.0.1:3001 pnpm dev
+```
+
+The speech API serves **both** STT and TTS on port 3001; the two roles
+select their engines independently. The mock engines make this example
+work without a second Whisper/Piper installation. For real native speech
+engines, configure `WHISPER_CPP_URL` and `PIPER_HTTP_URL` (or Piper CLI with
+`PIPER_MODEL_PATH`) as described in
+[`apps/server/README.md`](../apps/server/README.md).
+
+Likewise, run the AI API natively and override only its Vite proxy:
+
+```sh
+LLM_PROVIDER=openai-compatible LLM_BASE_URL=http://127.0.0.1:11434/v1 \
+LLM_MODEL=llama3.2:3b pnpm dev:ai
+# In a separate terminal:
+SODALIS_API_GATEWAY_URL=http://127.0.0.1:4176 \
+SODALIS_AI_API_URL=http://127.0.0.1:3002 pnpm dev
+```
+
+The same pattern supports
+`SODALIS_HOME_API_URL=http://127.0.0.1:3003` with `pnpm dev:home` when a
+separate Home Assistant Core endpoint and token are reachable from the host;
+Compose's Core container has no host port by design.
+
 ### First-time Home Assistant simulator onboarding
 
 With `HOME_PROVIDER=simulator`, leave `HOME_ADMIN_UI=1` and
@@ -110,7 +221,9 @@ real home.
    onboarding (including location and units). If setup takes a moment,
    revisit the gateway root rather than a stale `/onboarding.html` URL.
 2. Under **Settings > People > Users**, create a separate **non-admin**
-   Sodalis user. Sign out of the admin account, sign in as that user, and
+   user (the username does not need to be `sodalis`). Enable **Local access
+   only** for this local simulator: the Docker/Podman private network counts
+   as local. Sign out of the admin account, sign in as that user, and
    create a long-lived access token in **Profile > Security**.
 3. Put the token only in your ignored `.env` as `HOME_ASSISTANT_TOKEN=...`,
    set `HOME_ADMIN_UI=0`, and run `pnpm stack:up` again. The same gateway
