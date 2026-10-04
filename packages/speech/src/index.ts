@@ -67,8 +67,11 @@ export interface SpeechToTextSession {
   readonly events: AsyncIterable<SpeechToTextEvent>;
   /** Submit an audio segment; rejects after finish or cancellation. */
   writeAudio(chunk: SpeechAudioChunk): Promise<void>;
-  /** Signal end-of-input; the provider may emit final events afterward. */
-  finish(): Promise<void>;
+  /**
+   * Signal end-of-input; providers may emit final events afterward.
+   * The optional timestamp is in the consumer's monotonic clock domain.
+   */
+  finish(speechEndTimestampMs?: number): Promise<void>;
 }
 
 export interface SpeechToTextProvider
@@ -131,6 +134,12 @@ export class MockSpeechToTextProvider implements SpeechToTextProvider {
     };
   }
 }
+
+export {
+  ServerSpeechToTextProvider,
+  type SpeechToTextLatency,
+  type ServerSpeechToTextProviderOptions,
+} from "./ServerSpeechToTextProvider.js";
 
 export type SpeechId = string;
 

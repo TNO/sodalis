@@ -47,6 +47,7 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
   private readonly trackEndHandlers = new Map<MediaStreamTrack, () => void>();
   private readonly pendingAudio = new Set<Promise<void>>();
   private stopPromise: Promise<void> | undefined;
+  private segmentStopPromise: Promise<void> | undefined;
 
   constructor(options: BrowserMicrophoneCaptureOptions = {}) {
     this.options = options;
@@ -112,34 +113,6 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
       analyser.fftSize = 1024;
       context.createMediaStreamSource(stream).connect(analyser);
       this.analyser = analyser;
-      const recorder = this.options.createMediaRecorder
-        ? this.options.createMediaRecorder(stream)
-        : new MediaRecorder(stream);
-      this.recorder = recorder;
-      recorder.ondataavailable = (event: BlobEvent) => {
-        if (!event.data.size) return;
-        const pending = event.data
-          .arrayBuffer()
-          .then((buffer) => {
-            const chunk: SpeechAudioChunk = {
-              data: new Uint8Array(buffer),
-              mimeType:
-                recorder.mimeType ||
-                event.data.type ||
-                "application/octet-stream",
-            };
-            if (this.callbacks === callbacks) callbacks.onAudioChunk(chunk);
-          })
-          .catch((error: unknown) => callbacks.onError(asError(error)));
-        this.pendingAudio.add(pending);
-        void pending.then(
-          () => this.pendingAudio.delete(pending),
-          () => this.pendingAudio.delete(pending),
-        );
-      };
-      recorder.onerror = () => {
-        callbacks.onError(new Error("Microphone recording failed."));
-      };
 
       for (const track of stream.getAudioTracks()) {
         const onEnded = () =>
@@ -148,7 +121,6 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
         track.addEventListener("ended", onEnded, { once: true });
       }
 
-      recorder.start(RECORDED_CHUNK_INTERVAL_MS);
       this.frameHandle = (this.options.scheduleFrames ?? setInterval)(
         () => {
           try {
@@ -175,6 +147,86 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
       }
       throw error;
     }
+  }
+
+  async beginSpeechSegment(): Promise<void> {
+    if (!this.stream || !this.callbacks) {
+      throw new Error("Microphone capture must be active before speech.");
+    }
+    if (this.recorder) return;
+    if (this.segmentStopPromise) await this.segmentStopPromise;
+    if (!this.stream || !this.callbacks) {
+      throw new Error("Microphone capture stopped before speech recording.");
+    }
+
+    const stream = this.stream;
+    const callbacks = this.callbacks;
+    const recorder = this.options.createMediaRecorder
+      ? this.options.createMediaRecorder(stream)
+      : new MediaRecorder(stream);
+    this.recorder = recorder;
+    recorder.ondataavailable = (event: BlobEvent) => {
+      if (!event.data.size) return;
+      const pending = event.data
+        .arrayBuffer()
+        .then((buffer) => {
+          const chunk: SpeechAudioChunk = {
+            data: new Uint8Array(buffer),
+            mimeType:
+              recorder.mimeType ||
+              event.data.type ||
+              "application/octet-stream",
+          };
+          if (this.callbacks === callbacks) callbacks.onAudioChunk(chunk);
+        })
+        .catch((error: unknown) => callbacks.onError(asError(error)));
+      this.pendingAudio.add(pending);
+      void pending.then(
+        () => this.pendingAudio.delete(pending),
+        () => this.pendingAudio.delete(pending),
+      );
+    };
+    recorder.onerror = () => {
+      callbacks.onError(new Error("Microphone recording failed."));
+    };
+    try {
+      recorder.start(RECORDED_CHUNK_INTERVAL_MS);
+    } catch (error) {
+      this.recorder = undefined;
+      recorder.ondataavailable = null;
+      recorder.onerror = null;
+      throw error;
+    }
+  }
+
+  endSpeechSegment(): Promise<void> {
+    if (this.segmentStopPromise) return this.segmentStopPromise;
+    const recorder = this.recorder;
+    this.recorder = undefined;
+    let pending: Promise<void>;
+    pending = (async () => {
+      if (recorder && recorder.state !== "inactive") {
+        await new Promise<void>((resolve, reject) => {
+          recorder.addEventListener("stop", () => resolve(), { once: true });
+          try {
+            recorder.stop();
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }
+      if (recorder) {
+        recorder.ondataavailable = null;
+        recorder.onerror = null;
+      }
+      await this.drainAudio();
+    })().finally(() => {
+      if (this.segmentStopPromise === pending) {
+        this.segmentStopPromise = undefined;
+      }
+    });
+    this.segmentStopPromise = pending;
+    return pending;
   }
 
   stop(): Promise<void> {
@@ -206,28 +258,10 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
       this.frameHandle = undefined;
     }
 
-    const recorder = this.recorder;
-    this.recorder = undefined;
-    if (recorder && recorder.state !== "inactive") {
-      try {
-        await new Promise<void>((resolve, reject) => {
-          recorder.addEventListener("stop", () => resolve(), { once: true });
-          recorder.stop();
-        });
-      } catch (error) {
-        cleanupErrors.push(error);
-      }
-    }
-    if (recorder) {
-      recorder.ondataavailable = null;
-      recorder.onerror = null;
-    }
-
-    const pendingAudio = [...this.pendingAudio];
-    this.pendingAudio.clear();
-    const pendingResults = await Promise.allSettled(pendingAudio);
-    for (const result of pendingResults) {
-      if (result.status === "rejected") cleanupErrors.push(result.reason);
+    try {
+      await this.endSpeechSegment();
+    } catch (error) {
+      cleanupErrors.push(error);
     }
 
     for (const [track, handler] of this.trackEndHandlers) {
@@ -258,6 +292,18 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
     }
     if (cleanupErrors.length) {
       throw new AggregateError(cleanupErrors, "Microphone cleanup failed.");
+    }
+  }
+
+  private async drainAudio(): Promise<void> {
+    const pendingAudio = [...this.pendingAudio];
+    this.pendingAudio.clear();
+    const pendingResults = await Promise.allSettled(pendingAudio);
+    const errors = pendingResults
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason);
+    if (errors.length) {
+      throw new AggregateError(errors, "Recorded microphone audio could not be delivered.");
     }
   }
 }

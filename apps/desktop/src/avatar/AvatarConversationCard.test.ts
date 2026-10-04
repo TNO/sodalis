@@ -1,5 +1,9 @@
+// @vitest-environment jsdom
+
+import m from "mithril";
 import { describe, expect, it } from "vitest";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
+import { AvatarConversationCard } from "./AvatarConversationCard.js";
 
 function bounds(
   left: number,
@@ -74,6 +78,32 @@ describe("positionAvatarConversationCard", () => {
       left: 13,
       top: 6,
       maxHeight: 277,
+    });
+  });
+
+  describe("AvatarConversationCard transcript", () => {
+    it("renders live speech recognition text in the accessible transcript", () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+
+      m.render(
+        host,
+        m(AvatarConversationCard, {
+          userTranscript: "Waar is mijn afspraak?",
+          assistantText: "Je afspraak staat morgen om tien uur.",
+          onClose: () => undefined,
+        }),
+      );
+
+      expect(host.querySelector(".avatar-conversation-user-text")?.textContent)
+        .toBe("Waar is mijn afspraak?");
+      expect(host.querySelector(".avatar-conversation-caption")?.textContent)
+        .toBe("Je afspraak staat morgen om tien uur.");
+      expect(
+        host.querySelector('[aria-live="polite"]')?.textContent,
+      ).toContain("Waar is mijn afspraak?");
+
+      m.render(host, null);
     });
   });
 });

@@ -16,6 +16,7 @@ export interface SpeechInputState {
 export interface SpeechActivityEvent {
   readonly type: "speech-start" | "speech-end";
   readonly sessionId: SpeechSessionId;
+  readonly segmentId: string;
   readonly timestampMs: number;
 }
 
@@ -31,6 +32,8 @@ export interface MicrophoneCapture {
     signal: AbortSignal,
   ): Promise<void>;
   stop(): Promise<void>;
+  beginSpeechSegment?(): Promise<void>;
+  endSpeechSegment?(): Promise<void>;
 }
 
 export interface ActiveSpeechOutput {
@@ -111,6 +114,11 @@ export function createSpeechInputController(
   let generation = 0;
   let startPromise: Promise<void> | undefined;
   let stopPromise: Promise<void> | undefined;
+  let segmentOperation: Promise<void> = Promise.resolve();
+  let segmentSequence = 0;
+  let activeSegmentId: string | undefined;
+  let speechActive = false;
+  let stopping = false;
   let disposed = false;
 
   const setState = (nextState: SpeechInputState) => {
@@ -173,6 +181,8 @@ export function createSpeechInputController(
     activeAbortController = undefined;
     activeSessionId = undefined;
     generation += 1;
+    stopping = true;
+    speechActive = false;
     options.detector.reset();
     setState({ status: "error", error: normalized.message });
     void stopCapture().catch((stopError: unknown) => {
@@ -185,17 +195,60 @@ export function createSpeechInputController(
     });
   };
 
+  const queueSegmentOperation = (
+    operation: () => Promise<void> | void,
+    runGeneration: number,
+  ): Promise<void> => {
+    const pending = segmentOperation.then(operation);
+    segmentOperation = pending.catch((error: unknown) => {
+      failCapture(error, runGeneration);
+    });
+    return segmentOperation;
+  };
+
   const processActivity = (
     type: SpeechActivityEvent["type"],
     sessionId: SpeechSessionId,
     timestampMs: number,
+    runGeneration: number,
   ) => {
-    const event: SpeechActivityEvent = { type, sessionId, timestampMs };
+    const segmentId =
+      type === "speech-start"
+        ? `${sessionId}:segment-${++segmentSequence}`
+        : activeSegmentId ?? `${sessionId}:segment-${segmentSequence}`;
+    const event: SpeechActivityEvent = {
+      type,
+      sessionId,
+      segmentId,
+      timestampMs,
+    };
     if (type === "speech-start") {
+      speechActive = true;
+      activeSegmentId = segmentId;
       interruptOutput(event);
       options.onSpeechStart?.(event);
+      if (capture.beginSpeechSegment) {
+        void queueSegmentOperation(
+          () => capture.beginSpeechSegment?.(),
+          runGeneration,
+        );
+      }
     } else {
-      options.onSpeechEnd?.(event);
+      speechActive = false;
+      activeSegmentId = undefined;
+      if (capture.endSpeechSegment) {
+        void queueSegmentOperation(async () => {
+          await capture.endSpeechSegment?.();
+          if (
+            runGeneration === generation &&
+            activeSessionId === sessionId
+          ) {
+            options.onSpeechEnd?.(event);
+          }
+        }, runGeneration);
+      } else {
+        options.onSpeechEnd?.(event);
+      }
     }
   };
 
@@ -220,6 +273,11 @@ export function createSpeechInputController(
       const sessionId = createId();
       activeAbortController = abortController;
       activeSessionId = sessionId;
+      segmentOperation = Promise.resolve();
+      segmentSequence = 0;
+      activeSegmentId = undefined;
+      speechActive = false;
+      stopping = false;
       options.detector.reset();
       setState({ status: "requesting-permission" });
 
@@ -228,6 +286,7 @@ export function createSpeechInputController(
           {
             onSamples(samples, timestampMs) {
               if (
+                stopping ||
                 runGeneration !== generation ||
                 activeSessionId !== sessionId
               ) {
@@ -237,7 +296,12 @@ export function createSpeechInputController(
                 samples,
                 timestampMs,
               )) {
-                processActivity(event.type, sessionId, event.timestampMs);
+                processActivity(
+                  event.type,
+                  sessionId,
+                  event.timestampMs,
+                  runGeneration,
+                );
               }
             },
             onAudioChunk(chunk) {
@@ -275,6 +339,38 @@ export function createSpeechInputController(
   };
 
   const stop = async (): Promise<void> => {
+    if (!activeAbortController) {
+      if (stopPromise) await stopPromise;
+      return;
+    }
+    stopping = true;
+    const sessionId = activeSessionId;
+    const runGeneration = generation;
+    if (speechActive && sessionId) {
+      speechActive = false;
+      const event: SpeechActivityEvent = {
+        type: "speech-end",
+        sessionId,
+        segmentId:
+          activeSegmentId ?? `${sessionId}:segment-${segmentSequence}`,
+        timestampMs: now(),
+      };
+      activeSegmentId = undefined;
+      if (capture.endSpeechSegment) {
+        await queueSegmentOperation(async () => {
+          await capture.endSpeechSegment?.();
+          if (
+            runGeneration === generation &&
+            activeSessionId === sessionId
+          ) {
+            options.onSpeechEnd?.(event);
+          }
+        }, runGeneration);
+      } else {
+        options.onSpeechEnd?.(event);
+      }
+    }
+    await segmentOperation;
     if (!activeAbortController) {
       if (stopPromise) await stopPromise;
       return;

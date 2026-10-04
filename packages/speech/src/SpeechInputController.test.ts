@@ -24,6 +24,8 @@ function createCapture(startError?: Error): {
       if (startError) throw startError;
     }),
     stop: vi.fn(async () => undefined),
+    beginSpeechSegment: vi.fn(async () => undefined),
+    endSpeechSegment: vi.fn(async () => undefined),
   };
   return {
     capture,
@@ -92,13 +94,19 @@ describe("speech input controller", () => {
     expect(onSpeechStart).toHaveBeenCalledWith({
       type: "speech-start",
       sessionId: "speech-session-1",
+      segmentId: "speech-session-1:segment-1",
       timestampMs: 40,
     });
-    expect(onSpeechEnd).toHaveBeenCalledWith({
-      type: "speech-end",
-      sessionId: "speech-session-1",
-      timestampMs: 80,
-    });
+    await vi.waitFor(() =>
+      expect(onSpeechEnd).toHaveBeenCalledWith({
+        type: "speech-end",
+        sessionId: "speech-session-1",
+        segmentId: "speech-session-1:segment-1",
+        timestampMs: 80,
+      }),
+    );
+    expect(capture.beginSpeechSegment).toHaveBeenCalledOnce();
+    expect(capture.endSpeechSegment).toHaveBeenCalledOnce();
     expect(onAudioChunk).toHaveBeenCalledWith(
       { data: new Uint8Array([1, 2]), mimeType: "audio/webm" },
       "speech-session-1",
@@ -191,6 +199,62 @@ describe("speech input controller", () => {
     resolveFirstStart?.();
     await firstStart;
     expect(controller.state).toEqual({ status: "listening" });
+    await controller.dispose();
+  });
+
+  it("finishes an active speech segment when push-to-talk is released", async () => {
+    const { capture, callbacks } = createCapture();
+    const onSpeechEnd = vi.fn();
+    const controller = makeController(capture, {
+      onSpeechEnd,
+      now: () => 90,
+    });
+    await controller.start();
+    callbacks().onSamples(samples(0.2), 20);
+    callbacks().onSamples(samples(0.2), 40);
+
+    await controller.stop();
+
+    expect(capture.endSpeechSegment).toHaveBeenCalledOnce();
+    expect(onSpeechEnd).toHaveBeenCalledWith({
+      type: "speech-end",
+      sessionId: "speech-session-1",
+      segmentId: "speech-session-1:segment-1",
+      timestampMs: 90,
+    });
+    expect(controller.state).toEqual({ status: "idle" });
+    await controller.dispose();
+  });
+
+  it("assigns distinct IDs to utterances within one microphone session", async () => {
+    const { capture, callbacks } = createCapture();
+    const onSpeechStart = vi.fn();
+    const onSpeechEnd = vi.fn();
+    const controller = makeController(capture, { onSpeechStart, onSpeechEnd });
+    await controller.start();
+    const emitUtterance = async (offset: number) => {
+      callbacks().onSamples(samples(0.2), offset);
+      callbacks().onSamples(samples(0.2), offset + 20);
+      callbacks().onSamples(samples(0.01), offset + 40);
+      callbacks().onSamples(samples(0.01), offset + 60);
+      await vi.waitFor(() =>
+        expect(onSpeechEnd).toHaveBeenCalledTimes(
+          offset === 0 ? 1 : 2,
+        ),
+      );
+    };
+
+    await emitUtterance(0);
+    await emitUtterance(100);
+
+    const firstStart = onSpeechStart.mock.calls[0]?.[0];
+    const secondStart = onSpeechStart.mock.calls[1]?.[0];
+    const firstEnd = onSpeechEnd.mock.calls[0]?.[0];
+    const secondEnd = onSpeechEnd.mock.calls[1]?.[0];
+    expect(firstStart?.segmentId).toBe("speech-session-1:segment-1");
+    expect(secondStart?.segmentId).toBe("speech-session-1:segment-2");
+    expect(firstEnd?.segmentId).toBe(firstStart?.segmentId);
+    expect(secondEnd?.segmentId).toBe(secondStart?.segmentId);
     await controller.dispose();
   });
 

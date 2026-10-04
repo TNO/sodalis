@@ -7,6 +7,8 @@ interface AvatarConversationCardAttrs {
   speechInput?: SpeechInputController;
   speechActivityMessage?: string;
   speechError?: string;
+  userTranscript?: string;
+  assistantText?: string;
   onSpeechError?: (error: Error) => void;
   onClose: () => void;
 }
@@ -163,9 +165,15 @@ export const AvatarConversationCard =
             ]),
             m("div.avatar-conversation-transcript[aria-live=polite][aria-atomic=true]", [
               m("p.avatar-conversation-speaker", "You"),
-              m("p.avatar-conversation-user-text", transcript),
+              m(
+                "p.avatar-conversation-user-text",
+                vnode.attrs.userTranscript ?? transcript,
+              ),
               m("p.avatar-conversation-speaker", "Sodalis"),
-              m("p.avatar-conversation-caption", caption),
+              m(
+                "p.avatar-conversation-caption",
+                vnode.attrs.assistantText ?? caption,
+              ),
             ]),
             m(
               "p.avatar-conversation-status[role=status][aria-live=polite]",

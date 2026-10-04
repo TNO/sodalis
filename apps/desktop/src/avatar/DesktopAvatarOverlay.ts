@@ -5,10 +5,14 @@ import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import {
   createEnergyVoiceActivityDetector,
   createSpeechInputController,
+  ServerSpeechToTextProvider,
 } from "@sodalis/speech";
 import type {
+  SpeechAudioChunk,
   SpeechInputController,
   SpeechInputState,
+  SpeechSessionId,
+  SpeechToTextSession,
 } from "@sodalis/speech";
 import { AvatarConversationCard } from "./AvatarConversationCard.js";
 import { AvatarNotificationPanel } from "./AvatarNotificationPanel.js";
@@ -61,6 +65,17 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+interface ActiveSpeechRecognition {
+  readonly microphoneSessionId: SpeechSessionId;
+  readonly recognitionSessionId: SpeechSessionId;
+  readonly abortController: AbortController;
+  ready: Promise<void>;
+  writeChain: Promise<void>;
+  session?: SpeechToTextSession;
+  failed: boolean;
+  errorReported: boolean;
+}
+
 export const DesktopAvatarOverlay =
   (): m.Component<DesktopAvatarOverlayAttrs> => {
     let layer: HTMLElement | undefined;
@@ -92,10 +107,107 @@ export const DesktopAvatarOverlay =
     let microphoneWasActive = false;
     let speechActivityMessage: string | undefined;
     let speechError: string | undefined;
+    let userTranscript: string | undefined;
+    let assistantText: string | undefined;
+    let activeRecognition: ActiveSpeechRecognition | undefined;
+    const speechToTextProvider = new ServerSpeechToTextProvider({
+      baseUrl: import.meta.env.VITE_SODALIS_API_URL ?? "/api",
+      onLatency(metric) {
+        if (import.meta.env.DEV) {
+          console.debug("Speech recognition latency:", metric);
+        }
+      },
+    });
 
     const reportSpeechError = (error: Error) => {
       speechError = error.message;
       m.redraw();
+    };
+
+    const reportRecognitionError = (
+      recognition: ActiveSpeechRecognition,
+      error: unknown,
+    ) => {
+      if (recognition.errorReported) return;
+      recognition.errorReported = true;
+      recognition.failed = true;
+      if (
+        activeRecognition === recognition &&
+        !recognition.abortController.signal.aborted
+      ) {
+        speechActivityMessage = "Speech recognition failed.";
+        const normalized =
+          error instanceof Error ? error : new Error(String(error));
+        reportSpeechError(normalized);
+        recognition.abortController.abort(normalized);
+      }
+    };
+
+    const cancelRecognition = () => {
+      const recognition = activeRecognition;
+      activeRecognition = undefined;
+      if (recognition && !recognition.abortController.signal.aborted) {
+        recognition.abortController.abort();
+      }
+    };
+
+    const beginRecognition = (
+      microphoneSessionId: SpeechSessionId,
+      segmentId: string,
+    ) => {
+      cancelRecognition();
+      speechError = undefined;
+      userTranscript = "";
+      assistantText = undefined;
+      const recognition: ActiveSpeechRecognition = {
+        microphoneSessionId,
+        recognitionSessionId: segmentId,
+        abortController: new AbortController(),
+        ready: Promise.resolve(),
+        writeChain: Promise.resolve(),
+        failed: false,
+        errorReported: false,
+      };
+      activeRecognition = recognition;
+      recognition.ready = speechToTextProvider
+        .createSession({
+          sessionId: recognition.recognitionSessionId,
+          language: "nl-NL",
+          signal: recognition.abortController.signal,
+        })
+        .then((session) => {
+          if (
+            activeRecognition !== recognition ||
+            recognition.abortController.signal.aborted
+          ) {
+            recognition.abortController.abort();
+            return;
+          }
+          recognition.session = session;
+          void (async () => {
+            try {
+              for await (const event of session.events) {
+                if (
+                  activeRecognition !== recognition ||
+                  event.sessionId !== recognition.recognitionSessionId
+                ) {
+                  continue;
+                }
+                userTranscript = event.text;
+                speechActivityMessage =
+                  event.type === "final"
+                    ? "Transcript ready."
+                    : "Transcribing speech…";
+                if (layer) m.redraw();
+              }
+            } catch (error) {
+              reportRecognitionError(recognition, error);
+            }
+          })();
+        })
+        .catch((error: unknown) => {
+          reportRecognitionError(recognition, error);
+        });
     };
 
     const createSpeechInput = (): SpeechInputController =>
@@ -103,6 +215,7 @@ export const DesktopAvatarOverlay =
         detector: createEnergyVoiceActivityDetector(),
         onStateChange(state: Readonly<SpeechInputState>) {
           const active = state.status === "listening";
+          if (state.status === "error") cancelRecognition();
           if (active) {
             microphoneWasActive = true;
             avatarScene?.controller.setState("listening");
@@ -118,14 +231,63 @@ export const DesktopAvatarOverlay =
           if (state === "interrupted") avatarScene.controller.interrupt();
           avatarScene.controller.setState(state);
         },
-        onSpeechStart() {
+        onSpeechStart(event) {
           speechActivityMessage =
-            "Speech detected. Transcription will be available when STT is connected.";
+            "Speech detected. Starting speech recognition…";
+          beginRecognition(event.sessionId, event.segmentId);
           if (layer) m.redraw();
         },
-        onSpeechEnd() {
-          speechActivityMessage = "Speech ended. Listening for more.";
+        onSpeechEnd(event) {
+          const recognition = activeRecognition;
+          if (
+            !recognition ||
+            recognition.recognitionSessionId !== event.segmentId
+          ) {
+            return;
+          }
+          speechActivityMessage = "Transcribing speech…";
+          void recognition.writeChain
+            .then(() => recognition.ready)
+            .then(async () => {
+              if (
+                activeRecognition !== recognition ||
+                recognition.abortController.signal.aborted ||
+                recognition.failed ||
+                !recognition.session
+              ) {
+                return;
+              }
+              await recognition.session.finish(event.timestampMs);
+            })
+            .catch((error: unknown) =>
+              reportRecognitionError(recognition, error),
+            );
           if (layer) m.redraw();
+        },
+        onAudioChunk(chunk: SpeechAudioChunk, sessionId) {
+          const recognition = activeRecognition;
+          if (
+            !recognition ||
+            recognition.microphoneSessionId !== sessionId
+          ) {
+            return;
+          }
+          recognition.writeChain = recognition.writeChain
+            .then(async () => {
+              await recognition.ready;
+              if (
+                activeRecognition !== recognition ||
+                recognition.abortController.signal.aborted ||
+                recognition.failed ||
+                !recognition.session
+              ) {
+                return;
+              }
+              await recognition.session.writeAudio(chunk);
+            })
+            .catch((error: unknown) =>
+              reportRecognitionError(recognition, error),
+            );
         },
         onBargeInLatency(metric) {
           if (import.meta.env.DEV) {
@@ -150,6 +312,7 @@ export const DesktopAvatarOverlay =
       conversationOpen = false;
       restoreAvatarFocus = true;
       presentation?.setMode("ambient");
+      cancelRecognition();
       void speechInput?.stop().catch((error: unknown) => {
         reportSpeechError(
           error instanceof Error ? error : new Error(String(error)),
@@ -438,6 +601,7 @@ export const DesktopAvatarOverlay =
         }
         conversationOpen = false;
         notificationOpen = false;
+        cancelRecognition();
         setSpeechInputListener(undefined);
         void speechInput?.dispose().catch((error: unknown) => {
           console.error("Unable to dispose speech input:", error);
@@ -545,6 +709,8 @@ export const DesktopAvatarOverlay =
                   speechInput,
                   speechActivityMessage,
                   speechError,
+                  userTranscript,
+                  assistantText,
                   onSpeechError: reportSpeechError,
                   onClose: closeConversation,
                 })

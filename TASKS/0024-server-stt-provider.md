@@ -1,6 +1,6 @@
 # 0024 Server STT provider
 
-Status: open
+Status: done
 Priority: high
 Subsystem: speech
 Depends on: 0022, 0023
@@ -58,3 +58,8 @@ Keep browser-local STT as a future provider.
 ## Agent Notes
 
 - Evaluate recognition quality with normal conversational Dutch rather than only English test phrases.
+- Also evaluate the lightweight Dutch-capable Whistle model requested by the user:
+  https://huggingface.co/Cactus-Compute/whistle
+- Implemented a self-hosted Whisper.cpp adapter behind the Hono speech API.
+- The provider advertises final-only output (`partialResults: false`); first-partial latency is therefore not applicable. Speech-end-to-final latency is reported by the provider.
+- The Whistle and Whisper.cpp comparison used two synthetic Dutch utterances and is documented in `apps/server/README.md`; it is not a broad accuracy benchmark.

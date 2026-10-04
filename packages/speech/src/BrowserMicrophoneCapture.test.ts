@@ -80,11 +80,13 @@ describe("browser microphone capture", () => {
     });
 
     await capture.start(callbacks, controller.signal);
+    await capture.beginSpeechSegment();
     scheduledFrame?.();
     const stopRecorder = vi.spyOn(recorder, "stop");
     recorder.ondataavailable?.({
       data: new Blob([new Uint8Array([1, 2, 3])], { type: recorder.mimeType }),
     } as BlobEvent);
+    await capture.endSpeechSegment();
     await Promise.all([capture.stop(), capture.stop()]);
 
     expect(callbacks.onSamples).toHaveBeenCalledOnce();
@@ -92,8 +94,12 @@ describe("browser microphone capture", () => {
     expect(recordedSamples?.length).toBe(1024);
     expect(recordedSamples?.[0]).toBeCloseTo(0.2);
     expect(vi.mocked(callbacks.onSamples).mock.calls[0]?.[1]).toBe(42);
-    expect(callbacks.onAudioChunk).toHaveBeenCalledWith({
+    expect(callbacks.onAudioChunk).toHaveBeenNthCalledWith(1, {
       data: new Uint8Array([1, 2, 3]),
+      mimeType: "audio/webm",
+    });
+    expect(callbacks.onAudioChunk).toHaveBeenNthCalledWith(2, {
+      data: new Uint8Array([4, 5]),
       mimeType: "audio/webm",
     });
     expect(track.stop).toHaveBeenCalledOnce();

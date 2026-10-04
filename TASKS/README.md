@@ -51,7 +51,7 @@ production providers follow in 0024–0025 after microphone/VAD support in
 
 - [x] 0022 Defining provider-neutral STT and TTS contracts
 - [x] 0023 Adding microphone VAD and barge-in *(needs 0022)*
-- [ ] 0024 Adding a server STT provider *(needs 0022, 0023)*
+- [x] 0024 Adding a server STT provider *(needs 0022, 0023)*
 - [ ] 0025 Adding server TTS and lip sync *(needs 0022, 0023)*
 
 ## Conversation and app actions
