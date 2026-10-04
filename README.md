@@ -8,12 +8,22 @@ optional Three.js/TalkingHead avatar runtime and an accessible assistant panel.
 
 Use Docker Desktop with Docker Compose v2, or a running Podman machine with
 the standalone Docker Compose v2 `docker-compose` executable (not
-`podman-compose`). Install Node.js 24 and pnpm 12.4.1. Download the Whisper
-and Piper models into `models/` as described in
-[`docs/development-stack.md`](docs/development-stack.md) unless they are
-already present in this checkout.
+`podman-compose`). Install Node.js 24 and pnpm 12.4.1. Models are not
+included in the repository: `models/` is git-ignored, so **every fresh
+checkout needs its own downloads**. From the repository root, download the
+default Whisper.cpp and Piper models before starting the stack:
 
-From the repository root:
+```sh
+mkdir -p models/whisper models/piper
+curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
+  -o models/whisper/ggml-base.bin
+curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx \
+  -o models/piper/nl_BE-nathalie-medium.onnx
+curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx.json \
+  -o models/piper/nl_BE-nathalie-medium.onnx.json
+```
+
+If the three files already exist in this checkout, skip the downloads. Then:
 
 ```sh
 pnpm install
