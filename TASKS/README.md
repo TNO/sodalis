@@ -1,9 +1,7 @@
 # Sodalis task index
 
-The individual task files are the source of truth. Phase 1 is intentionally
-sequential: each implementation task depends on the previous acceptance gate.
-Do not add production speech, an LLM, memory/RAG, Home Assistant, or real Mail
-in this phase.
+The individual task files are the source of truth. Phase 1 records the desktop
+and avatar foundation; later work is sequenced by explicit dependencies.
 
 ## Phase 0 — Desktop foundation
 
@@ -52,13 +50,50 @@ production providers follow in 0024–0025 after microphone/VAD support in
 - [x] 0022 Defining provider-neutral STT and TTS contracts
 - [x] 0023 Adding microphone VAD and barge-in *(needs 0022)*
 - [x] 0024 Adding a server STT provider *(needs 0022, 0023)*
-- [ ] 0025 Adding server TTS and lip sync *(needs 0022, 0023)*
+- [x] 0025 Adding server TTS and lip sync *(needs 0022, 0023)*
 
 ## Conversation and app actions
 
 Task 0026 depends on both server speech paths; structured affect and trusted
 app actions follow the orchestrator.
 
-- [ ] 0026 Building the conversation orchestrator *(needs 0024, 0025)*
-- [ ] 0027 Adding structured assistant affect *(needs 0026)*
-- [ ] 0028 Connecting assistant app actions *(needs 0026, 0027)*
+- [x] 0026 Building the conversation orchestrator *(needs 0024, 0025)*
+- [x] 0027 Adding structured assistant affect *(needs 0026)*
+- [x] 0028 Connecting assistant app actions *(needs 0026, 0027)*
+
+## Flexible services and app integrations
+
+Tasks 0029–0034 establish independent Sodalis APIs, provider selection, the
+Home Assistant simulator, the first-party semantic app SDK, and a
+cross-platform development Compose stack. The stack uses Docker Compose v2
+with Docker or Podman, exposes only a localhost same-origin gateway, and does
+not silently fall back to cloud providers.
+
+- [x] 0029 Splitting speech and AI into Sodalis services *(needs 0028)*
+- [x] 0030 Selecting STT and TTS providers independently *(needs 0029)*
+- [x] 0031 Adding the Sodalis AI provider facade *(needs 0029)*
+- [x] 0032 Building the Home Assistant simulator service *(needs 0029)*
+- [x] 0033 Creating the semantic app integration SDK *(needs 0028, 0029)*
+- [x] 0034 Building the cross-platform development Compose stack *(needs 0029, 0030, 0031, 0032, 0033)*
+
+## Provider and Home Assistant follow-ups
+
+These tasks add provider implementations only after the relevant Sodalis
+service contract and Compose profile exist. Home Assistant Core is simulated
+first; linking to a real instance and designing access to many houses are
+separate, later steps.
+
+- [ ] 0035 Evaluating alternate STT providers *(needs 0030, 0034)*
+- [ ] 0036 Evaluating alternate TTS providers *(needs 0030, 0034)*
+- [ ] 0037 Evaluating alternate LLM providers *(needs 0031, 0034)*
+- [ ] 0038 Connecting to a real Home Assistant instance *(needs 0032, 0033, 0034)*
+
+## Long-term memory and future scale
+
+Memory is a separate local-first AI-service milestone. It distinguishes
+transcripts, derived memories, observations, and inferences, and requires
+dedicated consent and user controls for health memory. Multi-house connectivity
+is intentionally later than the single-instance Home Assistant adapter.
+
+- [ ] 0039 Building Sodalis long-term memory *(needs 0031, 0034)*
+- [ ] 0040 Designing multi-house Home Assistant connectivity *(needs 0038)*
