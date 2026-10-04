@@ -132,6 +132,7 @@ dist
 
 # pnpm
 .pnpm-store
+models/
 
 # yarn v3
 .pnp.*

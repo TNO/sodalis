@@ -1,0 +1,30 @@
+:8080 {
+	handle /api/speech/stt/* {
+		reverse_proxy speech:3001 {
+			flush_interval -1
+		}
+	}
+	handle /api/speech/tts {
+		reverse_proxy speech:3001 {
+			flush_interval -1
+		}
+	}
+	handle /api/assistant/* {
+		reverse_proxy ai:3002 {
+			flush_interval -1
+		}
+	}
+	handle /api/home/* {
+		reverse_proxy {$HOME_API_UPSTREAM} {
+			header_up Host {upstream_hostport}
+			flush_interval -1
+		}
+	}
+	handle /healthz {
+		respond "ok" 200
+	}
+	handle {
+		root * /srv
+		file_server
+	}
+}

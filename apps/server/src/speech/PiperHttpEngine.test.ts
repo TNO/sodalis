@@ -31,7 +31,7 @@ describe("Piper HTTP engine", () => {
         controller.enqueue(bytes.slice(45));
         controller.close();
       },
-    }), { headers: { "content-type": "audio/wav" } }));
+    }), { headers: { "content-type": "text/html; charset=utf-8" } }));
     const engine = new PiperHttpEngine({
       serverUrl: "http://localhost:5000", fetch: fetcher as typeof fetch,
     });
@@ -40,9 +40,22 @@ describe("Piper HTTP engine", () => {
       chunks.push(chunk);
     }
     expect(Uint8Array.from(chunks.flatMap((chunk) => [...chunk]))).toEqual(bytes.slice(44));
-    expect(fetcher).toHaveBeenCalledWith("http://localhost:5000/", expect.objectContaining({
+    expect(fetcher).toHaveBeenCalledWith("http://localhost:5000/synthesize", expect.objectContaining({
       method: "POST", body: JSON.stringify({ text: "Hallo" }),
     }));
+  });
+
+  it("retains an explicitly configured root endpoint", async () => {
+    const fetcher = vi.fn(async () => new Response(null, { status: 500 }));
+    const engine = new PiperHttpEngine({
+      serverUrl: "http://localhost:5000/", fetch: fetcher as typeof fetch,
+    });
+    await expect(async () => {
+      for await (const _chunk of engine.synthesize(request, new AbortController().signal)) {
+        // Consume the stream.
+      }
+    }).rejects.toThrow("HTTP 500");
+    expect(fetcher).toHaveBeenCalledWith("http://localhost:5000/", expect.any(Object));
   });
 
   it("fails explicitly on unsupported audio and propagates cancellation", async () => {
@@ -54,7 +67,7 @@ describe("Piper HTTP engine", () => {
       for await (const _chunk of engine.synthesize(request, new AbortController().signal)) {
         // Consume the stream.
       }
-    }).rejects.toThrow("audio/wav");
+    }).rejects.toThrow("incomplete WAV");
     const controller = new AbortController();
     controller.abort();
     await expect(async () => {

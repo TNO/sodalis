@@ -13,8 +13,8 @@ export interface BrowserMicrophoneCaptureOptions {
   scheduleFrames?: (
     callback: () => void,
     intervalMs: number,
-  ) => ReturnType<typeof setInterval>;
-  cancelFrames?: (handle: ReturnType<typeof setInterval>) => void;
+  ) => number;
+  cancelFrames?: (handle: number) => void;
   now?: () => number;
 }
 
@@ -41,7 +41,7 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
   private context: AudioContext | undefined;
   private recorder: MediaRecorder | undefined;
   private analyser: AnalyserNode | undefined;
-  private frameHandle: ReturnType<typeof setInterval> | undefined;
+  private frameHandle: number | undefined;
   private abortSignal: AbortSignal | undefined;
   private abortHandler: (() => void) | undefined;
   private readonly trackEndHandlers = new Map<MediaStreamTrack, () => void>();
@@ -121,7 +121,7 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
         track.addEventListener("ended", onEnded, { once: true });
       }
 
-      this.frameHandle = (this.options.scheduleFrames ?? setInterval)(
+      this.frameHandle = (this.options.scheduleFrames ?? window.setInterval.bind(window))(
         () => {
           try {
             const samples = new Float32Array(analyser.fftSize);
@@ -251,7 +251,7 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
 
     if (this.frameHandle !== undefined) {
       try {
-        (this.options.cancelFrames ?? clearInterval)(this.frameHandle);
+        (this.options.cancelFrames ?? window.clearInterval.bind(window))(this.frameHandle);
       } catch (error) {
         cleanupErrors.push(error);
       }

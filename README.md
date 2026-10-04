@@ -24,6 +24,11 @@ First-party desktop apps can register scoped semantic actions and avatar
 targets with [`@sodalis/app-sdk`](packages/app-sdk/README.md); the bundled
 Sample Notes panel is an example.
 
+For the CPU-capable Docker Compose v2 development stack, including the
+same-origin gateway, provider selection, model downloads, and Home Assistant
+simulator onboarding, see
+[`docs/development-stack.md`](docs/development-stack.md).
+
 ## Checks
 
 ```sh

@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+dist
+models
+.playwright-mcp
+services/homeassistant/.storage
+services/homeassistant/home-assistant_v2.db*
+services/homeassistant/home-assistant.log*

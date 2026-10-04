@@ -12,7 +12,10 @@ export class PiperHttpEngine implements SpeechSynthesisEngine {
   private readonly fetcher: typeof fetch;
 
   constructor(options: PiperHttpEngineOptions) {
-    this.endpoint = new URL("/", options.serverUrl).toString();
+    const url = new URL(options.serverUrl);
+    this.endpoint = url.pathname !== "/" || options.serverUrl.endsWith("/")
+      ? url.toString()
+      : new URL("synthesize", `${options.serverUrl}/`).toString();
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
@@ -30,9 +33,6 @@ export class PiperHttpEngine implements SpeechSynthesisEngine {
     });
     signal.throwIfAborted();
     if (!response.ok) throw new Error(`Piper HTTP returned HTTP ${response.status}.`);
-    if (!(response.headers.get("content-type") ?? "").toLowerCase().startsWith("audio/wav")) {
-      throw new Error("Piper HTTP must return audio/wav.");
-    }
     if (!response.body) throw new Error("Piper HTTP returned no audio stream.");
     const reader = response.body.getReader();
     const header = new Uint8Array(44);

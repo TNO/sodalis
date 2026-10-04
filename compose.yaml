@@ -1,0 +1,92 @@
+name: sodalis-dev
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    ports:
+      - "127.0.0.1:${SODALIS_PORT:-4176}:8080"
+    environment:
+      HOME_API_UPSTREAM: ${HOME_API_UPSTREAM:-home:3003}
+    volumes:
+      - ./services/gateway/${HOME_ADMIN_FILE:-Caddyfile.desktop}:/etc/caddy/Caddyfile:ro
+
+  speech:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    image: sodalis-api:dev
+    command: ["pnpm", "--filter", "@sodalis/server", "start:speech"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3001"
+      STT_PROVIDER: ${STT_PROVIDER:-whisper-cpp}
+      WHISPER_CPP_URL: ${WHISPER_CPP_URL:-}
+      TTS_PROVIDER: ${TTS_PROVIDER:-piper-http}
+      PIPER_HTTP_URL: ${PIPER_HTTP_URL:-}
+
+  ai:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    image: sodalis-api:dev
+    command: ["pnpm", "--filter", "@sodalis/server", "start:ai"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3002"
+      LLM_PROVIDER: ${LLM_PROVIDER:?Set LLM_PROVIDER in .env}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+
+  home:
+    profiles: ["home-api"]
+    image: sodalis-api:dev
+    command: ["pnpm", "--filter", "@sodalis/server", "start:home"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3003"
+      HOME_PROVIDER: simulator
+      HOME_ASSISTANT_URL: http://homeassistant:8123
+      HOME_ASSISTANT_TOKEN: ${HOME_ASSISTANT_TOKEN:-}
+      HOME_SAFE_MIN_C: ${HOME_SAFE_MIN_C:-16}
+      HOME_SAFE_MAX_C: ${HOME_SAFE_MAX_C:-26}
+
+  homeassistant:
+    profiles: ["home-simulator"]
+    image: ${HOME_ASSISTANT_IMAGE:-ghcr.io/home-assistant/home-assistant:2026.9.4}
+    volumes:
+      - homeassistant_data:/config
+      - ./services/homeassistant/configuration.yaml:/config/configuration.yaml:ro
+    environment:
+      TZ: ${TZ:-Europe/Amsterdam}
+
+  whisper:
+    profiles: ["whisper"]
+    build:
+      context: .
+      dockerfile: services/whisper/Dockerfile
+    command: ["--host", "0.0.0.0", "--port", "8080", "-m", "/models/ggml-base.bin", "--convert", "--no-gpu"]
+    volumes:
+      - ./models/whisper:/models:ro
+
+  piper:
+    profiles: ["piper"]
+    build:
+      context: .
+      dockerfile: services/piper/Dockerfile
+    command: ["python", "-m", "piper.http_server", "-m", "nl_BE-nathalie-medium", "--data-dir", "/models", "--host", "0.0.0.0", "--port", "5000"]
+    volumes:
+      - ./models/piper:/models:ro
+
+  llm:
+    profiles: ["llm"]
+    image: ghcr.io/ggml-org/llama.cpp:server
+    entrypoint: ["llama-server"]
+    command: ["-m", "/models/${LLM_MODEL:-local.gguf}", "--alias", "${LLM_MODEL:-local.gguf}", "--host", "0.0.0.0", "--port", "8080", "--no-webui"]
+    volumes:
+      - ./models/llm:/models:ro
+
+volumes:
+  homeassistant_data:

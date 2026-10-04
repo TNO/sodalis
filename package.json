@@ -8,13 +8,19 @@
     "dev:speech": "pnpm --filter @sodalis/server dev:speech",
     "dev:ai": "pnpm --filter @sodalis/server dev:ai",
     "dev:home": "pnpm --filter @sodalis/server dev:home",
+    "stack:up": "tsx scripts/dev-stack.ts up",
+    "stack:down": "tsx scripts/dev-stack.ts down",
+    "stack:config": "tsx scripts/dev-stack.ts config",
+    "stack:smoke": "tsx scripts/smoke-stack.ts",
     "build": "pnpm --recursive build",
-    "test": "pnpm --filter @sodalis/desktop-host test && pnpm --filter @sodalis/avatar test && pnpm --filter @sodalis/speech test && pnpm --filter @sodalis/assistant test && pnpm --filter @sodalis/app-sdk test && pnpm --filter @sodalis/server test && pnpm --filter @sodalis/desktop test",
+    "test": "vitest run scripts/stack-config.test.ts && pnpm --filter @sodalis/desktop-host test && pnpm --filter @sodalis/avatar test && pnpm --filter @sodalis/speech test && pnpm --filter @sodalis/assistant test && pnpm --filter @sodalis/app-sdk test && pnpm --filter @sodalis/server test && pnpm --filter @sodalis/desktop test",
     "typecheck": "pnpm --recursive typecheck"
   },
   "devDependencies": {
+    "@types/node": "^24.10.4",
     "@types/mithril": "^2.2.9",
     "jsdom": "^30.1.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.2",
     "vitest": "^5.0.3"

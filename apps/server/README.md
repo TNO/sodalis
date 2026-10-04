@@ -9,6 +9,8 @@ it never receives provider URLs or credentials. Each service has `/healthz`
 the availability of external models. Speech listens on port 3001 and AI on
 3002 by default; use `HOST` and `PORT` to override either process. Start them
 in separate terminals with `pnpm dev:speech` and `pnpm dev:ai`.
+For the containerized gateway and independently selected engines, see
+[`docs/development-stack.md`](../../docs/development-stack.md).
 
 ## Speech
 
@@ -78,7 +80,7 @@ or unknown provider IDs rather than falling back. Either role can instead
 select `mock`, a deterministic fixture with no engine dependencies.
 `TTS_PROVIDER=piper-http` uses an explicitly configured `PIPER_HTTP_URL`;
 that Piper HTTP service must return standard 22,050 Hz mono PCM16 WAV for a
-JSON `{"text": "..."}` request. STT's Whisper.cpp URL can likewise point to
+JSON `{"text": "..."}` request to `/synthesize`. STT's Whisper.cpp URL can likewise point to
 a remote/native host instance; keep such endpoints private and trusted.
 Piper HTTP's format is specific to that adapter, not a generic engine
 protocol. STT and TTS can be mixed freely, retain the existing browser
