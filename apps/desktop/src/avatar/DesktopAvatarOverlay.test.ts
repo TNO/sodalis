@@ -296,16 +296,20 @@ describe("DesktopAvatarOverlay", () => {
     expect(host.textContent).toContain(
       "Live assistant replies are not connected yet.",
     );
+    expect(host.textContent).toContain("Microphone is off.");
+    expect(
+      host.querySelector(".avatar-conversation-push-to-talk")?.textContent,
+    ).toBe("Hold to talk");
 
     host
       .querySelector<HTMLButtonElement>(".avatar-conversation-listening")
       ?.click();
     await vi.waitFor(() => {
-      expect(host.textContent).toContain("Demo listening is stopped.");
+      expect(host.textContent).toContain("Microphone error:");
     });
     expect(
       host.querySelector(".avatar-conversation-listening")?.textContent,
-    ).toBe("Resume demo listening");
+    ).toBe("Start microphone");
 
     activate?.focus();
     host

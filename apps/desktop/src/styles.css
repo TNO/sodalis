@@ -421,6 +421,18 @@ body {
   width: 100%;
 }
 
+.avatar-conversation-push-to-talk {
+  width: 100%;
+  margin-top: 0.5rem;
+  touch-action: none;
+}
+
+.avatar-conversation-push-to-talk[aria-pressed="true"] {
+  border-color: var(--shell-focus);
+  background: var(--shell-focus);
+  color: var(--shell-panel);
+}
+
 .avatar-conversation-form {
   display: grid;
   gap: 0.4rem;

@@ -2,6 +2,14 @@ import m from "mithril";
 import type { Vnode } from "mithril";
 import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
+import {
+  createEnergyVoiceActivityDetector,
+  createSpeechInputController,
+} from "@sodalis/speech";
+import type {
+  SpeechInputController,
+  SpeechInputState,
+} from "@sodalis/speech";
 import { AvatarConversationCard } from "./AvatarConversationCard.js";
 import { AvatarNotificationPanel } from "./AvatarNotificationPanel.js";
 import type { AvatarNotification } from "./AvatarNotificationPanel.js";
@@ -16,6 +24,7 @@ interface DesktopAvatarOverlayAttrs {
   showGazeTarget?: boolean;
   frame?: HTMLIFrameElement;
   presentation?: AvatarPresentationController;
+  onSpeechInput?: (controller: SpeechInputController | undefined) => void;
   onOpenApplication?: (appId: string) => Promise<void>;
 }
 
@@ -65,6 +74,11 @@ export const DesktopAvatarOverlay =
     let contentMutationObserver: MutationObserver | undefined;
     let windowMutationObserver: MutationObserver | undefined;
     let presentation: AvatarPresentationController | undefined;
+    let speechInput: SpeechInputController | undefined;
+    let speechInputListener:
+      | ((controller: SpeechInputController | undefined) => void)
+      | undefined;
+    let avatarScene: AvatarSceneHandle | undefined;
     let onGeometryChange: (() => void) | undefined;
     let conversationOpen = false;
     let notificationOpen = false;
@@ -75,6 +89,74 @@ export const DesktopAvatarOverlay =
     }));
     let restoreAvatarFocus = false;
     let restoreNotificationFocus = false;
+    let microphoneWasActive = false;
+    let speechActivityMessage: string | undefined;
+    let speechError: string | undefined;
+
+    const reportSpeechError = (error: Error) => {
+      speechError = error.message;
+      m.redraw();
+    };
+
+    const createSpeechInput = (): SpeechInputController =>
+      createSpeechInputController({
+        detector: createEnergyVoiceActivityDetector(),
+        onStateChange(state: Readonly<SpeechInputState>) {
+          const active = state.status === "listening";
+          if (active) {
+            microphoneWasActive = true;
+            avatarScene?.controller.setState("listening");
+          } else if (microphoneWasActive) {
+            microphoneWasActive = false;
+            avatarScene?.controller.setState("idle");
+          }
+          if (state.status !== "error") speechError = undefined;
+          if (layer) m.redraw();
+        },
+        onAssistantStateChange(state) {
+          if (!avatarScene) return;
+          if (state === "interrupted") avatarScene.controller.interrupt();
+          avatarScene.controller.setState(state);
+        },
+        onSpeechStart() {
+          speechActivityMessage =
+            "Speech detected. Transcription will be available when STT is connected.";
+          if (layer) m.redraw();
+        },
+        onSpeechEnd() {
+          speechActivityMessage = "Speech ended. Listening for more.";
+          if (layer) m.redraw();
+        },
+        onBargeInLatency(metric) {
+          if (import.meta.env.DEV) {
+            console.debug("Avatar barge-in latency:", metric);
+          }
+        },
+        onError: reportSpeechError,
+      });
+
+    const setSpeechInputListener = (
+      listener:
+        | ((controller: SpeechInputController | undefined) => void)
+        | undefined,
+    ) => {
+      if (speechInputListener === listener) return;
+      speechInputListener?.(undefined);
+      speechInputListener = listener;
+      speechInputListener?.(speechInput);
+    };
+
+    const closeConversation = () => {
+      conversationOpen = false;
+      restoreAvatarFocus = true;
+      presentation?.setMode("ambient");
+      void speechInput?.stop().catch((error: unknown) => {
+        reportSpeechError(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      });
+      m.redraw();
+    };
 
     const closeNotificationCenter = () => {
       notificationOpen = false;
@@ -320,12 +402,15 @@ export const DesktopAvatarOverlay =
       oncreate(vnode) {
         layer = vnode.dom as HTMLElement;
         onGeometryChange = vnode.attrs.onGeometryChange;
+        speechInput = createSpeechInput();
+        setSpeechInputListener(vnode.attrs.onSpeechInput);
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
       },
 
       onupdate(vnode) {
         onGeometryChange = vnode.attrs.onGeometryChange;
+        setSpeechInputListener(vnode.attrs.onSpeechInput);
         setFrame(vnode.attrs.frame);
         setPresentation(vnode.attrs.presentation);
         if (restoreNotificationFocus && !notificationOpen) {
@@ -347,12 +432,17 @@ export const DesktopAvatarOverlay =
         }
       },
 
-      onremove() {
+      onremove(vnode) {
         if (conversationOpen || notificationOpen) {
           presentation?.setMode("ambient");
         }
         conversationOpen = false;
         notificationOpen = false;
+        setSpeechInputListener(undefined);
+        void speechInput?.dispose().catch((error: unknown) => {
+          console.error("Unable to dispose speech input:", error);
+        });
+        speechInput = undefined;
         setPresentation(undefined);
         setFrame(undefined);
         layer = undefined;
@@ -362,7 +452,13 @@ export const DesktopAvatarOverlay =
       view(vnode: Vnode<DesktopAvatarOverlayAttrs>) {
         const viewportAttrs = {
           targetRegistry: vnode.attrs.targetRegistry,
-          onScene: vnode.attrs.onScene,
+          onScene(scene: AvatarSceneHandle | undefined) {
+            avatarScene = scene;
+            if (scene && microphoneWasActive) {
+              scene.controller.setState("listening");
+            }
+            vnode.attrs.onScene?.(scene);
+          },
           gazeOverlay: vnode.attrs.gazeOverlay,
           showGazeTarget: vnode.attrs.showGazeTarget,
           interactive: true,
@@ -446,12 +542,11 @@ export const DesktopAvatarOverlay =
               : null,
             conversationOpen
               ? m(AvatarConversationCard, {
-                  onClose() {
-                    conversationOpen = false;
-                    restoreAvatarFocus = true;
-                    presentation?.setMode("ambient");
-                    m.redraw();
-                  },
+                  speechInput,
+                  speechActivityMessage,
+                  speechError,
+                  onSpeechError: reportSpeechError,
+                  onClose: closeConversation,
                 })
               : null,
           ],

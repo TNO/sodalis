@@ -1,9 +1,11 @@
 # 0023 Microphone VAD and barge-in
 
-Status: open
+Status: done
 Priority: high
 Subsystem: speech
 Depends on: 0022
+Owner: Copilot
+Agent: Copilot
 
 ## Context
 
@@ -67,3 +69,20 @@ Do not implement production STT in this task.
 ## Agent Notes
 
 - Responsiveness is more important here than perfect VAD classification.
+
+## Implementation Notes
+
+- Browser capture uses `getUserMedia`, `AudioContext` analysis frames, and
+  `MediaRecorder` chunks. Permission, recording, and device-loss errors are
+  surfaced in the conversation card.
+- The initial energy-based VAD uses configurable RMS thresholds and speech /
+  silence frame counts; its default start detection is designed for low latency.
+- Speech input events and recorded chunks carry the current speech session ID.
+  Stale callbacks are ignored after stop or cancellation.
+- A registered active-output handle is stopped locally before TTS and generation
+  cancellation hooks run. The avatar transitions through `interrupted` to
+  `listening`, and the controller reports speech-start-to-next-visible-frame
+  latency.
+- The conversation card provides continuous microphone start/stop, accessible
+  press-and-hold push-to-talk, and typed input. Speech recognition and assistant
+  responses remain for later tasks.

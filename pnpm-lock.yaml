@@ -190,6 +190,9 @@ importers:
       '@sodalis/desktop-host':
         specifier: workspace:*
         version: link:../../packages/desktop-host
+      '@sodalis/speech':
+        specifier: workspace:*
+        version: link:../../packages/speech
       mithril:
         specifier: ^2.3.8
         version: 2.3.8
@@ -211,6 +214,8 @@ importers:
         version: 0.180.0
 
   packages/desktop-host: {}
+
+  packages/speech: {}
 
 packages:
 

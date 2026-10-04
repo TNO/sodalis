@@ -323,3 +323,26 @@ export function validateSpeechConfiguration(
 
   return { ok: true, configuration: { stt, tts } };
 }
+
+export {
+  BrowserMicrophoneCapture,
+  type BrowserMicrophoneCaptureOptions,
+} from "./BrowserMicrophoneCapture.js";
+export {
+  createSpeechInputController,
+  type ActiveSpeechOutput,
+  type BargeInLatency,
+  type MicrophoneCapture,
+  type SpeechActivityEvent,
+  type SpeechInputAudioCallbacks,
+  type SpeechInputController,
+  type SpeechInputControllerOptions,
+  type SpeechInputState,
+  type SpeechInputStatus,
+} from "./SpeechInputController.js";
+export {
+  createEnergyVoiceActivityDetector,
+  type EnergyVoiceActivityDetectorOptions,
+  type VoiceActivityDetector,
+  type VoiceActivityEvent,
+} from "./voiceActivity.js";

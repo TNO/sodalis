@@ -1,8 +1,13 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
+import type { SpeechInputController } from "@sodalis/speech";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
 
 interface AvatarConversationCardAttrs {
+  speechInput?: SpeechInputController;
+  speechActivityMessage?: string;
+  speechError?: string;
+  onSpeechError?: (error: Error) => void;
   onClose: () => void;
 }
 
@@ -10,10 +15,34 @@ export const AvatarConversationCard =
   (): m.Component<AvatarConversationCardAttrs> => {
     let card: HTMLElement | undefined;
     let resizeObserver: ResizeObserver | undefined;
-    let listening = true;
     let draft = "";
     let transcript = "How do I reply to this email?";
     let caption = "Select Reply in the message toolbar. I can highlight it for you.";
+    let actionError: string | undefined;
+    let pushToTalkActive = false;
+
+    const handleActionError = (
+      error: unknown,
+      attrs: AvatarConversationCardAttrs,
+    ) => {
+      const normalized =
+        error instanceof Error ? error : new Error(String(error));
+      actionError = normalized.message;
+      attrs.onSpeechError?.(normalized);
+      m.redraw();
+    };
+
+    const runInputAction = (
+      action: (() => Promise<void>) | undefined,
+      attrs: AvatarConversationCardAttrs,
+    ) => {
+      if (!action) {
+        handleActionError(new Error("Microphone input is unavailable."), attrs);
+        return;
+      }
+      actionError = undefined;
+      void action().catch((error: unknown) => handleActionError(error, attrs));
+    };
 
     const updatePosition = () => {
       if (!card) return;
@@ -72,6 +101,42 @@ export const AvatarConversationCard =
       },
 
       view(vnode: Vnode<AvatarConversationCardAttrs>) {
+        const speechInput = vnode.attrs.speechInput;
+        const speechState = speechInput?.state;
+        const requestingPermission =
+          speechState?.status === "requesting-permission";
+        const listening = speechState?.status === "listening";
+        const statusMessage =
+          vnode.attrs.speechError
+            ? `Microphone error: ${vnode.attrs.speechError}`
+            : speechState?.status === "error"
+              ? `Microphone unavailable: ${speechState.error ?? "Unknown error."}`
+              : actionError
+                ? `Microphone error: ${actionError}`
+              : requestingPermission
+                ? "Requesting microphone permission…"
+                : listening
+                  ? vnode.attrs.speechActivityMessage ??
+                    "Microphone is on. Speak to start a turn."
+                  : "Microphone is off. Hold to talk or type a message.";
+
+        const startPushToTalk = () => {
+          if (pushToTalkActive || requestingPermission) return;
+          pushToTalkActive = true;
+          runInputAction(
+            speechInput ? () => speechInput.start() : undefined,
+            vnode.attrs,
+          );
+        };
+        const stopPushToTalk = () => {
+          if (!pushToTalkActive) return;
+          pushToTalkActive = false;
+          runInputAction(
+            speechInput ? () => speechInput.stop() : undefined,
+            vnode.attrs,
+          );
+        };
+
         const sendMessage = (event: SubmitEvent) => {
           event.preventDefault();
           const message = draft.trim();
@@ -104,18 +169,60 @@ export const AvatarConversationCard =
             ]),
             m(
               "p.avatar-conversation-status[role=status][aria-live=polite]",
-              listening
-                ? "Demo listening is active. No microphone is connected."
-                : "Demo listening is stopped. You can type a message instead.",
+              statusMessage,
             ),
             m(
               "button.avatar-conversation-listening[type=button]",
               {
+                disabled: requestingPermission,
                 onclick: () => {
-                  listening = !listening;
+                  runInputAction(
+                    speechInput
+                      ? listening
+                        ? () => speechInput.stop()
+                        : () => speechInput.start()
+                      : undefined,
+                    vnode.attrs,
+                  );
                 },
               },
-              listening ? "Stop demo listening" : "Resume demo listening",
+              listening ? "Stop listening" : "Start microphone",
+            ),
+            m(
+              "button.avatar-conversation-push-to-talk[type=button]",
+              {
+                disabled: requestingPermission,
+                "aria-pressed": String(pushToTalkActive),
+                onpointerdown: (event: PointerEvent) => {
+                  event.preventDefault();
+                  const button = event.currentTarget as HTMLButtonElement;
+                  if (typeof button.setPointerCapture === "function") {
+                    button.setPointerCapture(event.pointerId);
+                  }
+                  startPushToTalk();
+                },
+                onpointerup: stopPushToTalk,
+                onpointercancel: stopPushToTalk,
+                onlostpointercapture: stopPushToTalk,
+                onkeydown: (event: KeyboardEvent) => {
+                  if (
+                    event.repeat ||
+                    (event.key !== " " && event.key !== "Enter")
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  startPushToTalk();
+                },
+                onkeyup: (event: KeyboardEvent) => {
+                  if (event.key === " " || event.key === "Enter") {
+                    event.preventDefault();
+                    stopPushToTalk();
+                  }
+                },
+                onblur: stopPushToTalk,
+              },
+              pushToTalkActive ? "Release to stop" : "Hold to talk",
             ),
             m(
               "form.avatar-conversation-form",

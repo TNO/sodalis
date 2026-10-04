@@ -12,6 +12,7 @@
   "dependencies": {
     "@sodalis/avatar": "workspace:*",
     "@sodalis/desktop-host": "workspace:*",
+    "@sodalis/speech": "workspace:*",
     "mithril": "^2.3.8",
     "mithril-materialized": "^4.0.0"
   }

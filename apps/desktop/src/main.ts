@@ -4,6 +4,7 @@ import { createAttentionTargetRegistry } from "@sodalis/avatar";
 import { DesktopAvatarOverlay } from "./avatar/DesktopAvatarOverlay.js";
 import { createAttentionManager } from "./avatar/AttentionManager.js";
 import { createAvatarPresentationController } from "./avatar/AvatarPresentationController.js";
+import type { SpeechInputController } from "@sodalis/speech";
 import {
   createAvatarLab,
   createAvatarLabState,
@@ -32,6 +33,7 @@ const DesktopShell = () => {
     error?: string;
     presentationError?: string;
     avatarScene?: AvatarSceneHandle;
+    speechInput?: SpeechInputController;
     desktopFrame?: HTMLIFrameElement;
     avatarLab: ReturnType<typeof createAvatarLabState>;
   } = {
@@ -157,6 +159,9 @@ const DesktopShell = () => {
                     m.redraw();
                   },
                   presentation,
+                  onSpeechInput(controller) {
+                    state.speechInput = controller;
+                  },
                   async onOpenApplication(appId) {
                     if (!state.host) {
                       throw new Error("The desktop connection is unavailable.");
@@ -216,7 +221,7 @@ const DesktopShell = () => {
                 : null,
               m(
                 "p.assistant-note",
-                "Live speech and assistant responses are planned for a later phase.",
+                "Speech recognition and assistant responses are planned for a later phase.",
               ),
             ]),
           ]),
