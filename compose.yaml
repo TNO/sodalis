@@ -111,6 +111,18 @@ services:
     volumes:
       - ./models/piper:/models:ro
 
+  fish-speech:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-fish-speech-1.5
+    profiles: ["fish-speech-eval"]
+    cpus: 2
+    mem_limit: 4g
+    build:
+      context: .
+      dockerfile: services/fish-speech-1.5/Dockerfile
+    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-fish-speech-1.5:dev
+    volumes:
+      - ./models/fish-speech-1.5:/models:ro
+
   llm:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-llm
     profiles: ["llm"]

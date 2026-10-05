@@ -7,7 +7,8 @@ export interface StackSelection {
 type Settings = Readonly<Record<string, string | undefined>>;
 
 export const ALL_LOCAL_PROFILES = [
-  "whisper", "whistle", "parakeet-tdt", "piper", "llm", "home-simulator", "home-api",
+  "whisper", "whistle", "parakeet-tdt", "piper", "fish-speech-eval",
+  "llm", "home-simulator", "home-api",
 ] as const;
 
 export function serviceNamePrefix(directory: string): string {

@@ -93,8 +93,9 @@ its model as described in the guide) or `STT_PROVIDER=whistle` in `.env`,
 then run `pnpm stack:up`. The default is original Parakeet TDT v3, **not**
 Parakeet Redux. See the
 [STT comparison and limitations](docs/development-stack.md#try-local-whistle-or-parakeet-tdt-in-compose).
-Piper remains the default TTS. An explicit Azure Speech opt-in and the
-unverified local TTS candidates are described in the
+Piper remains the default TTS. An explicit Azure Speech opt-in and a
+standalone, non-commercial Fish Speech 1.5 evaluation profile (not
+connected to Sodalis playback) are described in the
 [TTS compatibility guide](docs/development-stack.md#evaluate-alternative-speech-synthesis).
 
 ## Frontend-only development

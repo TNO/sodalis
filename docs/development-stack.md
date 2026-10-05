@@ -239,7 +239,7 @@ Never put a real key in `.env.example` or commit your `.env`.
 | --- | --- | --- | --- | --- |
 | Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained |
 | Chatterbox Multilingual V3 | [23-language model](https://github.com/resemble-ai/chatterbox) includes Dutch; no local voice or latency measurement yet | `generate` returns complete audio; Sodalis-compatible incremental streaming and in-flight cancellation unverified | [MIT code](https://github.com/resemble-ai/chatterbox/blob/master/LICENSE) and [MIT model weights](https://huggingface.co/ResembleAI/chatterbox); CPU/MPS/CUDA documented, roughly 3.2 GB of model weights for V3 | No profile until Dutch voice, memory and time-to-first-audio are measured on the target Mac |
-| Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch but reports under 10k training hours; no local quality or latency result | v1.5 HTTP API supports streamed WAV; conversion to Sodalis 22,050 Hz PCM and cancellation still need validation | [v1.5 code Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), **v1.5 weights CC BY-NC-SA 4.0**; v1.5 docs say Linux/Windows/macOS, CPU/Apple Silicon performance unmeasured | Non-commercial local evaluation only; keep weights out of distributed images and repository; do not use current Fish S2 runtime (different license) |
+| Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch (<10k training hours). No Dutch audio was produced in 160 seconds on the 8 GB macOS ARM Podman VM, so voice quality could not be judged | Sends a WAV header before generated segments; pinned evaluation patch prevents duplicate final audio. Client disconnect did **not** promptly stop CPU inference | [v1.5 source LICENSE Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), but package metadata declares CC BY-NC-SA; **weights CC BY-NC-SA 4.0**. Container build tested on macOS ARM only | Standalone evaluation-only Compose profile; **not** selectable as Sodalis TTS because practical latency and cancellation failed on tested CPU |
 | F5-TTS | [Official pretrained models](https://github.com/SWivid/F5-TTS/blob/main/src/f5_tts/infer/SHARED.md) are trained on Chinese and English; no verified Dutch checkpoint/quality | CLI chunks long text; socket streaming exists; no Sodalis adapter/cancellation measurement | [MIT code, CC BY-NC weights](https://github.com/SWivid/F5-TTS); PyTorch CPU/MPS/CUDA documented, Docker example targets NVIDIA GPU | No local profile until a Dutch-capable checkpoint, matching terms, and CPU/MPS latency are verified |
 | Azure AI Speech | [Dutch neural voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts); no local quality/latency measurement | [REST streaming raw PCM](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech), HTTP request cancellation | Hosted on Azure; account, key, network, billing and text transfer required; runs via Sodalis API from all three desktop platforms | Explicit opt-in `azure` adapter, not selected by default |
 
@@ -248,6 +248,56 @@ consent or an appropriate public-domain/CC-licensed recording. Do not treat
 the current Fish S2 repository license as the 1.5 license. Nor does a
 non-commercial model license authorize organizational/commercial deployment;
 this evaluation does not bundle Fish or F5 weights.
+
+For **non-commercial local evaluation only**, Fish Speech 1.5 has a
+standalone service, **not** a Sodalis speech provider. Obtain the weights
+after reviewing the [model card and its
+CC BY-NC-SA 4.0 terms](https://huggingface.co/fishaudio/fish-speech-1.5).
+The following pinned revision downloads into the ignored `models/` folder,
+not a distributable image:
+
+```sh
+mkdir -p models/fish-speech-1.5
+for file in config.json special_tokens.json tokenizer.tiktoken model.pth \
+  firefly-gan-vq-fsq-8x1024-21hz-generator.pth; do
+  curl -fL "https://huggingface.co/fishaudio/fish-speech-1.5/resolve/275a984d33c33659e39eed41ff5bcd6e67517f4c/$file" \
+    -o "models/fish-speech-1.5/$file"
+done
+```
+
+With your usual `.env` in place, start the isolated service manually:
+
+```sh
+docker-compose --env-file .env -f compose.yaml --profile fish-speech-eval up --build -d fish-speech
+docker-compose --env-file .env -f compose.yaml --profile fish-speech-eval logs -f fish-speech
+# After the trial:
+docker-compose --env-file .env -f compose.yaml --profile fish-speech-eval stop fish-speech
+```
+
+Use `docker compose` instead of `docker-compose` on Docker Desktop. The
+container is internal to Compose, capped at 2 CPUs and 4 GB RAM to limit
+impact on other services, not published to the host or connected to the
+Sodalis TTS endpoint. `pnpm stack:up` replaces the selected stack
+and stops the evaluation service. The CPU container builds from pinned
+upstream v1.5.0 source and mounts weights read-only. A narrowly scoped
+[`streaming.patch`](../services/fish-speech-1.5/streaming.patch) prevents
+the upstream streaming path from appending its complete final audio after
+already emitting the segments. No adapter is offered for its 44,100 Hz
+output, since it cannot currently meet Sodalis's 22,050 Hz streaming,
+latency, and cancellation requirements on the tested CPU. On an 8 GB
+Podman VM on macOS ARM, warmup took about 68 seconds; generating
+`Hoe oud bent u?` produced **no audio after 160 seconds** at roughly
+0.4 model tokens/second, ~2 GB resident memory and ~600% container CPU
+in a direct, uncapped trial.
+Even a health request timed out while inference ran. We aborted the test,
+so neither complete-audio latency nor Dutch voice quality was measured.
+Disconnecting the HTTP client did **not** stop inference. Do not use this
+profile for normal desktop use. The source `LICENSE` is Apache-2.0, while
+its `pyproject.toml` metadata
+declares CC BY-NC-SA 4.0; treat redistribution terms as unresolved rather
+than relying solely on the source license. No reference speaker is configured:
+do not assume MLS's recording license alone authorizes cloning an
+identifiable speaker.
 
 Do not upload the MLS recordings or private microphone samples to a
 hosted provider without separate authorization. MLS recordings are

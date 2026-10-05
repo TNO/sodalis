@@ -64,3 +64,20 @@ without changing the Sodalis browser contract.
   Dutch. Neither Fish 1.5 nor F5 is yet offered as a selectable profile.
   Do not mark this task done until compatible local candidates have been
   tested against the public Sodalis TTS contract or ruled out with evidence.
+- 2026-10-05 Copilot: Built an evaluation-only Fish Speech 1.5 CPU service
+  from pinned source, mounting ignored pinned CC BY-NC-SA model weights
+  read-only. The upstream stream sends a WAV header and appends the entire
+  waveform after streaming segments; a narrow patch removes that duplicate.
+  On an 8 GB macOS ARM Podman VM, CPU warmup took ~68 seconds and a request for
+  `Hoe oud bent u?` emitted **no audio within ~160 seconds** at ~0.4
+  tokens/second, ~2 GB RAM and ~600% CPU. After client disconnect inference
+  kept using CPU; stopped the evaluation container explicitly. This fails
+  practical voice-chat latency and effective inference cancellation on that
+  machine, so the profile remains standalone, **not a selectable Sodalis
+  TTS provider**; no Dutch voice-quality measurement was possible. The source
+  LICENSE says Apache-2.0 but pyproject metadata says CC BY-NC-SA, so
+  redistribution rights need clarification. Neither Fish nor F5 weights
+  ship in an image or repository; no MLS voice was cloned. Windows/Linux
+  runtime, GPU speed, and live Azure voice/latency remain untested. Keep
+  the task in progress until those criteria are resolved; Piper remains the
+  only validated local default.

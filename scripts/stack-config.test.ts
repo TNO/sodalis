@@ -178,6 +178,8 @@ describe("development stack selection", () => {
     expect(() => resolveStack({ ...base, LLM_PROVIDER: "azure" })).toThrow("LLM_PROVIDER");
     expect(() => resolveStack({ ...base, STT_PROVIDER: "azure" })).toThrow("STT_PROVIDER");
     expect(() => resolveStack({ ...base, TTS_PROVIDER: "piper-http" })).toThrow("PIPER_HTTP_URL");
+    expect(() => resolveStack({ ...base, TTS_PROVIDER: "fish-speech-1.5" }))
+      .toThrow("Unsupported TTS_PROVIDER");
     expect(() => resolveStack({ ...base, HOME_ADMIN_UI: "0" })).toThrow("HOME_ASSISTANT_TOKEN");
   });
 

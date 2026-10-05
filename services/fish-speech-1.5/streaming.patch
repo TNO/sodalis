@@ -1,0 +1,9 @@
+--- a/tools/server/inference.py
++++ b/tools/server/inference.py
+@@ -33,5 +33,5 @@
+             case "final":
+                 count += 1
+-                if isinstance(result.audio, tuple):
++                if not req.streaming and isinstance(result.audio, tuple):
+                     yield result.audio[1]
+                 return None  # Stop the generator
