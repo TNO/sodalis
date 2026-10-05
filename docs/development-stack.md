@@ -235,6 +235,102 @@ response, **not a live Azure resource**: Dutch voice quality, real
 time-to-first-audio, quota handling, and billing are still unmeasured.
 Never put a real key in `.env.example` or commit your `.env`.
 
+#### Compare fifty Dutch avatar utterances locally
+
+`scripts/tts-sentences.json` is a fixed set of 50 synthetic avatar replies:
+greetings, confirmations, clarification, silence, dates, numbers, email and
+calendar summaries, and errors. `scripts/tts-compare.py` writes one WAV per
+sentence per engine, per-sentence synthesis time, CPU time where measurable,
+audio duration, real-time factor (compute time / audio duration), process
+high-water RSS, and MLX Metal allocator peak. It first synthesizes a separate
+warm-up phrase for **each** engine; neither the warm-up nor model startup
+enters the scored timings. `warmup_seconds` includes model loading and any
+engine-internal warm-up, so it is not a pure one-utterance latency. For Fish
+it measures only the excluded warm-up request; the separate server startup
+and its own internal warm-up are not included. Compare
+matching numbered clips in
+`models/tts-comparison/index.html` (open it locally in a browser), or inspect
+each `metrics.json`. Generated audio, weights, and metrics stay under the
+ignored `models/` folder and are not committed. Use headphones to judge Dutch
+pronunciation, prosody, omissions, and hallucinations; timing alone is not a
+quality score. Do **not** run engines concurrently when comparing throughput
+on shared hardware.
+
+```sh
+# Native CPU baseline using the already downloaded models/piper voice.
+uv venv --python 3.11 models/piper-native/.venv
+uv pip install --python models/piper-native/.venv/bin/python 'piper-tts==1.8.0'
+models/piper-native/.venv/bin/python scripts/tts-compare.py --backend piper
+
+# Use the *existing* tts-mlx Python environment and cached weights, read-only.
+# Pin this to your checkout's location; nothing is installed into that project.
+TTS_MLX_ROOT="$HOME/dev/tts-mlx"
+PYTHONDONTWRITEBYTECODE=1 HF_HUB_OFFLINE=1 \
+  "$TTS_MLX_ROOT/.venv/bin/python" scripts/tts-compare.py \
+  --backend voxtral --tts-mlx-root "$TTS_MLX_ROOT"
+PYTHONDONTWRITEBYTECODE=1 HF_HUB_OFFLINE=1 \
+  "$TTS_MLX_ROOT/.venv/bin/python" scripts/tts-compare.py \
+  --backend kugelaudio --tts-mlx-root "$TTS_MLX_ROOT"
+```
+
+Voxtral uses the cached 6-bit MLX model and `nl_female` preset; KugelAudio
+uses its `warm` preset and `nl` language hint. Neither needs an unlicensed
+reference recording. `tts-mlx` also exposes other model families, but they
+are **not** interchangeable Dutch candidates: VibeVoice 1.5B's model card
+lists English/Chinese, while cloning backends need approved reference audio.
+To add Fish, start the native MPS server described below in a separate
+terminal, note its Python PID, and then run:
+
+```sh
+models/fish-native/.venv/bin/python scripts/tts-compare.py \
+  --backend fish --fish-pid <server-python-PID>
+```
+
+Fish is unconditioned (no voice clone); the benchmark rewraps its streaming
+44.1 kHz PCM because the streamed WAV header advertises zero frames.
+The server must be loopback-only and its startup log must confirm MPS.
+`--limit 1` pilots the first sentence; a later full invocation skips already
+generated numbered clips and performs a fresh, excluded warm-up. In the
+recorded run, sample 01 for Piper, Voxtral, and KugelAudio came from
+separate warmed pilot processes; samples 02–50 came from their respective
+full runs. The Fish
+server may continue computing after a client disconnect: stop only its own
+PID at the end of the trial. `rss_gib` for Fish samples that server PID, while
+its `cpu_seconds` and Metal allocator peak are not available through this
+external HTTP call. RSS on Apple Silicon is **not** GPU memory; MLX allocator
+peak is only model-managed GPU allocation, not total device memory. These
+engines use different runtimes, voices, sample rates, and processing pipelines,
+so timings should be read as end-to-end local synthesis measurements, not
+isolated model-token benchmarks. No Azure traffic or voice cloning is involved.
+
+On the M4 Max with 128 GB unified memory, the 2026-10-05 local run generated
+and verified **all 200 nonempty mono PCM16 WAV clips** (50 per engine).
+All times below exclude the separate warm-up utterance; model startup is
+included in the measured warm-up for in-process backends, but **not** Fish's
+separate server startup. Lower RTF is faster. Audio quality is deliberately
+**unrated** until a person listens to matching numbered clips in the report.
+
+| Engine / voice | Acceleration | Warm-up (excluded) | Median / total synthesis, 50 clips | Median RTF | Peak process RSS | Peak MLX Metal allocation |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Piper / `nl_BE-nathalie-medium` | Native CPU; no GPU required | 0.46 s | 0.044 s / 2.23 s | 0.017 | 0.28 GiB | n/a |
+| Voxtral 4B 6-bit / `nl_female` via `tts-mlx` | Apple Silicon Metal/MLX | 6.37 s | 1.32 s / 68.64 s | 0.427 | 3.84 GiB | 4.28 GiB |
+| Fish Speech 1.5 / unconditioned | PyTorch MPS; CPU container previously too slow | 9.08 s (request only) | 11.72 s / 684.86 s | 2.786 | 6.64 GiB (server) | not measured |
+| KugelAudio-0-Open / `warm` via `tts-mlx` | Apple Silicon Metal/MLX | 33.97 s | 20.06 s / 1067.56 s | 5.775 | 16.58 GiB | 19.26 GiB |
+
+These RSS and MLX high-water figures are different metrics and **must not
+be added** to estimate required RAM: Apple Silicon shares CPU/GPU memory.
+Fish's server RSS increased during the 50-request run (sample 01: 1.75 GiB;
+sample 50: 6.64 GiB), so the short single-request RSS from the earlier trial
+is not a capacity estimate. The KugelAudio run took nearly 18 minutes for
+around 200 seconds of audio, far too slow for interactive replies in this
+configuration. Some Fish outputs are unusually long for short input
+(sample 01: 12.17 s; sample 36: 13.65 s): **listen** before interpreting
+this as fluent speech. Voxtral synthesized faster than real time in these
+short tests, but its existing HTTP API still buffers a complete file; these
+numbers do not establish time to first audio or interruption on disconnect.
+Piper remains the proven local default. The benchmark is a listening
+comparison, **not** evidence to close task 0036 or select a new provider.
+
 | Candidate | Dutch voice / latency | Streaming / cancellation | License and platforms | Decision |
 | --- | --- | --- | --- | --- |
 | Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained |

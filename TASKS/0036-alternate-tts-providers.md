@@ -105,3 +105,16 @@ without changing the Sodalis browser contract.
   it was stopped by PID. Keep Fish evaluation-only until cancellation,
   long-reply timing, audio quality, resampling, and cross-platform behavior
   meet the contract. No live Azure test was performed.
+- 2026-10-05 Copilot: Added a reproducible 50-sentence Dutch avatar listening
+  comparison for native Piper, Fish 1.5 MPS, and the Voxtral 6-bit MLX and
+  KugelAudio MLX backends in the user's `tts-mlx` checkout. A separate
+  first utterance warms each engine and is excluded from scores. All 200
+  generated clips were checked for nonempty mono PCM16 and match the
+  transcript and per-engine metrics; HTML audio controls compare matching
+  sentences side by side. On the M4 Max the median synthesis time was
+  0.044 s Piper (CPU), 1.32 s Voxtral (Metal), 11.72 s Fish (MPS), and
+  20.06 s KugelAudio (Metal); peak RSS was 0.28, 3.84, 6.64, and 16.58
+  GiB respectively. Fish RSS grew across the batch. The sample clips and
+  measurements are local-only under ignored `models/tts-comparison/`.
+  Dutch intelligibility, prosody, and transcript fidelity need human review;
+  no production adapter, external account, or cloning consent is implied.
