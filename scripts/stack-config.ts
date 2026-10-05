@@ -41,7 +41,7 @@ export function resolveStack(settings: Settings): StackSelection {
   if (settings.HOME_ADMIN_UI && !["0", "1"].includes(settings.HOME_ADMIN_UI)) {
     throw new Error("HOME_ADMIN_UI must be 0 or 1.");
   }
-  const stt = settings.STT_PROVIDER || "whisper-cpp";
+  const stt = settings.STT_PROVIDER || "parakeet-tdt";
   if (stt !== "whisper-cpp" && (settings.WHISPER_CPP_URL || settings.WHISPER_MODEL)) {
     throw new Error("WHISPER_CPP_URL and WHISPER_MODEL require STT_PROVIDER=whisper-cpp.");
   }
@@ -85,6 +85,11 @@ export function resolveStack(settings: Settings): StackSelection {
   } else throw new Error(`Unsupported STT_PROVIDER "${stt}".`);
 
   const tts = settings.TTS_PROVIDER || "piper";
+  for (const name of ["AZURE_TTS_URL", "AZURE_TTS_KEY", "AZURE_TTS_VOICE"] as const) {
+    if (tts !== "azure" && settings[name]) {
+      throw new Error(`${name} requires TTS_PROVIDER=azure.`);
+    }
+  }
   if (tts === "piper") {
     environment.TTS_PROVIDER = "piper-http";
     environment.PIPER_HTTP_URL = settings.PIPER_HTTP_URL
@@ -101,6 +106,21 @@ export function resolveStack(settings: Settings): StackSelection {
   } else if (tts === "mock") {
     if (settings.PIPER_HTTP_URL) throw new Error("PIPER_HTTP_URL requires a Piper TTS provider.");
     environment.TTS_PROVIDER = tts;
+  } else if (tts === "azure") {
+    if (settings.PIPER_HTTP_URL) {
+      throw new Error("PIPER_HTTP_URL requires a Piper TTS provider.");
+    }
+    const url = endpoint(settings.AZURE_TTS_URL, "AZURE_TTS_URL");
+    if (!url.startsWith("https://") ||
+        !new URL(url).pathname.endsWith("/cognitiveservices/v1")) {
+      throw new Error("AZURE_TTS_URL must be an HTTPS Azure TTS /cognitiveservices/v1 endpoint.");
+    }
+    if (!settings.AZURE_TTS_KEY?.trim()) throw new Error("Set AZURE_TTS_KEY.");
+    if (!settings.AZURE_TTS_VOICE?.trim()) throw new Error("Set AZURE_TTS_VOICE.");
+    environment.TTS_PROVIDER = tts;
+    environment.AZURE_TTS_URL = url;
+    environment.AZURE_TTS_KEY = settings.AZURE_TTS_KEY;
+    environment.AZURE_TTS_VOICE = settings.AZURE_TTS_VOICE;
   } else throw new Error(`Unsupported TTS_PROVIDER "${tts}".`);
 
   switch (settings.LLM_PROVIDER) {

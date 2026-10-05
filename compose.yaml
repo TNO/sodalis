@@ -24,12 +24,15 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "3001"
-      STT_PROVIDER: ${STT_PROVIDER:-whisper-cpp}
+      STT_PROVIDER: ${STT_PROVIDER:-parakeet-tdt}
       WHISPER_CPP_URL: ${WHISPER_CPP_URL:-}
       WHISTLE_URL: ${WHISTLE_URL:-}
       PARAKEET_TDT_URL: ${PARAKEET_TDT_URL:-}
       TTS_PROVIDER: ${TTS_PROVIDER:-piper-http}
       PIPER_HTTP_URL: ${PIPER_HTTP_URL:-}
+      AZURE_TTS_URL: ${AZURE_TTS_URL:-}
+      AZURE_TTS_KEY: ${AZURE_TTS_KEY:-}
+      AZURE_TTS_VOICE: ${AZURE_TTS_VOICE:-}
 
   ai:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-ai

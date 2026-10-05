@@ -4,6 +4,7 @@ import { LocalSpeechHttpEngine } from "./LocalSpeechHttpEngine.js";
 import type { SpeechSynthesisEngine } from "./PiperTtsEngine.js";
 import { PiperTtsEngine } from "./PiperTtsEngine.js";
 import { PiperHttpEngine } from "./PiperHttpEngine.js";
+import { AzureTtsEngine } from "./AzureTtsEngine.js";
 
 export interface SpeechProviderSettings {
   readonly STT_PROVIDER?: string;
@@ -14,6 +15,9 @@ export interface SpeechProviderSettings {
   readonly PIPER_MODEL_PATH?: string;
   readonly PIPER_EXECUTABLE?: string;
   readonly PIPER_HTTP_URL?: string;
+  readonly AZURE_TTS_URL?: string;
+  readonly AZURE_TTS_KEY?: string;
+  readonly AZURE_TTS_VOICE?: string;
 }
 
 function required(value: string | undefined, name: string): string {
@@ -26,7 +30,7 @@ export function createSpeechProviders(settings: SpeechProviderSettings): {
   tts: SpeechSynthesisEngine;
 } {
   const stt: SpeechRecognitionEngine = (() => {
-    switch (settings.STT_PROVIDER ?? "whisper-cpp") {
+    switch (settings.STT_PROVIDER ?? "parakeet-tdt") {
       case "whisper-cpp":
         return new WhisperCppHttpEngine({
           serverUrl: required(settings.WHISPER_CPP_URL, "WHISPER_CPP_URL"),
@@ -62,6 +66,12 @@ export function createSpeechProviders(settings: SpeechProviderSettings): {
       case "piper-http":
         return new PiperHttpEngine({
           serverUrl: required(settings.PIPER_HTTP_URL, "PIPER_HTTP_URL"),
+        });
+      case "azure":
+        return new AzureTtsEngine({
+          endpoint: required(settings.AZURE_TTS_URL, "AZURE_TTS_URL"),
+          key: required(settings.AZURE_TTS_KEY, "AZURE_TTS_KEY"),
+          voice: required(settings.AZURE_TTS_VOICE, "AZURE_TTS_VOICE"),
         });
       case "mock":
         return {

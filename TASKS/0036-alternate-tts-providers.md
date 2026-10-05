@@ -1,6 +1,6 @@
 # 0036 Evaluating alternate TTS providers
 
-Status: open
+Status: in_progress
 Priority: medium
 Subsystem: speech
 Depends on: 0030, 0034
@@ -44,3 +44,23 @@ without changing the Sodalis browser contract.
   meet the provider contract and platform constraints.
 - Added Fish Speech and F5-TTS for review, not as selected engines. Licensing
   and macOS deployment need explicit checks before an integration decision.
+- 2026-10-05 Copilot: Kept Piper as the default and added an explicitly
+  configured server-side Azure REST adapter for Dutch SSML and streaming raw
+  22,050 Hz PCM, with HTTPS/key/voice validation and abort propagation.
+  Verified five Azure adapter tests, provider selection and TTS public-route
+  tests without calling Azure; real Dutch voice quality, latency, quotas, and
+  cloud billing remain untested. No cloud fallback is enabled.
+- 2026-10-05 Copilot: Verified Chatterbox Multilingual V3 advertises Dutch
+  and MIT code/weights but its Python `generate` returns complete audio;
+  CPU/MPS latency, incremental delivery, and cancellation remain untested.
+  Verified Fish Speech **1.5** weights declare CC BY-NC-SA 4.0 and its
+  matching v1.5.0 code is Apache-2.0. Current Fish S2 instead uses a Fish
+  Audio Research License and must not be substituted. User approved only
+  non-commercial local evaluation with no model weights in source or
+  distributable images. The 1.5 HTTP API supports streamed WAV but its Dutch
+  quality, resource use, 22,050 Hz conversion, and cancellation still need a
+  local container trial. F5-TTS code is MIT and official pretrained weights
+  CC BY-NC; the official checkpoint targets Chinese/English, not verified
+  Dutch. Neither Fish 1.5 nor F5 is yet offered as a selectable profile.
+  Do not mark this task done until compatible local candidates have been
+  tested against the public Sodalis TTS contract or ruled out with evidence.

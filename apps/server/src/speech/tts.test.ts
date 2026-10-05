@@ -98,6 +98,29 @@ describe("speech synthesis API", () => {
     expect(synthesize).not.toHaveBeenCalled();
   });
 
+  it("accepts only the selected engine's configured voice", async () => {
+    const synthesize = vi.fn(async function* () {
+      yield new Uint8Array([1, 0]);
+    });
+    const app = createSpeechApp(sttEngine, {
+      ttsEngine: { voiceId: "nl-NL-ColetteNeural", synthesize },
+    });
+    const post = (voice: string) =>
+      app.request("/api/speech/tts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...request, voice }),
+      });
+    expect((await post("nl_BE-nathalie-medium")).status).toBe(400);
+    const accepted = await post("nl-NL-ColetteNeural");
+    expect(accepted.status).toBe(200);
+    await accepted.arrayBuffer();
+    expect(synthesize).toHaveBeenCalledWith(
+      expect.objectContaining({ voice: "nl-NL-ColetteNeural" }),
+      expect.any(AbortSignal),
+    );
+  });
+
   it("aborts the engine when the client cancels the audio stream", async () => {
     let observedSignal: AbortSignal | undefined;
     let markSynthesisWaiting: (() => void) | undefined;

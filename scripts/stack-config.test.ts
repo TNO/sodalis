@@ -18,8 +18,10 @@ describe("development stack selection", () => {
       readFileSync(resolve(import.meta.dirname, "../.env.example"), "utf8"),
     );
     const selected = resolveStack(example);
-    expect(selected.profiles).toEqual(["whisper", "piper", "home-simulator"]);
+    expect(selected.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
     expect(selected.environment).toMatchObject({
+      STT_PROVIDER: "parakeet-tdt",
+      PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
       LLM_PROVIDER: "openai-compatible",
       LLM_BASE_URL: "http://host.docker.internal:11434/v1",
       LLM_MODEL: "llama3.2:3b",
@@ -44,6 +46,17 @@ describe("development stack selection", () => {
       LLM_PROVIDER: "mock",
       HOME_ADMIN_FILE: "Caddyfile.admin",
     });
+  });
+
+  it("defaults to Parakeet while retaining an explicit Whisper selection", () => {
+    const selected = resolveStack({
+      TTS_PROVIDER: "piper",
+      LLM_PROVIDER: "mock",
+      HOME_PROVIDER: "simulator",
+      HOME_ADMIN_UI: "1",
+    });
+    expect(selected.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
+    expect(selected.environment.STT_PROVIDER).toBe("parakeet-tdt");
   });
 
   it("selects a downloaded Whisper model without accepting path traversal or unused settings", () => {
@@ -135,6 +148,27 @@ describe("development stack selection", () => {
       ...base, HOME_PROVIDER: "external-api", HOME_ADMIN_UI: "0",
       HOME_API_URL: "https://home.example.test/sodalis",
     })).toThrow("HOME_API_URL must be an origin");
+  });
+
+  it("selects Azure TTS only with explicit credentials and no local Piper profile", () => {
+    const selected = resolveStack({
+      ...base,
+      TTS_PROVIDER: "azure",
+      AZURE_TTS_URL: "https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1",
+      AZURE_TTS_KEY: "test-key",
+      AZURE_TTS_VOICE: "nl-NL-ColetteNeural",
+    });
+    expect(selected.profiles).toEqual(["whisper", "home-simulator"]);
+    expect(selected.environment).toMatchObject({
+      TTS_PROVIDER: "azure",
+      AZURE_TTS_VOICE: "nl-NL-ColetteNeural",
+    });
+    expect(() => resolveStack({
+      ...base, TTS_PROVIDER: "azure",
+    })).toThrow("AZURE_TTS_URL");
+    expect(() => resolveStack({
+      ...base, AZURE_TTS_KEY: "unused",
+    })).toThrow("AZURE_TTS_KEY");
   });
 
   it("requires explicit LLM and Home providers and rejects incomplete or invalid selections", () => {

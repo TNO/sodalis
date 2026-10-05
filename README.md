@@ -11,19 +11,27 @@ the standalone Docker Compose v2 `docker-compose` executable (not
 `podman-compose`). Install Node.js 24 and pnpm 12.4.1. Models are not
 included in the repository: `models/` is git-ignored, so **every fresh
 checkout needs its own downloads**. From the repository root, download the
-default Whisper.cpp and Piper models before starting the stack:
+default Piper voice before starting the stack. The default Parakeet TDT v3
+image downloads its own weights at build time:
 
 ```sh
-mkdir -p models/whisper models/piper
-curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
-  -o models/whisper/ggml-base.bin
+mkdir -p models/piper
 curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx \
   -o models/piper/nl_BE-nathalie-medium.onnx
 curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx.json \
   -o models/piper/nl_BE-nathalie-medium.onnx.json
 ```
 
-If the three files already exist in this checkout, skip the downloads. Then:
+If both Piper files already exist in this checkout, skip the downloads.
+Parakeet needs more than a 2 GB Podman machine; 8 GB worked alongside the
+development containers. Changing the Podman VM memory requires stopping
+it, which briefly stops all its containers:
+
+```sh
+podman machine stop
+podman machine set --memory 8192
+podman machine start
+```
 
 Install and start [Ollama](https://ollama.com/download) on your Mac and
 download the example LLM (it is not included in this repository):
@@ -71,7 +79,7 @@ pnpm stack:smoke  # check the running gateway and selected services
 pnpm stack:down   # stop containers without deleting Core's data volume
 ```
 
-The example `.env` uses local CPU Whisper.cpp and Piper for speech and the
+The example `.env` uses local CPU Parakeet TDT v3 and Piper for speech and the
 host's `llama3.2:3b` via Ollama for AI. To exercise the full chain, wait for
 the avatar to load, click it to open **Talk with Sodalis**, then click
 **Start microphone** and allow the browser prompt. Speak, pause for
@@ -80,11 +88,14 @@ requested on activation, never on page load. You can type a message first
 to test AI and TTS without STT. See the
 [development stack guide](docs/development-stack.md) for model downloads,
 Docker/Podman setup, individual-service development, and troubleshooting.
-For experimental local Dutch STT, set `STT_PROVIDER=whistle` or
-`STT_PROVIDER=parakeet-tdt` in `.env`, then run `pnpm stack:up`.
-The latter is original Parakeet TDT v3, **not** Parakeet Redux, and needs
-more than a 2 GB Podman VM. See the
+To select a different STT service, set `STT_PROVIDER=whisper-cpp` (download
+its model as described in the guide) or `STT_PROVIDER=whistle` in `.env`,
+then run `pnpm stack:up`. The default is original Parakeet TDT v3, **not**
+Parakeet Redux. See the
 [STT comparison and limitations](docs/development-stack.md#try-local-whistle-or-parakeet-tdt-in-compose).
+Piper remains the default TTS. An explicit Azure Speech opt-in and the
+unverified local TTS candidates are described in the
+[TTS compatibility guide](docs/development-stack.md#evaluate-alternative-speech-synthesis).
 
 ## Frontend-only development
 

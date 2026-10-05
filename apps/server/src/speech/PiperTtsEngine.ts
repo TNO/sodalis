@@ -6,6 +6,7 @@ export const PIPER_PCM_MIME_TYPE =
   "audio/pcm;rate=22050;bits=16;channels=1;endianness=little";
 
 export interface SpeechSynthesisEngine {
+  readonly voiceId?: string;
   synthesize(
     request: SpeechRequest,
     signal: AbortSignal,

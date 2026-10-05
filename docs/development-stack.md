@@ -26,13 +26,15 @@ PowerShell). Never commit `.env`, downloaded models, or access tokens.
 
 Edit `.env` before each launch. `LLM_PROVIDER` and `HOME_PROVIDER` **must** be
 explicit. The example uses host Ollama with `llama3.2:3b` and the Home
-Assistant simulator. `STT_PROVIDER` defaults to `whisper-cpp` and
+Assistant simulator. `STT_PROVIDER` defaults to `parakeet-tdt` and
 `TTS_PROVIDER` to `piper`, both running in Compose on CPU without a GPU.
+Parakeet needs more than a 2 GB Podman VM; see the
+[local STT comparison](#try-local-whistle-or-parakeet-tdt-in-compose).
 
 | Role | Local selection | External selection |
 | --- | --- | --- |
 | STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL` |
-| TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL` |
+| TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
 | LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; the example targets host Ollama |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
 
@@ -45,12 +47,15 @@ Ollama endpoint on a public network.
 An external Whisper endpoint must speak the Whisper.cpp server protocol.
 External Whistle and Parakeet TDT endpoints must speak Sodalis's local
 `POST /transcribe` protocol (raw audio, `x-sodalis-language`, JSON `{text}`).
-TTS must speak Piper HTTP (`POST /synthesize` with a WAV response); the LLM endpoint
+External Piper TTS must speak Piper HTTP (`POST /synthesize` with a WAV
+response); Azure TTS uses its own HTTPS SSML endpoint and streams raw
+22,050 Hz PCM through the speech API. The LLM endpoint
 must stream OpenAI-compatible Chat Completions; and the Home endpoint must
-implement Sodalis's `/api/home/*` contract. Azure and other hosted services
-are usable **only when their endpoint implements the selected protocol**,
-possibly through a separately managed adapter. No Azure-specific wire
-protocol, automatic provider discovery, or remote fallback is included.
+implement Sodalis's `/api/home/*` contract. Azure TTS has an explicit
+server-side SSML adapter; other hosted services are usable **only when their
+endpoint implements the selected protocol**, possibly through a separately
+managed adapter. No automatic provider discovery or remote fallback is
+included.
 For a legacy Piper-compatible service that accepts `POST /`, set
 `TTS_PROVIDER=piper-http` and end `PIPER_HTTP_URL` with `/`. An explicit
 non-root endpoint path is also honored. `HOME_API_URL` must be an origin
@@ -58,21 +63,28 @@ without a path or query, since Caddy proxies the existing `/api/home/*` path.
 Keep external endpoints private and trusted. Browser code receives neither
 provider URLs nor credentials.
 
-For local speech, download a multilingual Whisper.cpp model and both Piper
-voice files into these ignored paths:
+For the default stack, download both Piper voice files into these ignored
+paths. Only download a multilingual Whisper.cpp model if you explicitly
+select `STT_PROVIDER=whisper-cpp`:
 
 ```sh
-mkdir -p models/whisper models/piper
-curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
-  -o models/whisper/ggml-base.bin
+mkdir -p models/piper
 curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx \
   -o models/piper/nl_BE-nathalie-medium.onnx
 curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx.json \
   -o models/piper/nl_BE-nathalie-medium.onnx.json
 ```
 
+For the optional Whisper.cpp profile:
+
+```sh
+mkdir -p models/whisper
+curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
+  -o models/whisper/ggml-base.bin
+```
+
 On Windows, download those URLs with a browser or `Invoke-WebRequest -Uri URL
--OutFile PATH` after creating the `models/whisper` and `models/piper` folders.
+-OutFile PATH` after creating the matching `models/` folders.
 The launcher checks model paths before startup. For a local OpenAI-compatible
 LLM, put a compatible `.gguf` model under `models/llm/` and set `LLM_MODEL`
 to its filename. Model licenses and memory requirements vary; obtain an
@@ -84,7 +96,7 @@ CPU latency and RAM needs depend on the selected model, especially the LLM.
 
 ### Improve Dutch recognition on a Mac
 
-The default `ggml-base.bin` keeps the CPU Compose setup lightweight, but it
+The optional Whisper `ggml-base.bin` keeps CPU inference lightweight, but it
 misrecognized a short Dutch question in testing. To choose a stronger local
 model, download it into `models/whisper/` and set its filename in your
 ignored `.env` (leave `WHISPER_CPP_URL` empty):
@@ -160,10 +172,10 @@ submitting silent segments, but noisy rooms need real-microphone testing.
 
 ### Try local Whistle or Parakeet TDT in Compose
 
-Set `STT_PROVIDER=whistle` or `STT_PROVIDER=parakeet-tdt` in `.env`,
-leave its matching URL blank, and run `pnpm stack:config` then
-`pnpm stack:up`. These opt-in profiles build their own CPU services;
-neither changes the default Whisper setup. The speech API remains the
+Set `STT_PROVIDER=whistle` or keep the default `STT_PROVIDER=parakeet-tdt`
+in `.env`, leave its matching URL blank, and run `pnpm stack:config` then
+`pnpm stack:up`. These profiles build their own CPU services;
+neither changes the TTS or LLM selection. The speech API remains the
 only browser-facing STT endpoint. Both builds download model weights;
 Parakeet uses a pinned conversion revision, while Whistle currently uses
 the default model fetched by the pinned Needle runtime. No recording is
@@ -197,6 +209,45 @@ not the differently licensed `cactus` engine.
 | Cactus engine (other models) | Not benchmarked | Chunked `confirmed` / `pending` API; cancellation not verified | [Different license](https://github.com/cactus-compute/cactus/blob/main/LICENSE) restricts organizations above funding/revenue thresholds | Not bundled |
 | Moondream Parakeet Redux / Photon | Dutch claimed; MLS accuracy not measured | Photon documents live PCM snapshots; cancellation and Sodalis WebM conversion not verified | Local CPU/Apple silicon/CUDA; weights CC BY 4.0, `kestrel-kernels` requires a written agreement | No adapter/profile until runtime terms and live path are verified |
 | Azure AI Speech | Dutch supported by service; local sample not uploaded | Continuous recognition provides interim events; Sodalis cancellation not integrated | Hosted; credentials, billing, network and data transfer required | No adapter or cloud fallback without authorization and a local-only evaluation plan |
+
+### Evaluate alternative speech synthesis
+
+Piper remains the default. The optional `azure` TTS selection calls Azure
+Speech **only when explicitly selected**, sending assistant reply text (not
+microphone audio) to your configured Speech resource. Set these values in
+your ignored `.env`, supply credentials from your own resource, and run
+`pnpm stack:config` then `pnpm stack:up`:
+
+```dotenv
+TTS_PROVIDER=azure
+AZURE_TTS_URL=https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1
+AZURE_TTS_KEY=<your Speech resource key>
+AZURE_TTS_VOICE=nl-NL-ColetteNeural
+```
+
+Keep `PIPER_HTTP_URL` blank. The adapter requests
+`raw-22050hz-16bit-mono-pcm` and relays PCM chunks through the existing
+Sodalis TTS endpoint; cancellation aborts the upstream HTTP response.
+Azure endpoint, voice, and key are required at startup, and a missing or
+failing service never falls back to Piper. The browser receives none of
+these settings. Contract tests cover the adapter with an isolated HTTP
+response, **not a live Azure resource**: Dutch voice quality, real
+time-to-first-audio, quota handling, and billing are still unmeasured.
+Never put a real key in `.env.example` or commit your `.env`.
+
+| Candidate | Dutch voice / latency | Streaming / cancellation | License and platforms | Decision |
+| --- | --- | --- | --- | --- |
+| Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained |
+| Chatterbox Multilingual V3 | [23-language model](https://github.com/resemble-ai/chatterbox) includes Dutch; no local voice or latency measurement yet | `generate` returns complete audio; Sodalis-compatible incremental streaming and in-flight cancellation unverified | [MIT code](https://github.com/resemble-ai/chatterbox/blob/master/LICENSE) and [MIT model weights](https://huggingface.co/ResembleAI/chatterbox); CPU/MPS/CUDA documented, roughly 3.2 GB of model weights for V3 | No profile until Dutch voice, memory and time-to-first-audio are measured on the target Mac |
+| Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch but reports under 10k training hours; no local quality or latency result | v1.5 HTTP API supports streamed WAV; conversion to Sodalis 22,050 Hz PCM and cancellation still need validation | [v1.5 code Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), **v1.5 weights CC BY-NC-SA 4.0**; v1.5 docs say Linux/Windows/macOS, CPU/Apple Silicon performance unmeasured | Non-commercial local evaluation only; keep weights out of distributed images and repository; do not use current Fish S2 runtime (different license) |
+| F5-TTS | [Official pretrained models](https://github.com/SWivid/F5-TTS/blob/main/src/f5_tts/infer/SHARED.md) are trained on Chinese and English; no verified Dutch checkpoint/quality | CLI chunks long text; socket streaming exists; no Sodalis adapter/cancellation measurement | [MIT code, CC BY-NC weights](https://github.com/SWivid/F5-TTS); PyTorch CPU/MPS/CUDA documented, Docker example targets NVIDIA GPU | No local profile until a Dutch-capable checkpoint, matching terms, and CPU/MPS latency are verified |
+| Azure AI Speech | [Dutch neural voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts); no local quality/latency measurement | [REST streaming raw PCM](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech), HTTP request cancellation | Hosted on Azure; account, key, network, billing and text transfer required; runs via Sodalis API from all three desktop platforms | Explicit opt-in `azure` adapter, not selected by default |
+
+Voice-cloning trials require a suitable licensed reference clip and speaker
+consent or an appropriate public-domain/CC-licensed recording. Do not treat
+the current Fish S2 repository license as the 1.5 license. Nor does a
+non-commercial model license authorize organizational/commercial deployment;
+this evaluation does not bundle Fish or F5 weights.
 
 Do not upload the MLS recordings or private microphone samples to a
 hosted provider without separate authorization. MLS recordings are

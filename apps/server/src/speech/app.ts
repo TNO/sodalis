@@ -357,8 +357,9 @@ export function createSpeechApp(
     if (language !== "nl-NL" && language !== "nl-BE") {
       return jsonError(context, "Language must be nl-NL or nl-BE.", 400);
     }
-    if (voice !== undefined && voice !== PIPER_VOICE_ID) {
-      return jsonError(context, `Voice must be ${PIPER_VOICE_ID}.`, 400);
+    const configuredVoice = engine.voiceId ?? PIPER_VOICE_ID;
+    if (voice !== undefined && voice !== configuredVoice) {
+      return jsonError(context, `Voice must be ${configuredVoice}.`, 400);
     }
     if (activeTtsRequests >= MAX_TTS_REQUESTS) {
       return jsonError(context, "Speech server is at TTS capacity.", 503);
