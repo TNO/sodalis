@@ -44,6 +44,9 @@ without changing the Sodalis browser contract.
   meet the provider contract and platform constraints.
 - Added Fish Speech and F5-TTS for review, not as selected engines. Licensing
   and macOS deployment need explicit checks before an integration decision.
+- The local `language-course-compiler` is a consumer of an HTTP TTS service,
+  not an additional synthesis engine. Review its backend separately from its
+  lesson-generation and transcript workflow.
 - 2026-10-05 Copilot: Kept Piper as the default and added an explicitly
   configured server-side Azure REST adapter for Dutch SSML and streaming raw
   22,050 Hz PCM, with HTTPS/key/voice validation and abort propagation.
@@ -81,3 +84,24 @@ without changing the Sodalis browser contract.
   runtime, GPU speed, and live Azure voice/latency remain untested. Keep
   the task in progress until those criteria are resolved; Piper remains the
   only validated local default.
+- 2026-10-05 Copilot: Reviewed the local `voxtral-api`, `vibevoice-mlx`, and
+  `kugelaudio-open` projects read-only as further candidates. The Voxtral MLX
+  model advertises Dutch preset voices, but the current shared HTTP API waits
+  for full synthesis and returns a file, not generated chunks. The original
+  VibeVoice 1.5B model card lists English and Chinese, not Dutch; the
+  KugelAudio model card lists Dutch but warns of uneven language quality.
+  Dutch output, short-reply first-audio latency, in-flight cancellation, and
+  PCM conversion remain to be measured before integrating any of them.
+- 2026-10-05 Copilot: Ran Fish 1.5 natively on the M4 Max with PyTorch MPS.
+  Its upstream `torch.isin` needs matching tensor dtypes on MPS; a
+  native-evaluation-only patch fixes this and omits optional PyAudio, whose
+  PortAudio headers were unavailable. With fp16 and pinned weights, warmup
+  completed and `Hoe oud bent u?` yielded 114,688 bytes of 44.1 kHz PCM
+  (~1.30 s) in 3.89 s to first PCM and completion, at ~1.12 GiB process RSS
+  after the request (not peak). The streaming header advertises zero frames
+  and requires rewrapping for a playable file. No listener validated Dutch
+  intelligibility. A longer request kept the server busy after client
+  disconnect (health timed out); SIGTERM did not interrupt it promptly, so
+  it was stopped by PID. Keep Fish evaluation-only until cancellation,
+  long-reply timing, audio quality, resampling, and cross-platform behavior
+  meet the contract. No live Azure test was performed.

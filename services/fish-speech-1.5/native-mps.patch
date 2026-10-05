@@ -1,0 +1,21 @@
+diff --git a/pyproject.toml b/pyproject.toml
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -36,7 +36,6 @@ dependencies = [
+     "einx[torch]==0.2.2",
+     "zstandard>=0.22.0",
+     "pydub",
+-    "pyaudio",
+     "faster_whisper",
+     "modelscope==1.17.1",
+     "funasr==1.1.5",
+diff --git a/fish_speech/models/text2semantic/llama.py b/fish_speech/models/text2semantic/llama.py
+--- a/fish_speech/models/text2semantic/llama.py
++++ b/fish_speech/models/text2semantic/llama.py
+@@ -249,5 +249,5 @@ class BaseTransformer(nn.Module):
+     def embed(self, inp: Tensor, share_codebook_embeddings=True) -> Tensor:
+         embeds = []
+         semantic_token_ids_tensor = torch.tensor(
+-            self.semantic_token_ids, device=inp.device
++            self.semantic_token_ids, device=inp.device, dtype=inp.dtype
+         )

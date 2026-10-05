@@ -239,9 +239,23 @@ Never put a real key in `.env.example` or commit your `.env`.
 | --- | --- | --- | --- | --- |
 | Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained |
 | Chatterbox Multilingual V3 | [23-language model](https://github.com/resemble-ai/chatterbox) includes Dutch; no local voice or latency measurement yet | `generate` returns complete audio; Sodalis-compatible incremental streaming and in-flight cancellation unverified | [MIT code](https://github.com/resemble-ai/chatterbox/blob/master/LICENSE) and [MIT model weights](https://huggingface.co/ResembleAI/chatterbox); CPU/MPS/CUDA documented, roughly 3.2 GB of model weights for V3 | No profile until Dutch voice, memory and time-to-first-audio are measured on the target Mac |
-| Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch (<10k training hours). No Dutch audio was produced in 160 seconds on the 8 GB macOS ARM Podman VM, so voice quality could not be judged | Sends a WAV header before generated segments; pinned evaluation patch prevents duplicate final audio. Client disconnect did **not** promptly stop CPU inference | [v1.5 source LICENSE Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), but package metadata declares CC BY-NC-SA; **weights CC BY-NC-SA 4.0**. Container build tested on macOS ARM only | Standalone evaluation-only Compose profile; **not** selectable as Sodalis TTS because practical latency and cancellation failed on tested CPU |
+| Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch (<10k training hours). CPU VM produced no audio in 160 s; native M4 Max MPS returned 1.30 s of audio in 3.89 s, intelligibility not listener-validated | Sends a WAV header before segments; pinned patch prevents duplicate final audio. Client disconnect did **not** stop native MPS inference promptly | [v1.5 source LICENSE Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), but package metadata declares CC BY-NC-SA; **weights CC BY-NC-SA 4.0**. CPU Compose and native MPS tested on macOS ARM only | Standalone evaluation-only Compose profile; **not** selectable as Sodalis TTS because effective inference cancellation failed |
 | F5-TTS | [Official pretrained models](https://github.com/SWivid/F5-TTS/blob/main/src/f5_tts/infer/SHARED.md) are trained on Chinese and English; no verified Dutch checkpoint/quality | CLI chunks long text; socket streaming exists; no Sodalis adapter/cancellation measurement | [MIT code, CC BY-NC weights](https://github.com/SWivid/F5-TTS); PyTorch CPU/MPS/CUDA documented, Docker example targets NVIDIA GPU | No local profile until a Dutch-capable checkpoint, matching terms, and CPU/MPS latency are verified |
 | Azure AI Speech | [Dutch neural voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts); no local quality/latency measurement | [REST streaming raw PCM](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech), HTTP request cancellation | Hosted on Azure; account, key, network, billing and text transfer required; runs via Sodalis API from all three desktop platforms | Explicit opt-in `azure` adapter, not selected by default |
+| Voxtral MLX via local `voxtral-api` | [Voxtral 4B TTS MLX](https://huggingface.co/mlx-community/Voxtral-4B-TTS-2603-mlx-6bit) lists `nl_female` and `nl_male` at 24 kHz; Dutch output/latency unmeasured here | Model yields internal chunks, but the existing `/v1/audio/speech` route synthesizes a complete file before responding; no HTTP first-audio or inference cancellation verified | Converted weights CC BY-NC 4.0; Apple Silicon MLX; check each backend's own model terms | Promising Dutch candidate for a future native-Mac trial, not a Sodalis provider |
+| VibeVoice MLX | [Original 1.5B model card](https://huggingface.co/microsoft/VibeVoice-1.5B) lists **English/Chinese**, not Dutch; local project's M4 Max throughput numbers are not Sodalis measurements | Internal VAE decoding streams; local CLI writes WAV and the `voxtral-api` HTTP route returns a file; no short-reply or cancellation measurement | [MIT original weights](https://huggingface.co/microsoft/VibeVoice-1.5B); verify converted checkpoint separately; MLX on Apple Silicon | Do not assume Dutch support from local examples |
+| KugelAudio-0-Open | [Model card](https://huggingface.co/kugelaudio/kugelaudio-0-open) lists Dutch, with quality varying by language; German preference tests do not measure Dutch | Local fork supports reusable voice embeddings; streaming HTTP and inference cancellation unverified | MIT source and model card; verify voice-reference rights/consent; native Mac example, other platforms unverified | Candidate for measured Dutch voice and latency trial, not yet an adapter |
+
+The local `language-course-compiler` is a **client**, not a fifth model: its
+lesson generator calls a configurable OpenAI-style speech endpoint and
+receives completed MP3 audio. `voxtral-api` wraps several distinct model
+backends; its shared HTTP route returns a `FileResponse` after `synthesize`
+completes, even where a backend internally yields chunks. These local
+projects were inspected read-only; no comparative Dutch listening test,
+first-audio measurement, or integration was performed. The Sodalis endpoint
+expects 22,050 Hz mono PCM16, so their 24 kHz WAV/MP3 outputs require
+server-side decoding and resampling. Closing an HTTP response alone must not
+be mistaken for interrupting model inference.
 
 Voice-cloning trials require a suitable licensed reference clip and speaker
 consent or an appropriate public-domain/CC-licensed recording. Do not treat
@@ -298,6 +312,91 @@ declares CC BY-NC-SA 4.0; treat redistribution terms as unresolved rather
 than relying solely on the source license. No reference speaker is configured:
 do not assume MLS's recording license alone authorizes cloning an
 identifiable speaker.
+
+#### Native Apple Silicon Fish 1.5 trial
+
+Unlike a Linux container on macOS, a native Python process can use Metal/MPS.
+This is an isolated **evaluation**, not a Sodalis TTS selection. With the
+ignored weights downloaded above, an ARM Python 3.11 and `uv` installed,
+prepare the pinned source in this worktree (not another project's checkout):
+
+```sh
+mkdir -p models/fish-native/source
+git -C models/fish-native/source init
+git -C models/fish-native/source remote add origin https://github.com/fishaudio/fish-speech.git
+git -C models/fish-native/source fetch --depth 1 origin 7902e408c85b37193ce3f3c2361ca3c76be0d533
+git -C models/fish-native/source checkout --detach FETCH_HEAD
+git -C models/fish-native/source apply ../../../services/fish-speech-1.5/streaming.patch
+git -C models/fish-native/source apply ../../../services/fish-speech-1.5/native-mps.patch
+uv venv --python 3.11 models/fish-native/.venv
+uv pip install --python models/fish-native/.venv/bin/python \
+  'torch==2.4.1' 'torchaudio==2.4.1' 'transformers==4.45.2' \
+  -e 'models/fish-native/source[stable]'
+```
+
+The native-only patch omits PyAudio (used by the optional playback client,
+which needs PortAudio headers) and matches token tensor dtypes for MPS
+`torch.isin`; the separately applied streaming patch prevents duplicate
+complete audio. Neither patch changes the vendored container image. Start
+the API in the foreground, bound to loopback, in another terminal:
+
+```sh
+cd models/fish-native/source
+../.venv/bin/python -m tools.api_server --listen 127.0.0.1:18080 \
+  --device mps --half --llama-checkpoint-path ../../fish-speech-1.5 \
+  --decoder-checkpoint-path ../../fish-speech-1.5/firefly-gan-vq-fsq-8x1024-21hz-generator.pth \
+  --decoder-config-name firefly_gan_vq
+```
+
+Wait for `mps is available, running on mps` **and** `Application startup
+complete`. From the worktree root, request a short Dutch phrase and measure
+the time until actual PCM, not just the streaming WAV header:
+
+```sh
+python3 - <<'PY'
+import json, time, urllib.request, wave
+from pathlib import Path
+
+request = urllib.request.Request(
+    "http://127.0.0.1:18080/v1/tts",
+    json.dumps({"text": "Hoe oud bent u?", "format": "wav",
+                "streaming": True, "max_new_tokens": 256}).encode(),
+    {"Content-Type": "application/json"},
+)
+start = time.monotonic()
+with urllib.request.urlopen(request, timeout=120) as response:
+    header = response.read(44)
+    first_pcm = response.read(2048)
+    print("first_pcm_seconds:", round(time.monotonic() - start, 2))
+    pcm = first_pcm + response.read()
+    print("total_seconds:", round(time.monotonic() - start, 2))
+    print("sample_rate:", int.from_bytes(header[24:28], "little"),
+          "pcm_bytes:", len(pcm))
+out = Path("models/fish-native/dutch-question-playable.wav")
+with wave.open(str(out), "wb") as wav:
+    wav.setnchannels(1)
+    wav.setsampwidth(2)
+    wav.setframerate(44100)
+    wav.writeframes(pcm)
+print("playback_file:", out)
+PY
+```
+
+Fish's streamed WAV header reports zero frames; the example rewraps the raw
+44.1 kHz PCM in a playable WAV. Listen to the file before judging Dutch
+quality. On the M4 Max trial, MPS warmup finished about 20 seconds after
+process startup; the phrase returned its first PCM at **3.89 seconds**, total
+**3.89 seconds**, 114,688 PCM bytes (about 1.30 seconds of mono 16-bit
+audio), and roughly **1.12 GiB process RSS** after the request (not peak or
+Metal allocation). This is much faster than the tested CPU container, but
+voice intelligibility was **not** listener-validated. A longer streaming
+request disconnected immediately after its header, yet the server remained
+busy generating, and a health request timed out two seconds later. The
+process did not respond promptly to SIGTERM while generating; it was stopped
+by its specific PID. In-flight cancellation therefore remains unsuitable
+for an always-open voice session. Do not infer production reliability from
+the short-phrase timing; test longer replies and repeated requests before
+considering an adapter. The trial never contacted Azure.
 
 Do not upload the MLS recordings or private microphone samples to a
 hosted provider without separate authorization. MLS recordings are
