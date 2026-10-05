@@ -16,7 +16,7 @@ export interface EnergyVoiceActivityDetectorOptions {
 
 const DEFAULT_THRESHOLD_RMS = 0.025;
 const DEFAULT_START_FRAMES = 2;
-const DEFAULT_END_FRAMES = 12;
+const DEFAULT_END_FRAMES = 35;
 
 export function createEnergyVoiceActivityDetector(
   options: EnergyVoiceActivityDetectorOptions = {},

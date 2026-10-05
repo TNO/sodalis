@@ -11,7 +11,7 @@ import type {
 const SERVER_STT_CAPABILITIES: SpeechToTextCapabilities = {
   runtime: "server",
   languages: ["nl-NL", "en-US"],
-  partialResults: false,
+  partialResults: true,
   inputAudioMimeTypes: [
     "audio/webm",
     "audio/ogg",
@@ -26,6 +26,8 @@ type FetchLike = (
   input: RequestInfo | URL,
   init?: RequestInit,
 ) => Promise<Response>;
+
+const PARTIAL_INTERVAL_MS = 1500;
 
 interface EventQueue<T> {
   readonly iterable: AsyncIterable<T>;
@@ -145,6 +147,7 @@ export interface ServerSpeechToTextProviderOptions {
   readonly fetch?: FetchLike;
   readonly now?: () => number;
   readonly onLatency?: (metric: SpeechToTextLatency) => void;
+  readonly onPartialError?: (error: Error) => void;
 }
 
 export interface SpeechToTextLatency {
@@ -161,12 +164,14 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
   private readonly fetcher: FetchLike;
   private readonly now: () => number;
   private readonly onLatency: ServerSpeechToTextProviderOptions["onLatency"];
+  private readonly onPartialError: ServerSpeechToTextProviderOptions["onPartialError"];
 
   constructor(options: ServerSpeechToTextProviderOptions = {}) {
     this.baseUrl = (options.baseUrl ?? "/api").replace(/\/+$/, "");
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? (() => performance.now());
     this.onLatency = options.onLatency;
+    this.onPartialError = options.onPartialError;
   }
 
   async createSession(
@@ -177,6 +182,7 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
     const fetcher = this.fetcher;
     const now = this.now;
     const onLatency = this.onLatency;
+    const onPartialError = this.onPartialError;
     const sessionEndpoint = `${path}/${encodeURIComponent(config.sessionId)}`;
     const cancelRemote = async () => {
       try {
@@ -224,6 +230,10 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
     const queue = createEventQueue<SpeechToTextEvent>();
     let finished = false;
     let cancelled = false;
+    let firstAudioAt: number | undefined;
+    let lastPartialAt: number | undefined;
+    let partialPromise: Promise<void> | undefined;
+    let reportedFirstPartial = false;
     const cancelOnAbort = () => {
       if (cancelled) return;
       cancelled = true;
@@ -267,12 +277,48 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
         const details = await readJson(audioResponse);
         if (!audioResponse.ok) throw errorFromResponse(audioResponse, details);
         ensureActive();
+        const uploadedAt = now();
+        firstAudioAt ??= uploadedAt;
+        if (partialPromise ||
+            uploadedAt - (lastPartialAt ?? firstAudioAt) < PARTIAL_INTERVAL_MS) {
+          return;
+        }
+        lastPartialAt = uploadedAt;
+        partialPromise = (async () => {
+          const response = await fetcher(`${sessionEndpoint}/partial`, {
+            method: "POST", signal: config.signal,
+          });
+          const result = await readJson(response);
+          if (!response.ok) throw errorFromResponse(response, result);
+          const text = readTranscript(result);
+          if (!finished && !cancelled && text) {
+            queue.push({ type: "partial", text, sessionId: config.sessionId });
+            if (!reportedFirstPartial) {
+              reportedFirstPartial = true;
+              onLatency?.({
+                sessionId: config.sessionId,
+                type: "first-partial",
+                latencyMs: Math.max(0, now() - firstAudioAt!),
+              });
+            }
+          }
+        })().catch((error: unknown) => {
+          if (!cancelled) {
+            const normalized = error instanceof Error ? error : new Error(String(error));
+            if (onPartialError) onPartialError(normalized);
+            else console.error("Interim speech recognition failed:", normalized);
+          }
+        }).finally(() => {
+          partialPromise = undefined;
+        });
       },
       async finish(speechEndTimestampMs) {
         ensureActive();
         finished = true;
         const speechEndedAtMs = speechEndTimestampMs ?? now();
         try {
+          await partialPromise;
+          ensureNotAborted();
           const finishResponse = await fetcher(
             `${path}/${encodeURIComponent(config.sessionId)}/finish`,
             { method: "POST", signal: config.signal },

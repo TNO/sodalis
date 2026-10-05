@@ -80,6 +80,95 @@ version `1.8.0`. The local llama.cpp server image is CPU-capable; GPU
 acceleration and hardware-specific builds are optional, not configured here.
 CPU latency and RAM needs depend on the selected model, especially the LLM.
 
+### Improve Dutch recognition on a Mac
+
+The default `ggml-base.bin` keeps the CPU Compose setup lightweight, but it
+misrecognized a short Dutch question in testing. To choose a stronger local
+model, download it into `models/whisper/` and set its filename in your
+ignored `.env` (leave `WHISPER_CPP_URL` empty):
+
+```sh
+curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin \
+  -o models/whisper/ggml-small.bin
+# In .env: WHISPER_MODEL=ggml-small.bin
+pnpm stack:up
+```
+
+`small` needs more than the default 2 GB Podman Mac VM in our testing
+(the isolated container exited 137). Increase the VM memory *before*
+selecting it, without resetting the existing machine or its Home Assistant
+data. The larger `ggml-medium.bin` (about 1.4 GB of weights) needs still
+more memory. Alternatively, run Whisper.cpp natively with Metal, avoiding
+CPU-only model inference inside the VM:
+
+```sh
+brew install whisper-cpp ffmpeg
+curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin \
+  -o models/whisper/ggml-medium.bin
+whisper-server -m models/whisper/ggml-medium.bin --host 127.0.0.1 \
+  --port 4304 --convert
+```
+
+Keep that server running. In another terminal run
+`STT_PROVIDER=whisper-cpp WHISPER_CPP_URL=http://127.0.0.1:4304
+TTS_PROVIDER=mock pnpm dev:speech`, then use the **Develop one service at a
+time** Vite command below to proxy speech to the native port 3001 and
+other APIs to Compose. Set `TTS_PROVIDER=piper-http` and a reachable
+`PIPER_HTTP_URL` instead of `mock` if native speech playback is needed.
+The browser never connects directly to Whisper. For a Compose speech
+container to call host-native Whisper, bind Whisper to a **private,
+container-reachable host interface** and configure `WHISPER_CPP_URL`
+accordingly; a listener bound to `127.0.0.1` is only accessible to host
+processes. Do not expose the unauthenticated engine to a public network.
+
+Whisper now supplies replaceable interim transcripts while speech continues:
+the speech API re-transcribes a growing audio snapshot at most once per
+1.5 seconds, and only the final transcript is submitted to the assistant.
+This is **not** incremental model decoding. CPU inference may lag behind
+incoming speech. Voice activity waits about 700 ms of silence before ending
+an utterance (rather than 240 ms); short questions may still end before
+the first interim transcript. There is not yet a speech pre-roll or a
+long-utterance rollover. One 46-second probe made by repeating the same
+MLS passage three times returned only two copies, while a different
+44-second probe with three distinct passages transcribed all three.
+Repetition suppression, not a proven 30-second cutoff, is the likely
+explanation. Natural uninterrupted speech and open-microphone quality
+still need real-device testing.
+
+To reproduce the Dutch comparison against the MLS **test** split, install
+`ffmpeg`, start the speech API locally, and run:
+
+```sh
+pnpm exec tsx scripts/stt-benchmark.ts /path/to/mls_dutch/mls_dutch \
+  http://127.0.0.1:3001
+```
+
+This tool picks one 10–18-second clip from each of six test speakers,
+converts the audio locally, and uploads it only to a **loopback** Sodalis
+speech API. Its word error rate compares lowercase words but does not
+normalize historical Dutch spelling; it is a small diagnostic sample,
+not a population-level quality estimate. Against the same six clips
+(215 reference words), Compose `base` scored 77 errors (35.8% WER),
+native `small` 49 (22.8%), and native `medium` 25 (11.6%).
+The synthetic short question still became "Hoe uit bent u?" with the
+native `medium` HTTP server, so the benchmark does not guarantee that
+particular question will be correct. Pure silence sent **directly** to
+Whisper can hallucinate text; the microphone's energy gate avoids
+submitting silent segments, but noisy rooms need real-microphone testing.
+
+| Candidate | Dutch / accuracy | Interim / cancellation | Deployment / license | Decision |
+| --- | --- | --- | --- | --- |
+| Whisper.cpp `base`, `small`, `medium` | Measured above; short questions still imperfect | Sodalis snapshot interim API; session cancellation | macOS native or cross-platform CPU Compose; model-specific memory | Available; `medium` preferred on a sufficiently provisioned native Mac |
+| Cactus Parakeet TDT v3 | Multilingual claim; no authorized local Dutch benchmark yet | Chunked `confirmed` / `pending` API; cancellation not verified | Native runtime; [license](https://github.com/cactus-compute/cactus/blob/main/LICENSE) restricts organizations above funding/revenue thresholds | Not bundled or selected without license review and integration testing |
+| Moondream Parakeet Redux / Photon | Dutch claimed; MLS accuracy not measured | Photon documents live PCM snapshots; cancellation and Sodalis WebM conversion not verified | Local CPU/Apple silicon/CUDA; model weights CC BY 4.0, runtime distribution terms not established | No adapter/profile until runtime terms and live path are verified |
+| Azure AI Speech | Dutch supported by service; local sample not uploaded | Continuous recognition provides interim events; Sodalis cancellation not integrated | Hosted; credentials, billing, network and data transfer required | No adapter or cloud fallback without authorization and a local-only evaluation plan |
+
+Do not upload the MLS recordings or private microphone samples to a
+hosted provider without separate authorization. MLS recordings are
+licensed CC BY 4.0 for the dataset, but that alone is **not** a speaker's
+consent to voice cloning; keep any TTS voice-selection investigation
+separate from this ASR benchmark.
+
 ### Host Ollama (the example LLM)
 
 Install [Ollama](https://ollama.com/download) for your host OS and keep its

@@ -14,6 +14,7 @@ interface RecognitionSession {
   mimeType: string;
   byteLength: number;
   processing: boolean;
+  partialProcessing: boolean;
   abortController?: AbortController;
 }
 
@@ -115,7 +116,7 @@ export function createSpeechApp(
   const removeExpiredSessions = () => {
     const cutoff = now() - sessionTtlMs;
     for (const [id, session] of sessions) {
-      if (session.createdAt < cutoff && !session.processing) {
+      if (session.createdAt < cutoff && !session.processing && !session.partialProcessing) {
         sessions.delete(id);
       }
     }
@@ -160,6 +161,7 @@ export function createSpeechApp(
       mimeType: "application/octet-stream",
       byteLength: 0,
       processing: false,
+      partialProcessing: false,
     });
     return context.json({ sessionId }, 201);
   });
@@ -208,11 +210,46 @@ export function createSpeechApp(
     return context.json({ acceptedBytes: session.byteLength });
   });
 
+  app.post("/api/speech/stt/sessions/:sessionId/partial", async (context) => {
+    const session = sessions.get(context.req.param("sessionId"));
+    if (!session) return jsonError(context, "Speech session not found.", 404);
+    if (session.processing || session.partialProcessing) {
+      return jsonError(context, "Speech session is already processing.", 409);
+    }
+    if (!session.byteLength) {
+      return jsonError(context, "Speech session contains no audio.", 400);
+    }
+    session.partialProcessing = true;
+    const abortController = new AbortController();
+    session.abortController = abortController;
+    const requestSignal = context.req.raw.signal;
+    const onRequestAbort = () => abortController.abort(requestSignal.reason);
+    requestSignal.addEventListener("abort", onRequestAbort, { once: true });
+    if (requestSignal.aborted) onRequestAbort();
+    try {
+      const result = await engine.transcribe({
+        audio: collectAudio(session),
+        mimeType: session.mimeType,
+        language: session.language,
+        signal: abortController.signal,
+      });
+      return context.json({ text: result.text });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Speech recognition failed.";
+      return jsonError(context, message, 502);
+    } finally {
+      requestSignal.removeEventListener("abort", onRequestAbort);
+      session.partialProcessing = false;
+      session.abortController = undefined;
+    }
+  });
+
   app.post("/api/speech/stt/sessions/:sessionId/finish", async (context) => {
     const sessionId = context.req.param("sessionId");
     const session = sessions.get(sessionId);
     if (!session) return jsonError(context, "Speech session not found.", 404);
-    if (session.processing) {
+    if (session.processing || session.partialProcessing) {
       return jsonError(context, "Speech session is already processing.", 409);
     }
     if (!session.byteLength) {
@@ -248,7 +285,7 @@ export function createSpeechApp(
   app.delete("/api/speech/stt/sessions/:sessionId", (context) => {
     const sessionId = context.req.param("sessionId");
     const session = sessions.get(sessionId);
-    if (session?.processing) {
+    if (session?.processing || session?.partialProcessing) {
       session.abortController?.abort(
         new DOMException("Speech recognition was cancelled.", "AbortError"),
       );

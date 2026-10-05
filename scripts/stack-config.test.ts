@@ -38,11 +38,24 @@ describe("development stack selection", () => {
     expect(selected.environment).toMatchObject({
       STT_PROVIDER: "whisper-cpp",
       WHISPER_CPP_URL: "http://whisper:8080",
+      WHISPER_MODEL: "ggml-base.bin",
       TTS_PROVIDER: "piper-http",
       PIPER_HTTP_URL: "http://piper:5000",
       LLM_PROVIDER: "mock",
       HOME_ADMIN_FILE: "Caddyfile.admin",
     });
+  });
+
+  it("selects a downloaded Whisper model without accepting path traversal or unused settings", () => {
+    const selected = resolveStack({ ...base, WHISPER_MODEL: "ggml-small.bin" });
+    expect(selected.models).toContain("models/whisper/ggml-small.bin");
+    expect(selected.environment.WHISPER_MODEL).toBe("ggml-small.bin");
+    expect(() => resolveStack({ ...base, WHISPER_MODEL: "../outside.bin" }))
+      .toThrow("WHISPER_MODEL");
+    expect(() => resolveStack({
+      ...base, WHISPER_MODEL: "ggml-small.bin",
+      WHISPER_CPP_URL: "http://host.docker.internal:4301",
+    })).toThrow("WHISPER_MODEL");
   });
 
   it("uses explicitly configured endpoints without starting matching engines", () => {

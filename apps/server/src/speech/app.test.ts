@@ -72,6 +72,72 @@ describe("speech recognition API", () => {
     );
   });
 
+  it("returns a transcript before finish while preserving the session for more audio", async () => {
+    const engine = createEngine(vi.fn()
+      .mockResolvedValueOnce({ text: "Hoe oud" })
+      .mockResolvedValueOnce({ text: "Hoe oud bent u?" }));
+    const app = createSpeechApp(engine);
+    await createSession(app);
+    await app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: new Uint8Array([1, 2]),
+    });
+
+    const partial = await app.request(
+      "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+    );
+    expect(partial.status).toBe(200);
+    await expect(partial.json()).resolves.toEqual({ text: "Hoe oud" });
+    await app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: new Uint8Array([3]),
+    });
+    const final = await app.request(
+      "/api/speech/stt/sessions/turn-1/finish", { method: "POST" },
+    );
+    await expect(final.json()).resolves.toEqual({ text: "Hoe oud bent u?" });
+    expect(engine.transcribe).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      audio: new Uint8Array([1, 2]),
+    }));
+    expect(engine.transcribe).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      audio: new Uint8Array([1, 2, 3]),
+    }));
+  });
+
+  it("aborts an in-progress interim transcription when the session is cancelled", async () => {
+    let started: (() => void) | undefined;
+    let recognitionSignal: AbortSignal | undefined;
+    const engine = createEngine(vi.fn(({ signal }) =>
+      new Promise<{ text: string }>((_resolve, reject) => {
+        recognitionSignal = signal;
+        started?.();
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      }),
+    ));
+    const app = createSpeechApp(engine);
+    await createSession(app);
+    await app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: new Uint8Array([1]),
+    });
+    const recognitionStarted = new Promise<void>((resolve) => { started = resolve; });
+    const partial = app.request(
+      "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+    );
+    await recognitionStarted;
+    expect((await app.request(
+      "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+    )).status).toBe(409);
+    expect((await app.request(
+      "/api/speech/stt/sessions/turn-1", { method: "DELETE" },
+    )).status).toBe(200);
+    expect(recognitionSignal?.aborted).toBe(true);
+    expect((await partial).status).toBe(502);
+  });
+
   it("validates language and session IDs before allocating memory", async () => {
     const app = createSpeechApp(createEngine());
 

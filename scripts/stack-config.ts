@@ -44,15 +44,24 @@ export function resolveStack(settings: Settings): StackSelection {
   const stt = settings.STT_PROVIDER || "whisper-cpp";
   if (stt === "whisper-cpp") {
     environment.STT_PROVIDER = stt;
+    if (settings.WHISPER_MODEL && settings.WHISPER_CPP_URL) {
+      throw new Error("WHISPER_MODEL requires a local Whisper.cpp profile.");
+    }
     environment.WHISPER_CPP_URL = settings.WHISPER_CPP_URL
       ? endpoint(settings.WHISPER_CPP_URL, "WHISPER_CPP_URL")
       : "http://whisper:8080";
     if (!settings.WHISPER_CPP_URL) {
+      const model = settings.WHISPER_MODEL || "ggml-base.bin";
+      if (!/^ggml-[A-Za-z0-9._-]+\.bin$/.test(model)) {
+        throw new Error("WHISPER_MODEL must name a ggml-*.bin file in models/whisper.");
+      }
+      environment.WHISPER_MODEL = model;
       profiles.push("whisper");
-      models.push("models/whisper/ggml-base.bin");
+      models.push(`models/whisper/${model}`);
     }
   } else if (stt === "mock") {
     if (settings.WHISPER_CPP_URL) throw new Error("WHISPER_CPP_URL requires STT_PROVIDER=whisper-cpp.");
+    if (settings.WHISPER_MODEL) throw new Error("WHISPER_MODEL requires STT_PROVIDER=whisper-cpp.");
     environment.STT_PROVIDER = stt;
   } else throw new Error(`Unsupported STT_PROVIDER "${stt}".`);
 

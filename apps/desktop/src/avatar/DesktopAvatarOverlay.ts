@@ -159,6 +159,11 @@ export const DesktopAvatarOverlay =
           console.debug("Speech recognition latency:", metric);
         }
       },
+      onPartialError(error) {
+        console.error("Interim speech recognition failed:", error);
+        speechActivityMessage = "Interim transcript unavailable; waiting for the final result.";
+        if (layer) m.redraw();
+      },
     });
     const textToSpeechProvider = new ServerTextToSpeechProvider({
       baseUrl: speechApiBaseUrl,

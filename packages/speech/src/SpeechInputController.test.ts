@@ -57,6 +57,22 @@ function makeController(
 }
 
 describe("speech input controller", () => {
+  it("does not start recognition during sustained silence with the microphone open", async () => {
+    const { capture, callbacks } = createCapture();
+    const onSpeechStart = vi.fn();
+    const controller = makeController(capture, {
+      detector: createEnergyVoiceActivityDetector(),
+      onSpeechStart,
+    });
+    await controller.start();
+    for (let index = 0; index < 150; index += 1) {
+      callbacks().onSamples(samples(0), index * 20);
+    }
+    expect(onSpeechStart).not.toHaveBeenCalled();
+    expect(capture.beginSpeechSegment).not.toHaveBeenCalled();
+    await controller.dispose();
+  });
+
   it("surfaces permission denial in state and rethrows the failure", async () => {
     const denied = new Error("Microphone permission was denied.");
     const { capture } = createCapture(denied);

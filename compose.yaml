@@ -75,7 +75,7 @@ services:
       context: .
       dockerfile: services/whisper/Dockerfile
     image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-whisper:dev
-    command: ["--host", "0.0.0.0", "--port", "8080", "-m", "/models/ggml-base.bin", "--convert", "--no-gpu"]
+    command: ["--host", "0.0.0.0", "--port", "8080", "-m", "/models/${WHISPER_MODEL:-ggml-base.bin}", "--convert", "--no-gpu"]
     volumes:
       - ./models/whisper:/models:ro
 

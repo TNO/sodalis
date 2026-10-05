@@ -38,4 +38,22 @@ describe("energy voice activity detector", () => {
       createEnergyVoiceActivityDetector({ thresholdRms: 0, startFrames: 1 }),
     ).toThrow("VAD thresholdRms must be a finite number greater than zero.");
   });
+
+  it("keeps one utterance across a brief pause before ending on sustained silence", () => {
+    const detector = createEnergyVoiceActivityDetector();
+    expect(detector.process(frame(0.2), 0)).toEqual([]);
+    expect(detector.process(frame(0.2), 20)).toEqual([
+      { type: "speech-start", timestampMs: 20 },
+    ]);
+    for (let index = 1; index <= 20; index += 1) {
+      expect(detector.process(frame(0), 20 + index * 20)).toEqual([]);
+    }
+    expect(detector.process(frame(0.2), 440)).toEqual([]);
+    for (let index = 1; index < 35; index += 1) {
+      expect(detector.process(frame(0), 440 + index * 20)).toEqual([]);
+    }
+    expect(detector.process(frame(0), 1140)).toEqual([
+      { type: "speech-end", timestampMs: 1140 },
+    ]);
+  });
 });

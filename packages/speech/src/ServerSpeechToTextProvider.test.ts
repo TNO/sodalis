@@ -22,6 +22,7 @@ describe("ServerSpeechToTextProvider", () => {
       now: () => 175,
       onLatency,
     });
+
     const session = await provider.createSession({
       sessionId: "turn-1",
       language: "nl-NL",
@@ -48,7 +49,7 @@ describe("ServerSpeechToTextProvider", () => {
           "POST",
         ],
       ]);
-    expect(provider.capabilities.partialResults).toBe(false);
+    expect(provider.capabilities.partialResults).toBe(true);
     expect(events).toEqual([
       {
         type: "final",
@@ -61,6 +62,67 @@ describe("ServerSpeechToTextProvider", () => {
       type: "final",
       latencyMs: 75,
     });
+  });
+
+  it("emits a replaceable interim transcript while speech continues", async () => {
+    let clock = 0;
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ sessionId: "live" }, 201))
+      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 2 }))
+      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 4 }))
+      .mockResolvedValueOnce(jsonResponse({ text: "Hoe oud" }))
+      .mockResolvedValueOnce(jsonResponse({ text: "Hoe oud bent u?" }));
+    const provider = new ServerSpeechToTextProvider({
+      fetch: fetcher, now: () => clock,
+    });
+
+    const session = await provider.createSession({
+      sessionId: "live", language: "nl-NL",
+      signal: new AbortController().signal,
+    });
+    await session.writeAudio({ data: new Uint8Array([1, 2]), mimeType: "audio/webm" });
+    clock = 1600;
+    await session.writeAudio({ data: new Uint8Array([3, 4]), mimeType: "audio/webm" });
+    const interim = await session.events[Symbol.asyncIterator]().next();
+    expect(interim.value).toEqual({
+      type: "partial", text: "Hoe oud", sessionId: "live",
+    });
+    expect(fetcher.mock.calls[3]?.[0]).toBe("/api/speech/stt/sessions/live/partial");
+    await session.finish();
+    expect((await session.events[Symbol.asyncIterator]().next()).value)
+      .toEqual({ type: "final", text: "Hoe oud bent u?", sessionId: "live" });
+    expect(provider.capabilities.partialResults).toBe(true);
+  });
+
+  it("reports a failed interim attempt but still transcribes the completed utterance", async () => {
+    let clock = 0;
+    const onPartialError = vi.fn();
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ sessionId: "retry-final" }, 201))
+      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 1 }))
+      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 2 }))
+      .mockResolvedValueOnce(jsonResponse({ error: "Incomplete WebM cluster." }, 502))
+      .mockResolvedValueOnce(jsonResponse({ text: "Hoe oud bent u?" }));
+    const provider = new ServerSpeechToTextProvider({
+      fetch: fetcher, now: () => clock, onPartialError,
+    });
+    const session = await provider.createSession({
+      sessionId: "retry-final", language: "nl-NL",
+      signal: new AbortController().signal,
+    });
+    await session.writeAudio({ data: new Uint8Array([1]), mimeType: "audio/webm" });
+    clock = 1600;
+    await session.writeAudio({ data: new Uint8Array([2]), mimeType: "audio/webm" });
+    await vi.waitFor(() =>
+      expect(onPartialError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "Incomplete WebM cluster." }),
+      ),
+    );
+    await session.finish();
+    expect((await session.events[Symbol.asyncIterator]().next()).value)
+      .toEqual({ type: "final", text: "Hoe oud bent u?", sessionId: "retry-final" });
+    expect(fetcher.mock.calls.map(([, init]) => init?.method))
+      .toEqual(["POST", "POST", "POST", "POST", "POST"]);
   });
 
   it("cancels the remote session and rejects stale writes", async () => {
