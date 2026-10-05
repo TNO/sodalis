@@ -2,7 +2,13 @@
 
 import m from "mithril";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as speech from "@sodalis/speech";
 import {
+  ServerSpeechToTextProvider,
+  type SpeechInputControllerOptions,
+} from "@sodalis/speech";
+import {
+  ConversationOrchestrator,
   createAssistantActionRuntime,
   type AppActionDefinition,
 } from "@sodalis/assistant";
@@ -50,6 +56,7 @@ describe("DesktopAvatarOverlay", () => {
     if (mountedHost) m.mount(mountedHost, null);
     mountedHost = undefined;
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     document.body.replaceChildren();
   });
@@ -96,6 +103,63 @@ describe("DesktopAvatarOverlay", () => {
     m.mount(host, null);
     mountedHost = undefined;
     expect(scene.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("does not send an empty final transcript to the assistant", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    let callbacks: SpeechInputControllerOptions | undefined;
+    const createInput = speech.createSpeechInputController;
+    vi.spyOn(speech, "createSpeechInputController")
+      .mockImplementation((options) => {
+        callbacks = options;
+        return createInput(options);
+      });
+    vi.spyOn(ServerSpeechToTextProvider.prototype, "createSession")
+      .mockImplementation(async ({ sessionId }) => ({
+        id: sessionId,
+        events: (async function* () {
+          yield { type: "final" as const, sessionId, text: "" };
+        })(),
+        writeAudio: async () => undefined,
+        finish: async () => undefined,
+      }));
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const submit = vi.spyOn(
+      ConversationOrchestrator.prototype, "submitUserMessage",
+    );
+    const setListening = vi.spyOn(
+      ConversationOrchestrator.prototype, "setListening",
+    );
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(DesktopAvatarOverlay, { presentation }) });
+    await vi.waitFor(() => expect(callbacks?.onSpeechStart).toBeDefined());
+    await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
+    host.querySelector<HTMLButtonElement>(
+      '[aria-label="Start a conversation with Sodalis"]',
+    )?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector(
+        '[role="region"][aria-labelledby="avatar-conversation-title"]',
+      )).not.toBeNull();
+    });
+    submit.mockClear();
+    setListening.mockClear();
+    callbacks?.onSpeechStart?.({
+      type: "speech-start",
+      sessionId: "mic-1",
+      segmentId: "segment-1",
+      timestampMs: 0,
+    });
+    await vi.waitFor(() => expect(setListening).toHaveBeenCalledWith(true));
+    expect(submit).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("aligns the avatar floor with the live taskbar without reloading the avatar", async () => {

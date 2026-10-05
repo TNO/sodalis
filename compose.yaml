@@ -26,6 +26,8 @@ services:
       PORT: "3001"
       STT_PROVIDER: ${STT_PROVIDER:-whisper-cpp}
       WHISPER_CPP_URL: ${WHISPER_CPP_URL:-}
+      WHISTLE_URL: ${WHISTLE_URL:-}
+      PARAKEET_TDT_URL: ${PARAKEET_TDT_URL:-}
       TTS_PROVIDER: ${TTS_PROVIDER:-piper-http}
       PIPER_HTTP_URL: ${PIPER_HTTP_URL:-}
 
@@ -78,6 +80,22 @@ services:
     command: ["--host", "0.0.0.0", "--port", "8080", "-m", "/models/${WHISPER_MODEL:-ggml-base.bin}", "--convert", "--no-gpu"]
     volumes:
       - ./models/whisper:/models:ro
+
+  whistle:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-whistle
+    profiles: ["whistle"]
+    build:
+      context: .
+      dockerfile: services/whistle/Dockerfile
+    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-whistle:dev
+
+  parakeet-tdt:
+    container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-parakeet-tdt
+    profiles: ["parakeet-tdt"]
+    build:
+      context: .
+      dockerfile: services/parakeet-tdt/Dockerfile
+    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-parakeet-tdt:dev
 
   piper:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-piper

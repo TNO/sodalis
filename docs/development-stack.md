@@ -31,7 +31,7 @@ Assistant simulator. `STT_PROVIDER` defaults to `whisper-cpp` and
 
 | Role | Local selection | External selection |
 | --- | --- | --- |
-| STT | `whisper-cpp` (blank `WHISPER_CPP_URL`) or `mock` | `whisper-cpp` with `WHISPER_CPP_URL` |
+| STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL` |
 | TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL` |
 | LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; the example targets host Ollama |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
@@ -42,8 +42,10 @@ Podman on macOS resolves both `host.docker.internal` and
 `host.containers.internal`. Linux Docker Engine may need a configured host
 gateway or another reachable address. Never expose an unauthenticated
 Ollama endpoint on a public network.
-An external STT endpoint must speak the Whisper.cpp server protocol; TTS must
-speak Piper HTTP (`POST /synthesize` with a WAV response); the LLM endpoint
+An external Whisper endpoint must speak the Whisper.cpp server protocol.
+External Whistle and Parakeet TDT endpoints must speak Sodalis's local
+`POST /transcribe` protocol (raw audio, `x-sodalis-language`, JSON `{text}`).
+TTS must speak Piper HTTP (`POST /synthesize` with a WAV response); the LLM endpoint
 must stream OpenAI-compatible Chat Completions; and the Home endpoint must
 implement Sodalis's `/api/home/*` contract. Azure and other hosted services
 are usable **only when their endpoint implements the selected protocol**,
@@ -156,11 +158,44 @@ particular question will be correct. Pure silence sent **directly** to
 Whisper can hallucinate text; the microphone's energy gate avoids
 submitting silent segments, but noisy rooms need real-microphone testing.
 
+### Try local Whistle or Parakeet TDT in Compose
+
+Set `STT_PROVIDER=whistle` or `STT_PROVIDER=parakeet-tdt` in `.env`,
+leave its matching URL blank, and run `pnpm stack:config` then
+`pnpm stack:up`. These opt-in profiles build their own CPU services;
+neither changes the default Whisper setup. The speech API remains the
+only browser-facing STT endpoint. Both builds download model weights;
+Parakeet uses a pinned conversion revision, while Whistle currently uses
+the default model fetched by the pinned Needle runtime. No recording is
+sent to a hosted ASR service. Whistle/Needle
+is Apache-2.0 and its model is Apache-2.0. Original NVIDIA Parakeet TDT
+v3 weights are CC BY 4.0; its `sherpa-onnx` runtime is Apache-2.0.
+Keep the model attribution when distributing an image. The Parakeet
+image includes roughly 670 MB of int8 weights; it consumed about 1.85 GB
+when idle and a 2 GB Podman machine could not start it (exit 137). An
+8 GB machine ran it alongside the existing development containers. Both
+services use FFmpeg to decode microphone WebM to 16-kHz mono
+audio and limit a single recognition request to 30 seconds. Snapshot
+interim transcripts still re-run inference on growing audio; neither
+engine has true incremental decoding through this adapter. Cancellation
+stops the Sodalis request but cannot interrupt an inference already
+running inside these experimental CPU services.
+
+**Parakeet TDT v3 is not Parakeet Redux.** Redux's weights are CC BY 4.0,
+but its documented Photon package depends on `kestrel-kernels`, whose
+[published license](https://pypi.org/project/kestrel-kernels/0.7.4/)
+requires a separate written agreement. Sodalis does not download or
+install that runtime. Cactus Whistle uses the separate Apache-2.0
+[`cactus-needle`](https://github.com/cactus-compute/needle) runtime,
+not the differently licensed `cactus` engine.
+
 | Candidate | Dutch / accuracy | Interim / cancellation | Deployment / license | Decision |
 | --- | --- | --- | --- | --- |
 | Whisper.cpp `base`, `small`, `medium` | Measured above; short questions still imperfect | Sodalis snapshot interim API; session cancellation | macOS native or cross-platform CPU Compose; model-specific memory | Available; `medium` preferred on a sufficiently provisioned native Mac |
-| Cactus Parakeet TDT v3 | Multilingual claim; no authorized local Dutch benchmark yet | Chunked `confirmed` / `pending` API; cancellation not verified | Native runtime; [license](https://github.com/cactus-compute/cactus/blob/main/LICENSE) restricts organizations above funding/revenue thresholds | Not bundled or selected without license review and integration testing |
-| Moondream Parakeet Redux / Photon | Dutch claimed; MLS accuracy not measured | Photon documents live PCM snapshots; cancellation and Sodalis WebM conversion not verified | Local CPU/Apple silicon/CUDA; model weights CC BY 4.0, runtime distribution terms not established | No adapter/profile until runtime terms and live path are verified |
+| Cactus Whistle/Needle | Six-speaker MLS test: 65/215 word errors (30.2% WER); fast CPU inference; short synthetic question still wrong | Sodalis snapshot interim; request cancellation, but in-flight inference continues | Apache-2.0 model and runtime; cross-platform CPU image | Opt-in Compose profile `whistle` |
+| NVIDIA Parakeet TDT v3 / sherpa-onnx | Six-speaker MLS test: 37/215 word errors (17.2% WER), 394–700 ms per clip; WAV short question correct, WebM question "Who oud bent u?"; 3 s silence empty | Sodalis snapshot interim; in-flight inference continues | Original weights CC BY 4.0, Apache-2.0 runtime; 2 GB VM OOM, 8 GB VM runs | Opt-in Compose profile `parakeet-tdt`; not Redux |
+| Cactus engine (other models) | Not benchmarked | Chunked `confirmed` / `pending` API; cancellation not verified | [Different license](https://github.com/cactus-compute/cactus/blob/main/LICENSE) restricts organizations above funding/revenue thresholds | Not bundled |
+| Moondream Parakeet Redux / Photon | Dutch claimed; MLS accuracy not measured | Photon documents live PCM snapshots; cancellation and Sodalis WebM conversion not verified | Local CPU/Apple silicon/CUDA; weights CC BY 4.0, `kestrel-kernels` requires a written agreement | No adapter/profile until runtime terms and live path are verified |
 | Azure AI Speech | Dutch supported by service; local sample not uploaded | Continuous recognition provides interim events; Sodalis cancellation not integrated | Hosted; credentials, billing, network and data transfer required | No adapter or cloud fallback without authorization and a local-only evaluation plan |
 
 Do not upload the MLS recordings or private microphone samples to a

@@ -1,5 +1,6 @@
 import type { SpeechRecognitionEngine } from "./WhisperCppHttpEngine.js";
 import { WhisperCppHttpEngine } from "./WhisperCppHttpEngine.js";
+import { LocalSpeechHttpEngine } from "./LocalSpeechHttpEngine.js";
 import type { SpeechSynthesisEngine } from "./PiperTtsEngine.js";
 import { PiperTtsEngine } from "./PiperTtsEngine.js";
 import { PiperHttpEngine } from "./PiperHttpEngine.js";
@@ -8,6 +9,8 @@ export interface SpeechProviderSettings {
   readonly STT_PROVIDER?: string;
   readonly TTS_PROVIDER?: string;
   readonly WHISPER_CPP_URL?: string;
+  readonly WHISTLE_URL?: string;
+  readonly PARAKEET_TDT_URL?: string;
   readonly PIPER_MODEL_PATH?: string;
   readonly PIPER_EXECUTABLE?: string;
   readonly PIPER_HTTP_URL?: string;
@@ -27,6 +30,16 @@ export function createSpeechProviders(settings: SpeechProviderSettings): {
       case "whisper-cpp":
         return new WhisperCppHttpEngine({
           serverUrl: required(settings.WHISPER_CPP_URL, "WHISPER_CPP_URL"),
+        });
+      case "whistle":
+        return new LocalSpeechHttpEngine({
+          serverUrl: required(settings.WHISTLE_URL, "WHISTLE_URL"),
+          name: "Whistle",
+        });
+      case "parakeet-tdt":
+        return new LocalSpeechHttpEngine({
+          serverUrl: required(settings.PARAKEET_TDT_URL, "PARAKEET_TDT_URL"),
+          name: "Parakeet TDT",
         });
       case "mock":
         return {

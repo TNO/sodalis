@@ -80,6 +80,11 @@ requested on activation, never on page load. You can type a message first
 to test AI and TTS without STT. See the
 [development stack guide](docs/development-stack.md) for model downloads,
 Docker/Podman setup, individual-service development, and troubleshooting.
+For experimental local Dutch STT, set `STT_PROVIDER=whistle` or
+`STT_PROVIDER=parakeet-tdt` in `.env`, then run `pnpm stack:up`.
+The latter is original Parakeet TDT v3, **not** Parakeet Redux, and needs
+more than a 2 GB Podman VM. See the
+[STT comparison and limitations](docs/development-stack.md#try-local-whistle-or-parakeet-tdt-in-compose).
 
 ## Frontend-only development
 

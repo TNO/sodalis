@@ -70,8 +70,28 @@ contract.
   passages returned all three. Do not infer a hard 30-second limit from the
   repeated sample. Pre-roll, sustained-speech rollover, and real
   continuous-microphone regression coverage remain open.
-- Cactus licensing restricts organizations above funding/revenue thresholds;
-  Photon runtime terms were not established; Azure requires credentials and
-  authorization to transfer test audio. None of these candidates has yet
-  passed a local Dutch streaming/cancellation evaluation, so no adapter or
-  Compose profile for them is claimed.
+- Cactus Whistle and its Needle runtime are Apache-2.0, distinct from the
+  separately licensed Cactus engine (which restricts organizations above
+  funding/revenue thresholds). Whistle is available behind an opt-in Compose
+  profile and a Sodalis-owned raw-audio HTTP adapter. On the same six-speaker
+  MLS subset it made 65/215 word errors (30.2% WER), with roughly 137–252 ms
+  per clip; it returned no text for silence but misheard a synthetic "Hoe oud
+  bent u?". Its model accepts at most 30 seconds per request.
+- The opt-in `parakeet-tdt` profile runs **original NVIDIA Parakeet TDT v3**,
+  not Moondream Redux, through Apache-2.0 sherpa-onnx. The original weights
+  are CC BY 4.0; check the conversion repository's redistribution terms
+  before publishing an image. It made 37/215 word errors (17.2% WER) on the
+  same MLS subset, 394–700 ms per clip. The synthetic WAV short question was
+  correct; an Opus WebM encoding returned "Who oud bent u?", and three seconds
+  of silence returned empty text. The image was killed at startup on a 2 GB
+  Podman machine; an 8 GB machine ran it alongside the existing containers.
+- Both adapters provide replaceable snapshot partials through the existing
+  Sodalis STT session API, not true incremental model decoding. Cancellation
+  aborts the request but cannot stop inference already underway inside the
+  CPU services. Each service rejects audio over 30 seconds. Real continuous
+  microphone input and rollover remain to be evaluated.
+- Moondream Redux weights are CC BY 4.0 but its documented Photon dependency
+  `kestrel-kernels` requires a separate written agreement; no Redux runtime
+  was installed. Azure requires credentials and authorization to transfer
+  test audio; local recordings were not sent there. Redux and Azure have no
+  adapter or Compose profile, and their Dutch/streaming performance is open.

@@ -58,6 +58,49 @@ describe("development stack selection", () => {
     })).toThrow("WHISPER_MODEL");
   });
 
+  it("selects Whistle locally or by explicit endpoint without activating Whisper", () => {
+    const local = resolveStack({ ...base, STT_PROVIDER: "whistle" });
+    expect(local.profiles).toEqual(["whistle", "piper", "home-simulator"]);
+    expect(local.environment).toMatchObject({
+      STT_PROVIDER: "whistle",
+      WHISTLE_URL: "http://whistle:8080",
+    });
+
+    const external = resolveStack({
+      ...base, STT_PROVIDER: "whistle",
+      WHISTLE_URL: "http://host.docker.internal:4307",
+    });
+    expect(external.profiles).not.toContain("whistle");
+    expect(external.environment.WHISTLE_URL)
+      .toBe("http://host.docker.internal:4307");
+    expect(() => resolveStack({
+      ...base, STT_PROVIDER: "whistle", WHISPER_MODEL: "ggml-base.bin",
+    })).toThrow("WHISPER_MODEL");
+    expect(() => resolveStack({
+      ...base, STT_PROVIDER: "whisper-cpp", WHISTLE_URL: "http://whistle:8080",
+    })).toThrow("WHISTLE_URL");
+  });
+
+  it("selects original Parakeet TDT v3 with its own service, never Redux", () => {
+    const local = resolveStack({ ...base, STT_PROVIDER: "parakeet-tdt" });
+    expect(local.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
+    expect(local.environment).toMatchObject({
+      STT_PROVIDER: "parakeet-tdt",
+      PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
+    });
+    const external = resolveStack({
+      ...base, STT_PROVIDER: "parakeet-tdt",
+      PARAKEET_TDT_URL: "http://host.docker.internal:4309",
+    });
+    expect(external.profiles).not.toContain("parakeet-tdt");
+    expect(() => resolveStack({
+      ...base, STT_PROVIDER: "whistle",
+      PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
+    })).toThrow("PARAKEET_TDT_URL");
+    expect(() => resolveStack({ ...base, STT_PROVIDER: "parakeet-redux" }))
+      .toThrow("Unsupported STT_PROVIDER");
+  });
+
   it("uses explicitly configured endpoints without starting matching engines", () => {
     const selected = resolveStack({
       ...base,

@@ -7,7 +7,7 @@ export interface StackSelection {
 type Settings = Readonly<Record<string, string | undefined>>;
 
 export const ALL_LOCAL_PROFILES = [
-  "whisper", "piper", "llm", "home-simulator", "home-api",
+  "whisper", "whistle", "parakeet-tdt", "piper", "llm", "home-simulator", "home-api",
 ] as const;
 
 export function serviceNamePrefix(directory: string): string {
@@ -42,6 +42,15 @@ export function resolveStack(settings: Settings): StackSelection {
     throw new Error("HOME_ADMIN_UI must be 0 or 1.");
   }
   const stt = settings.STT_PROVIDER || "whisper-cpp";
+  if (stt !== "whisper-cpp" && (settings.WHISPER_CPP_URL || settings.WHISPER_MODEL)) {
+    throw new Error("WHISPER_CPP_URL and WHISPER_MODEL require STT_PROVIDER=whisper-cpp.");
+  }
+  if (stt !== "whistle" && settings.WHISTLE_URL) {
+    throw new Error("WHISTLE_URL requires STT_PROVIDER=whistle.");
+  }
+  if (stt !== "parakeet-tdt" && settings.PARAKEET_TDT_URL) {
+    throw new Error("PARAKEET_TDT_URL requires STT_PROVIDER=parakeet-tdt.");
+  }
   if (stt === "whisper-cpp") {
     environment.STT_PROVIDER = stt;
     if (settings.WHISPER_MODEL && settings.WHISPER_CPP_URL) {
@@ -59,9 +68,19 @@ export function resolveStack(settings: Settings): StackSelection {
       profiles.push("whisper");
       models.push(`models/whisper/${model}`);
     }
+  } else if (stt === "whistle") {
+    environment.STT_PROVIDER = stt;
+    environment.WHISTLE_URL = settings.WHISTLE_URL
+      ? endpoint(settings.WHISTLE_URL, "WHISTLE_URL")
+      : "http://whistle:8080";
+    if (!settings.WHISTLE_URL) profiles.push("whistle");
+  } else if (stt === "parakeet-tdt") {
+    environment.STT_PROVIDER = stt;
+    environment.PARAKEET_TDT_URL = settings.PARAKEET_TDT_URL
+      ? endpoint(settings.PARAKEET_TDT_URL, "PARAKEET_TDT_URL")
+      : "http://parakeet-tdt:8080";
+    if (!settings.PARAKEET_TDT_URL) profiles.push("parakeet-tdt");
   } else if (stt === "mock") {
-    if (settings.WHISPER_CPP_URL) throw new Error("WHISPER_CPP_URL requires STT_PROVIDER=whisper-cpp.");
-    if (settings.WHISPER_MODEL) throw new Error("WHISPER_MODEL requires STT_PROVIDER=whisper-cpp.");
     environment.STT_PROVIDER = stt;
   } else throw new Error(`Unsupported STT_PROVIDER "${stt}".`);
 

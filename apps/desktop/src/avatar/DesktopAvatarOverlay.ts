@@ -313,10 +313,16 @@ export const DesktopAvatarOverlay =
                 userTranscript = event.text;
                 speechActivityMessage =
                   event.type === "final"
-                    ? "Transcript ready."
+                    ? event.text.trim()
+                      ? "Transcript ready."
+                      : "No speech recognized."
                     : "Transcribing speech…";
                 if (event.type === "final") {
-                  void conversation?.submitUserMessage(event.text);
+                  if (event.text.trim()) {
+                    void conversation?.submitUserMessage(event.text);
+                  } else {
+                    conversation?.setListening(true);
+                  }
                 }
                 if (layer) m.redraw();
               }

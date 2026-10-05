@@ -31,5 +31,11 @@ describe("speech provider selection", () => {
     expect(() => createSpeechProviders({
       STT_PROVIDER: "azure", TTS_PROVIDER: "mock",
     })).toThrow("STT_PROVIDER");
+    expect(() => createSpeechProviders({
+      STT_PROVIDER: "whistle", TTS_PROVIDER: "mock",
+    })).toThrow("WHISTLE_URL");
+    expect(() => createSpeechProviders({
+      STT_PROVIDER: "parakeet-tdt", TTS_PROVIDER: "mock",
+    })).toThrow("PARAKEET_TDT_URL");
   });
 });
