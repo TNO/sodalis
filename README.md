@@ -1,5 +1,8 @@
 # Sodalis
 
+The name comes from Latin *sodalis*, meaning a companion, friend, or
+associate: an assistant that accompanies you at your desktop.
+
 Sodalis is a local-first personal desktop with an embodied assistant. The
 initial avatar vertical slice hosts the MIT-licensed Aster desktop beside an
 optional Three.js/TalkingHead avatar runtime and an accessible assistant panel.
@@ -103,7 +106,11 @@ connected to Sodalis playback) are described in the
 `pnpm dev` starts the Vite desktop. To use the already running Compose
 backends while editing the desktop, run
 `SODALIS_API_GATEWAY_URL=http://127.0.0.1:4176 pnpm dev` and open Vite's
-printed URL (usually port 5173). For manual service development, run
+printed URL (usually port 5173). Open the developer-only **Avatar Lab**
+controls by expanding **Avatar Lab** in the **Assistant** sidebar of that
+Vite page. It is not shown in the production build at
+`http://127.0.0.1:4176`; there, click the avatar to open the
+**Talk with Sodalis** conversation panel. For manual service development, run
 `pnpm dev:speech`, `pnpm dev:ai`, or `pnpm dev:home` with the settings in
 [`apps/server/README.md`](apps/server/README.md). The desktop proxies their
 APIs by path; see the
