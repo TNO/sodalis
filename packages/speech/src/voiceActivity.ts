@@ -14,9 +14,11 @@ export interface EnergyVoiceActivityDetectorOptions {
   endFrames?: number;
 }
 
-const DEFAULT_THRESHOLD_RMS = 0.025;
+const DEFAULT_THRESHOLD_RMS = 0.045;
 const DEFAULT_START_FRAMES = 2;
-const DEFAULT_END_FRAMES = 12;
+// 35 frames * 20ms = 700ms hangover, long enough to survive natural
+// inter-word/sentence pauses without splitting one utterance into many.
+const DEFAULT_END_FRAMES = 35;
 
 export function createEnergyVoiceActivityDetector(
   options: EnergyVoiceActivityDetectorOptions = {},

@@ -38,4 +38,18 @@ describe("energy voice activity detector", () => {
       createEnergyVoiceActivityDetector({ thresholdRms: 0, startFrames: 1 }),
     ).toThrow("VAD thresholdRms must be a finite number greater than zero.");
   });
+
+  it("uses a hangover long enough to survive a natural mid-sentence pause", () => {
+    const detector = createEnergyVoiceActivityDetector();
+
+    expect(detector.process(frame(0.2), 0)).toEqual([]);
+    expect(detector.process(frame(0.2), 20)).toEqual([
+      { type: "speech-start", timestampMs: 20 },
+    ]);
+    // A 400ms pause between words must not end the segment.
+    for (let t = 40; t <= 420; t += 20) {
+      expect(detector.process(frame(0), t)).toEqual([]);
+    }
+    expect(detector.process(frame(0.2), 440)).toEqual([]);
+  });
 });

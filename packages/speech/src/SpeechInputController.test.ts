@@ -52,6 +52,9 @@ function makeController(
       endFrames: 2,
     }),
     createSessionId: () => "speech-session-1",
+    // Most tests use short synthetic segments; disable the duration gate
+    // unless a test overrides it to exercise that behavior directly.
+    minSegmentDurationMs: 0,
     ...options,
   });
 }
@@ -270,6 +273,72 @@ describe("speech input controller", () => {
       error: "Microphone disconnected.",
     });
     await vi.waitFor(() => expect(capture.stop).toHaveBeenCalled());
+    await controller.dispose();
+  });
+
+  it("suppresses onSpeechEnd for segments shorter than the minimum duration", async () => {
+    const { capture, callbacks } = createCapture();
+    const onSpeechStart = vi.fn();
+    const onSpeechEnd = vi.fn();
+    const controller = makeController(capture, {
+      onSpeechStart,
+      onSpeechEnd,
+      minSegmentDurationMs: 300,
+    });
+    await controller.start();
+
+    callbacks().onSamples(samples(0.2), 20);
+    callbacks().onSamples(samples(0.2), 40);
+    callbacks().onSamples(samples(0.01), 60);
+    callbacks().onSamples(samples(0.01), 80);
+
+    expect(onSpeechStart).toHaveBeenCalledOnce();
+    await vi.waitFor(() =>
+      expect(capture.endSpeechSegment).toHaveBeenCalledOnce(),
+    );
+    expect(onSpeechEnd).not.toHaveBeenCalled();
+    await controller.dispose();
+  });
+
+  it("still reports onSpeechEnd for segments at or above the minimum duration", async () => {
+    const { capture, callbacks } = createCapture();
+    const onSpeechEnd = vi.fn();
+    const controller = makeController(capture, {
+      onSpeechEnd,
+      minSegmentDurationMs: 300,
+    });
+    await controller.start();
+
+    callbacks().onSamples(samples(0.2), 20);
+    callbacks().onSamples(samples(0.2), 40);
+    callbacks().onSamples(samples(0.01), 340);
+    callbacks().onSamples(samples(0.01), 360);
+
+    await vi.waitFor(() =>
+      expect(onSpeechEnd).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "speech-end", timestampMs: 360 }),
+      ),
+    );
+    await controller.dispose();
+  });
+
+  it("suppresses onSpeechEnd on push-to-talk release for too-short segments", async () => {
+    const { capture, callbacks } = createCapture();
+    const onSpeechEnd = vi.fn();
+    const controller = makeController(capture, {
+      onSpeechEnd,
+      minSegmentDurationMs: 300,
+      now: () => 90,
+    });
+    await controller.start();
+    callbacks().onSamples(samples(0.2), 20);
+    callbacks().onSamples(samples(0.2), 40);
+
+    await controller.stop();
+
+    expect(capture.endSpeechSegment).toHaveBeenCalledOnce();
+    expect(onSpeechEnd).not.toHaveBeenCalled();
+    expect(controller.state).toEqual({ status: "idle" });
     await controller.dispose();
   });
 });

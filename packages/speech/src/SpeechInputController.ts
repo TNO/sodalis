@@ -54,6 +54,8 @@ export interface SpeechInputControllerOptions {
   detector: VoiceActivityDetector;
   createSessionId?: () => SpeechSessionId;
   now?: () => number;
+  /** Segments shorter than this are treated as noise and never reach STT. */
+  minSegmentDurationMs?: number;
   requestVisibleFrame?: (callback: (timestampMs: number) => void) => void;
   onStateChange?: (state: Readonly<SpeechInputState>) => void;
   onSpeechStart?: (event: SpeechActivityEvent) => void;
@@ -107,6 +109,7 @@ export function createSpeechInputController(
   const now = options.now ?? (() => performance.now());
   const requestVisibleFrame =
     options.requestVisibleFrame ?? defaultRequestVisibleFrame;
+  const minSegmentDurationMs = options.minSegmentDurationMs ?? 300;
   let state: SpeechInputState = { status: "idle" };
   let activeAbortController: AbortController | undefined;
   let activeSessionId: SpeechSessionId | undefined;
@@ -117,6 +120,7 @@ export function createSpeechInputController(
   let segmentOperation: Promise<void> = Promise.resolve();
   let segmentSequence = 0;
   let activeSegmentId: string | undefined;
+  let activeSegmentStartMs: number | undefined;
   let speechActive = false;
   let stopping = false;
   let disposed = false;
@@ -225,6 +229,7 @@ export function createSpeechInputController(
     if (type === "speech-start") {
       speechActive = true;
       activeSegmentId = segmentId;
+      activeSegmentStartMs = timestampMs;
       interruptOutput(event);
       options.onSpeechStart?.(event);
       if (capture.beginSpeechSegment) {
@@ -236,17 +241,22 @@ export function createSpeechInputController(
     } else {
       speechActive = false;
       activeSegmentId = undefined;
+      const isTooShort =
+        activeSegmentStartMs !== undefined &&
+        timestampMs - activeSegmentStartMs < minSegmentDurationMs;
+      activeSegmentStartMs = undefined;
       if (capture.endSpeechSegment) {
         void queueSegmentOperation(async () => {
           await capture.endSpeechSegment?.();
           if (
             runGeneration === generation &&
-            activeSessionId === sessionId
+            activeSessionId === sessionId &&
+            !isTooShort
           ) {
             options.onSpeechEnd?.(event);
           }
         }, runGeneration);
-      } else {
+      } else if (!isTooShort) {
         options.onSpeechEnd?.(event);
       }
     }
@@ -276,6 +286,7 @@ export function createSpeechInputController(
       segmentOperation = Promise.resolve();
       segmentSequence = 0;
       activeSegmentId = undefined;
+      activeSegmentStartMs = undefined;
       speechActive = false;
       stopping = false;
       options.detector.reset();
@@ -348,25 +359,31 @@ export function createSpeechInputController(
     const runGeneration = generation;
     if (speechActive && sessionId) {
       speechActive = false;
+      const endTimestampMs = now();
       const event: SpeechActivityEvent = {
         type: "speech-end",
         sessionId,
         segmentId:
           activeSegmentId ?? `${sessionId}:segment-${segmentSequence}`,
-        timestampMs: now(),
+        timestampMs: endTimestampMs,
       };
+      const isTooShort =
+        activeSegmentStartMs !== undefined &&
+        endTimestampMs - activeSegmentStartMs < minSegmentDurationMs;
       activeSegmentId = undefined;
+      activeSegmentStartMs = undefined;
       if (capture.endSpeechSegment) {
         await queueSegmentOperation(async () => {
           await capture.endSpeechSegment?.();
           if (
             runGeneration === generation &&
-            activeSessionId === sessionId
+            activeSessionId === sessionId &&
+            !isTooShort
           ) {
             options.onSpeechEnd?.(event);
           }
         }, runGeneration);
-      } else {
+      } else if (!isTooShort) {
         options.onSpeechEnd?.(event);
       }
     }
