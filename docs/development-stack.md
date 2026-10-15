@@ -351,27 +351,76 @@ Piper remains the proven local default. The benchmark is a listening
 comparison, **not** evidence to close task 0036 or select a new provider.
 
 On Linux (WSL2 Ubuntu 24.04 on an Intel i7-1355U laptop, 12 logical CPUs,
-about 7.6 GB RAM assigned to WSL, no GPU) the 2026-10-08 run measured CPU
-only; these times are not comparable with the M4 Max table above.
+about 7.6 GB RAM assigned to WSL, no GPU) the 2026-10-08/15 runs measured CPU
+only; these times are not comparable with the M4 Max table above. Parakeet
+WER is the corpus word error rate after transcribing each clip through the
+local Sodalis STT API (see the workflow below); it includes recognizer
+mistakes and is an intelligibility proxy, not a quality score.
 
-| Engine / voice | Clips | Warm-up (excluded) | Median synthesis | Median RTF | Peak process RSS |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Piper / `nl_BE-nathalie-medium` | 50 | 0.40 s | 0.36 s | 0.13 | 0.26 GiB |
-| Chatterbox Multilingual V3 / built-in voice, `nl` | 5 | 42–70 s | 38.69 s (26.9–75.1 s) | 15.6 | 6.10 GiB |
+| Engine / voice | Clips | Warm-up (excluded) | Median synthesis | Median RTF | Peak process RSS | Parakeet WER | Gates (≤ 1.5 s median, ≤ 10% WER) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Piper / `nl_NL-pim-medium` | 50 | 0.35 s | 0.52 s | 0.12 | 0.31 GiB | 3.9% | pass |
+| Piper / `nl_BE-nathalie-medium` (default) | 50 | 0.40 s | 0.36 s | 0.13 | 0.26 GiB | 5.3% | pass |
+| Piper / `nl_NL-ronnie-medium` | 50 | 0.58 s | 0.48 s | 0.12 | 0.30 GiB | 5.6% | pass |
+| Piper / `nl_BE-nathalie-x_low` (16 kHz) | 50 | 0.43 s | 0.24 s | 0.09 | 0.19 GiB | 7.0% | pass |
+| Piper / `nl_BE-rdh-medium` | 50 | 0.74 s | 0.72 s | 0.30 | 0.27 GiB | 8.7% | pass |
+| Piper / `nl_BE-rdh-x_low` (16 kHz) | 50 | 0.45 s | 0.32 s | 0.13 | 0.18 GiB | 11.1% | fails WER |
+| Piper / `nl_NL-mls_5809-low` (16 kHz) | 50 | 0.28 s | 0.41 s | 0.10 | 0.28 GiB | 39.4% | fails WER |
+| Piper / `nl_NL-mls-medium` | 50 | 0.49 s | 0.61 s | 0.12 | 0.32 GiB | 55.6% | fails WER |
+| Piper / `nl_NL-mls_7432-low` (16 kHz) | 50 | 0.39 s | 0.33 s | 0.13 | 0.22 GiB | 68.4% | fails WER |
+| MMS-TTS `facebook/mms-tts-nld` (16 kHz) | 50 | 9.15 s | 4.21 s | 1.01 | 0.92 GiB | 15.7% | fails speed and WER |
+| Chatterbox Multilingual V3 / built-in voice, `nl` | 5 | 42–70 s | 38.69 s (26.9–75.1 s) | 15.6 | 6.10 GiB | 2.8% (5 clips) | fails speed |
+| Parler-TTS Mini Multilingual v1.1 / Mark | 5 | 175 s | 152.4 s (102–205 s) | 49.5 | 4.49 GiB | 0% (5 clips) | fails speed |
 
-Chatterbox sample 01 came from a separate pilot process. The run stopped at
-five sentences because every clip was at least 14 times slower than real time;
-a first attempt also crashed the WSL VM while weights were still downloading.
-On this class of laptop CPU, Chatterbox is not viable for interactive replies.
+Chatterbox sample 01 came from a separate pilot process. Chatterbox and
+Parler stopped at five sentences because every clip was at least 14 (Parler:
+47) times slower than real time; a first Chatterbox attempt also crashed the
+WSL VM while weights were still downloading. On this class of laptop CPU,
+neither is viable for interactive replies. The three Multilingual LibriSpeech
+Piper voices are largely unintelligible to Parakeet; the passing five Piper
+voices go to the listening review. MMS-TTS is CC BY-NC and was run for local
+evaluation only. Azure was skipped because no key was configured.
+
+#### Score intelligibility and listen
+
+With the Parakeet STT profile running locally (a separate Compose project
+avoids touching a running stack; `/api/speech` is proxied by the gateway):
+
+```sh
+COMPOSE_PROJECT_NAME=sodalis-tts-eval SODALIS_SERVICE_PREFIX=sodalis-tts-eval \
+  SODALIS_PORT=4186 STT_PROVIDER=parakeet-tdt PARAKEET_TDT_URL=http://parakeet-tdt:8080 \
+  TTS_PROVIDER=piper-http PIPER_HTTP_URL=http://piper:5000 LLM_PROVIDER=mock \
+  docker compose -f compose.yaml --profile parakeet-tdt up --build -d gateway speech parakeet-tdt
+# Other Dutch Piper voices download into models/piper on first use.
+python scripts/tts-compare.py --backend piper --voice nl_NL-pim-medium --out models/tts-comparison-wsl
+# Transcribe every clip (resumable) into <run>/intelligibility.json.
+pnpm exec tsx scripts/tts-intelligibility.ts models/tts-comparison-wsl http://127.0.0.1:4186
+# Listening page for runs passing both gates (--review-all includes the others).
+python3 scripts/tts-compare.py --out models/tts-comparison-wsl --review
+# After exporting review-scores.json from review.html:
+python3 scripts/tts-compare.py --out models/tts-comparison-wsl --score review-scores.json
+python3 -m unittest scripts/test_tts_compare.py
+```
+
+The review uses ten sentences: five fixed representatives (greeting,
+apology, choice question, time/number, long sentence) plus the five with
+the highest mean WER across fully scored runs. Each clip gets a 1–5 score for
+Dutch pronunciation and for naturalness, plus error flags. `--score` writes
+`scores.md`/`scores.json` and ranks only runs that pass both gates by the
+mean listener score. Clips go only to a local HTTP origin. MMS needs
+`torch` and `transformers`; Parler needs `parler_tts==0.2.2`; Azure runs
+only when `AZURE_TTS_KEY`, `AZURE_TTS_URL`, and a Dutch `AZURE_TTS_VOICE` are set.
 
 | Candidate | Dutch voice / latency | Streaming / cancellation | License and platforms | Decision |
 | --- | --- | --- | --- | --- |
-| Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained |
+| Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline. Of nine Dutch v1.0.0 voices on Linux laptop CPU, five pass the speed and Parakeet WER gates (pim 3.9%, nathalie 5.3%, ronnie 5.6%); MLS voices 39–68% WER | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained pending listener scores for the five passing voices |
+| MMS-TTS (`facebook/mms-tts-nld`) | Dutch VITS; Linux laptop CPU: 4.2 s median (RTF ~1), 15.7% Parakeet WER | Complete waveform per call; no streaming | [CC BY-NC 4.0 weights](https://huggingface.co/facebook/mms-tts-nld); PyTorch CPU | Rejected: fails speed and WER gates, non-commercial licence |
+| Parler-TTS Mini Multilingual v1.1 | [Model card](https://huggingface.co/parler-tts/parler-tts-mini-multilingual-v1.1) lists Dutch speakers; speaker Mark, 0/36 word errors on five clips but 152 s median (RTF ~50) on Linux laptop CPU, 4.5 GiB RSS | Library offers token streaming; not evaluated | Apache-2.0; PyTorch CPU/CUDA | Rejected on CPU; GPU latency unmeasured |
 | Chatterbox Multilingual V3 | [23-language model](https://github.com/resemble-ai/chatterbox) includes Dutch; Linux laptop CPU: 38.7 s median for 1.4–2.8 s of audio (RTF ~16), 6.1 GiB RSS; Dutch quality not listener-rated | `generate` returns complete audio; Sodalis-compatible incremental streaming and in-flight cancellation unverified | [MIT code](https://github.com/resemble-ai/chatterbox/blob/master/LICENSE) and [MIT model weights](https://huggingface.co/ResembleAI/chatterbox); CPU/MPS/CUDA documented, roughly 3.2 GB of model weights for V3; PyPI 0.1.7 lacks V3 | No profile: far too slow on laptop CPU; GPU/MPS latency still unmeasured |
 | Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch (<10k training hours). CPU VM produced no audio in 160 s; native M4 Max MPS returned 1.30 s of audio in 3.89 s, intelligibility not listener-validated | Sends a WAV header before segments; pinned patch prevents duplicate final audio. Client disconnect did **not** stop native MPS inference promptly | [v1.5 source LICENSE Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), but package metadata declares CC BY-NC-SA; **weights CC BY-NC-SA 4.0**. CPU Compose and native MPS tested on macOS ARM only | Standalone evaluation-only Compose profile; **not** selectable as Sodalis TTS because effective inference cancellation failed |
 | F5-TTS | [Official pretrained models](https://github.com/SWivid/F5-TTS/blob/main/src/f5_tts/infer/SHARED.md) are trained on Chinese and English; no verified Dutch checkpoint/quality | CLI chunks long text; socket streaming exists; no Sodalis adapter/cancellation measurement | [MIT code, CC BY-NC weights](https://github.com/SWivid/F5-TTS); PyTorch CPU/MPS/CUDA documented, Docker example targets NVIDIA GPU | No local profile until a Dutch-capable checkpoint, matching terms, and CPU/MPS latency are verified |
 | Azure AI Speech | [Dutch neural voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts); no local quality/latency measurement | [REST streaming raw PCM](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech), HTTP request cancellation | Hosted on Azure; account, key, network, billing and text transfer required; runs via Sodalis API from all three desktop platforms | Explicit opt-in `azure` adapter, not selected by default |
-| Voxtral MLX via local `voxtral-api` | [Voxtral 4B TTS MLX](https://huggingface.co/mlx-community/Voxtral-4B-TTS-2603-mlx-6bit) lists `nl_female` and `nl_male` at 24 kHz; Dutch output/latency unmeasured here | Model yields internal chunks, but the existing `/v1/audio/speech` route synthesizes a complete file before responding; no HTTP first-audio or inference cancellation verified | Converted weights CC BY-NC 4.0; Apple Silicon MLX; check each backend's own model terms | Promising Dutch candidate for a future native-Mac trial, not a Sodalis provider |
+| Voxtral MLX via local `voxtral-api` | [Voxtral 4B TTS MLX](https://huggingface.co/mlx-community/Voxtral-4B-TTS-2603-mlx-6bit) lists `nl_female` and `nl_male` at 24 kHz; Dutch output/latency unmeasured here | Model yields internal chunks, but the existing `/v1/audio/speech` route synthesizes a complete file before responding; no HTTP first-audio or inference cancellation verified | Converted weights CC BY-NC 4.0; Apple Silicon MLX; check each backend's own model terms | Promising Dutch candidate for a future native-Mac trial, not a Sodalis provider; MLX-only, so not runnable on the Linux/Windows evaluation laptop |
 | VibeVoice MLX | [Original 1.5B model card](https://huggingface.co/microsoft/VibeVoice-1.5B) lists **English/Chinese**, not Dutch; local project's M4 Max throughput numbers are not Sodalis measurements | Internal VAE decoding streams; local CLI writes WAV and the `voxtral-api` HTTP route returns a file; no short-reply or cancellation measurement | [MIT original weights](https://huggingface.co/microsoft/VibeVoice-1.5B); verify converted checkpoint separately; MLX on Apple Silicon | Do not assume Dutch support from local examples |
 | KugelAudio-0-Open | [Model card](https://huggingface.co/kugelaudio/kugelaudio-0-open) lists Dutch, with quality varying by language; German preference tests do not measure Dutch | Local fork supports reusable voice embeddings; streaming HTTP and inference cancellation unverified | MIT source and model card; verify voice-reference rights/consent; native Mac example, other platforms unverified | Candidate for measured Dutch voice and latency trial, not yet an adapter |
 

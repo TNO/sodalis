@@ -129,9 +129,20 @@ without changing the Sodalis browser contract.
   quality, streaming and cancellation remain unmeasured. Azure stays
   untested live (no key available). F5-TTS remains ruled out for lack of a
   verified Dutch checkpoint.
-- Open scope question for the user: the planning session also proposed
-  extra Dutch candidates outside this task's list (all nine Piper Dutch
-  voices, MMS-TTS `facebook/mms-tts-nld` (CC BY-NC), Parler-TTS Mini
-  Multilingual) plus an automated Parakeet round-trip WER gate and a
-  10-sentence listening form. These were **not** implemented pending
-  confirmation that 0036 should be extended.
+- 2026-10-15 Copilot: The user approved extending this task with extra Dutch
+  candidates (all nine Piper Dutch voices, MMS-TTS `facebook/mms-tts-nld`
+  CC BY-NC for local evaluation only, Parler-TTS Mini Multilingual v1.1
+  Apache-2.0), an automated Parakeet round-trip WER gate, and a 10-sentence
+  listening form. `tts-compare.py` gained `--voice`, `mms`, `parler`, and
+  `azure` (skipped without `AZURE_TTS_KEY`) backends plus `--review` and
+  `--score`; `scripts/tts-intelligibility.ts` transcribes clips through the
+  local Sodalis STT API. Gates: median synthesis ≤ 1.5 s, corpus WER ≤ 10%.
+  On the same WSL laptop, five Piper voices pass both (WER: pim 3.9%,
+  nathalie-medium 5.3%, ronnie 5.6%, nathalie-x_low 7.0%, rdh-medium 8.7%;
+  medians 0.24–0.72 s); rdh-x_low (11.1%) and the three MLS voices (39–68%)
+  fail WER. MMS fails speed and WER (4.2 s, 15.7%). Parler transcribed
+  perfectly on five clips but took 152 s median (RTF ~50) and was stopped,
+  as was Chatterbox. Voxtral is MLX-only and was not run on Linux. Azure was
+  skipped (no key). The listener scores for the five passing Piper voices are
+  still pending; Piper remains the only validated local engine, and no
+  provider other than Piper meets the latency contract on laptop CPU.
