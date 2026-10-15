@@ -275,7 +275,26 @@ PYTHONDONTWRITEBYTECODE=1 HF_HUB_OFFLINE=1 \
 
 Voxtral uses the cached 6-bit MLX model and `nl_female` preset; KugelAudio
 uses its `warm` preset and `nl` language hint. Neither needs an unlicensed
-reference recording. `tts-mlx` also exposes other model families, but they
+reference recording.
+
+Chatterbox Multilingual V3 uses its built-in reference voice with
+`language_id="nl"` on CPU (fixed seed, no cloning). PyPI `chatterbox-tts`
+0.1.7 predates V3, so install the pinned source commit over it in an ignored
+virtual environment; the first run downloads about 3 GB of weights into the
+Hugging Face cache:
+
+```sh
+python3 -m venv ~/.venvs/tts-chatterbox
+~/.venvs/tts-chatterbox/bin/pip install torch==2.6.0 torchaudio==2.6.0 \
+  --index-url https://download.pytorch.org/whl/cpu
+~/.venvs/tts-chatterbox/bin/pip install chatterbox-tts
+~/.venvs/tts-chatterbox/bin/pip install --force-reinstall --no-deps \
+  'git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2'
+~/.venvs/tts-chatterbox/bin/python scripts/tts-compare.py \
+  --backend chatterbox --limit 5 --out models/tts-comparison-wsl
+```
+
+`tts-mlx` also exposes other model families, but they
 are **not** interchangeable Dutch candidates: VibeVoice 1.5B's model card
 lists English/Chinese, while cloning backends need approved reference audio.
 To add Fish, start the native MPS server described below in a separate
@@ -331,10 +350,24 @@ numbers do not establish time to first audio or interruption on disconnect.
 Piper remains the proven local default. The benchmark is a listening
 comparison, **not** evidence to close task 0036 or select a new provider.
 
+On Linux (WSL2 Ubuntu 24.04 on an Intel i7-1355U laptop, 12 logical CPUs,
+about 7.6 GB RAM assigned to WSL, no GPU) the 2026-10-08 run measured CPU
+only; these times are not comparable with the M4 Max table above.
+
+| Engine / voice | Clips | Warm-up (excluded) | Median synthesis | Median RTF | Peak process RSS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Piper / `nl_BE-nathalie-medium` | 50 | 0.40 s | 0.36 s | 0.13 | 0.26 GiB |
+| Chatterbox Multilingual V3 / built-in voice, `nl` | 5 | 42–70 s | 38.69 s (26.9–75.1 s) | 15.6 | 6.10 GiB |
+
+Chatterbox sample 01 came from a separate pilot process. The run stopped at
+five sentences because every clip was at least 14 times slower than real time;
+a first attempt also crashed the WSL VM while weights were still downloading.
+On this class of laptop CPU, Chatterbox is not viable for interactive replies.
+
 | Candidate | Dutch voice / latency | Streaming / cancellation | License and platforms | Decision |
 | --- | --- | --- | --- | --- |
 | Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained |
-| Chatterbox Multilingual V3 | [23-language model](https://github.com/resemble-ai/chatterbox) includes Dutch; no local voice or latency measurement yet | `generate` returns complete audio; Sodalis-compatible incremental streaming and in-flight cancellation unverified | [MIT code](https://github.com/resemble-ai/chatterbox/blob/master/LICENSE) and [MIT model weights](https://huggingface.co/ResembleAI/chatterbox); CPU/MPS/CUDA documented, roughly 3.2 GB of model weights for V3 | No profile until Dutch voice, memory and time-to-first-audio are measured on the target Mac |
+| Chatterbox Multilingual V3 | [23-language model](https://github.com/resemble-ai/chatterbox) includes Dutch; Linux laptop CPU: 38.7 s median for 1.4–2.8 s of audio (RTF ~16), 6.1 GiB RSS; Dutch quality not listener-rated | `generate` returns complete audio; Sodalis-compatible incremental streaming and in-flight cancellation unverified | [MIT code](https://github.com/resemble-ai/chatterbox/blob/master/LICENSE) and [MIT model weights](https://huggingface.co/ResembleAI/chatterbox); CPU/MPS/CUDA documented, roughly 3.2 GB of model weights for V3; PyPI 0.1.7 lacks V3 | No profile: far too slow on laptop CPU; GPU/MPS latency still unmeasured |
 | Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch (<10k training hours). CPU VM produced no audio in 160 s; native M4 Max MPS returned 1.30 s of audio in 3.89 s, intelligibility not listener-validated | Sends a WAV header before segments; pinned patch prevents duplicate final audio. Client disconnect did **not** stop native MPS inference promptly | [v1.5 source LICENSE Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), but package metadata declares CC BY-NC-SA; **weights CC BY-NC-SA 4.0**. CPU Compose and native MPS tested on macOS ARM only | Standalone evaluation-only Compose profile; **not** selectable as Sodalis TTS because effective inference cancellation failed |
 | F5-TTS | [Official pretrained models](https://github.com/SWivid/F5-TTS/blob/main/src/f5_tts/infer/SHARED.md) are trained on Chinese and English; no verified Dutch checkpoint/quality | CLI chunks long text; socket streaming exists; no Sodalis adapter/cancellation measurement | [MIT code, CC BY-NC weights](https://github.com/SWivid/F5-TTS); PyTorch CPU/MPS/CUDA documented, Docker example targets NVIDIA GPU | No local profile until a Dutch-capable checkpoint, matching terms, and CPU/MPS latency are verified |
 | Azure AI Speech | [Dutch neural voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts); no local quality/latency measurement | [REST streaming raw PCM](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech), HTTP request cancellation | Hosted on Azure; account, key, network, billing and text transfer required; runs via Sodalis API from all three desktop platforms | Explicit opt-in `azure` adapter, not selected by default |

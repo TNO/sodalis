@@ -16,9 +16,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SENTENCES = json.loads((ROOT / "scripts/tts-sentences.json").read_text())
-BACKENDS = ("piper", "fish", "voxtral", "kugelaudio")
+BACKENDS = ("piper", "fish", "voxtral", "kugelaudio", "chatterbox")
 VOICES = {"piper": "nl_BE-nathalie-medium", "fish": "unconditioned",
-          "voxtral": "nl_female", "kugelaudio": "warm"}
+          "voxtral": "nl_female", "kugelaudio": "warm",
+          "chatterbox": "multilingual-v3 built-in voice, nl"}
+DEVICES = {"piper": "CPU", "fish": "MPS (verify server log)", "voxtral": "Metal/MLX",
+           "kugelaudio": "Metal/MLX", "chatterbox": "CPU"}
 
 
 def synthesizer(args):
@@ -30,6 +33,24 @@ def synthesizer(args):
         def synthesize(text, path):
             with wave.open(str(path), "wb") as audio:
                 voice.synthesize_wav(text, audio)
+
+        return synthesize
+
+    if args.backend == "chatterbox":
+        import torch
+        from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+
+        model = ChatterboxMultilingualTTS.from_pretrained(device="cpu", t3_model="v3")
+
+        def synthesize(text, path):
+            torch.manual_seed(0)
+            with torch.inference_mode():
+                samples = model.generate(text, language_id="nl")[0].clamp(-1, 1)
+            with wave.open(str(path), "wb") as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(model.sr)
+                audio.writeframes((samples * 32767).round().to(torch.int16).numpy().tobytes())
 
         return synthesize
 
@@ -98,7 +119,9 @@ def gpu_memory():
 def process_peak(pid, action):
     if not pid:
         action()
-        return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024**3, 3)
+        # ru_maxrss is bytes on macOS and KiB on Linux.
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round(peak / (1024**3 if sys.platform == "darwin" else 1024**2), 3)
 
     stop = threading.Event()
     values = []
@@ -130,8 +153,7 @@ def run(args):
     manifest = directory / "metrics.json"
     data = json.loads(manifest.read_text()) if manifest.exists() else {
         "backend": args.backend, "voice": VOICES[args.backend],
-        "device": {"piper": "CPU", "fish": "MPS (verify server log)",
-                   "voxtral": "Metal/MLX", "kugelaudio": "Metal/MLX"}[args.backend],
+        "device": DEVICES[args.backend],
         "results": {},
     }
     if data["backend"] != args.backend or data["voice"] != VOICES[args.backend]:

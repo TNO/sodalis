@@ -118,3 +118,20 @@ without changing the Sodalis browser contract.
   measurements are local-only under ignored `models/tts-comparison/`.
   Dutch intelligibility, prosody, and transcript fidelity need human review;
   no production adapter, external account, or cloning consent is implied.
+- 2026-10-08 Copilot: Measured Linux CPU runtime (WSL2 Ubuntu 24.04, Intel
+  i7-1355U, 12 logical CPUs, ~7.6 GB RAM, no GPU) with `tts-compare.py`, which
+  now has a `chatterbox` backend and reports Linux RSS in the correct units.
+  Piper `nl_BE-nathalie-medium`: 50/50 clips, 0.36 s median, RTF 0.13,
+  0.26 GiB RSS. Chatterbox Multilingual V3 (pinned source; PyPI 0.1.7 lacks
+  V3; built-in voice, `nl`, no cloning): 38.7 s median over 5 clips (RTF
+  ~16), 6.1 GiB RSS; one attempt crashed the WSL VM. Chatterbox therefore
+  fails interactive latency on laptop CPU; GPU/MPS timing, Dutch listening
+  quality, streaming and cancellation remain unmeasured. Azure stays
+  untested live (no key available). F5-TTS remains ruled out for lack of a
+  verified Dutch checkpoint.
+- Open scope question for the user: the planning session also proposed
+  extra Dutch candidates outside this task's list (all nine Piper Dutch
+  voices, MMS-TTS `facebook/mms-tts-nld` (CC BY-NC), Parler-TTS Mini
+  Multilingual) plus an automated Parakeet round-trip WER gate and a
+  10-sentence listening form. These were **not** implemented pending
+  confirmation that 0036 should be extended.
