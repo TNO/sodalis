@@ -409,7 +409,7 @@ WSL VM while weights were still downloading. On this class of laptop CPU,
 neither is viable for interactive replies. The three Multilingual LibriSpeech
 Piper voices are largely unintelligible to Parakeet; the passing five Piper
 voices go to the listening review. MMS-TTS is CC BY-NC and was run for local
-evaluation only. Azure was skipped because no key was configured.
+evaluation only. Azure was skipped in that run because no key was configured; for the later Foundry probe see the [evaluation](evaluations/tts-providers.md).
 
 #### Score intelligibility and listen
 

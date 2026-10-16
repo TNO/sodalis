@@ -25,15 +25,26 @@ Commands to reproduce every run are in
   puts it out of scope for an organisational or commercial Sodalis
   deployment, just like MMS, Fish 1.5, and F5. It is also MLX-only, and its
   HTTP API returns complete files without in-flight cancellation.
-- Azure AI Speech, reached through a Microsoft Foundry resource, was
-  probed live with one sentence per voice. Every probed voice was fully
-  intelligible to Parakeet, including the English HD voice Adam, and all
-  accept the Sodalis 22,050 Hz format. The 50-sentence benchmark and
-  listening review are still to do. Fish Speech 1.5 failed cancellation;
-  F5-TTS has no Dutch checkpoint.
+- Fish Speech 1.5 failed cancellation; F5-TTS has no Dutch checkpoint.
+- **Azure AI Speech is the only non-Piper candidate that looks interactive,
+  but it is a cloud service.** It was reached through a Microsoft Foundry
+  resource and probed live with one sentence per voice:
+  - Every probed voice was fully intelligible to Parakeet, including the
+    English multilingual HD voice `en-US-Adam:DragonHDLatestNeural`.
+  - All accept the Sodalis 22,050 Hz format.
+  - Audio started after about 0.4–0.5 s. Native Dutch voices finished in
+    0.5–0.7 s; Adam took about 1.8 s.
+
+  The 50-sentence benchmark, live cancellation, and listening review are
+  still to do.
+- **A barge-in crash was found and fixed.** The new live Sodalis check showed
+  that a client disconnect during streaming crashed the speech service, in
+  both the Piper HTTP and the Azure adapters. Piper in-flight cancellation
+  now passes live.
 - **Recommendation:** keep Piper `nl_BE-nathalie-medium` as the default; no
-  provider change is justified by this evidence. The voice choice among the
-  five passing Piper voices awaits the listening review.
+  provider change is justified by this evidence. Azure stays an explicit
+  opt-in, never a fallback. The default voice choice awaits the listening
+  review.
 
 ## Scope and contract
 
@@ -103,7 +114,7 @@ Model weights and generated audio stay in the ignored `models/` folder.
 | MMS-TTS `facebook/mms-tts-nld` | 50 | 9.15 s | 4.21 s | 1.01 | 0.92 GiB | 16,000 Hz | 15.7% | fails both |
 | Chatterbox Multilingual V3, built-in voice | 5 | 42–70 s | 38.69 s | 15.6 | 6.10 GiB | 24,000 Hz | 2.8% | fails speed |
 | Parler-TTS Mini Multilingual v1.1, "Mark" | 5 | 175 s | 152.4 s | 49.5 | 4.49 GiB | 44,100 Hz | 0% | fails speed |
-| Azure AI Speech | — | — | — | — | — | — | — | not run (no key) |
+| Azure AI Speech | — | — | — | — | — | — | — | 50-sentence run pending; see the Foundry probe below |
 
 Chatterbox and Parler were stopped after five clips: each clip took 14–60
 times longer than its audio. A first Chatterbox attempt crashed the WSL VM
@@ -114,7 +125,7 @@ while its ~3 GB of weights were downloading.
 | Provider | First audio, short / medium / long (median) | Uncancelled 1,007-character reply | Cancellation (3 × in flight) | Speech after cancellation |
 | --- | --- | --- | --- | --- |
 | Piper `nl_BE-nathalie-medium` via Piper HTTP | 72 / 127 / 173 ms | first audio 2.58 s, end 2.65 s, 53.5 s of audio | Passed when cancelled 500 ms after the request | Audio after 200 ms |
-| Azure AI Speech | — | — | — | not run (no key) |
+| Azure AI Speech | — | — | — | pending (needs the user's approval) |
 
 Piper HTTP returns audio only after the whole reply has been synthesized:
 first audio is within a few milliseconds of the end of the stream. A user
@@ -214,6 +225,18 @@ KugelAudio) are 3–50 times slower than real time on available hardware.
 Voxtral on Metal is the only non-Piper engine near the 1.5 s median gate,
 but its CC BY-NC 4.0 licence likely rules it out regardless of speed.
 
+Azure is fast because synthesis runs in the cloud, not on the laptop. In the
+single-sentence probe:
+
+- audio started after 0.36–0.55 s for every voice (including a fresh TLS
+  connection);
+- native Dutch standard and MAI-Flash voices finished in 0.5–0.75 s;
+- the HD voice Adam took 1.7–1.9 s.
+
+Piper's first audio for a sentence of that length is about 0.13 s. Azure's
+latency depends on network and service load, which the 50-sentence run and
+the live check must still quantify.
+
 ### Intelligibility
 
 - **Piper voices split into two groups.** The voices trained on dedicated
@@ -240,6 +263,11 @@ but its CC BY-NC 4.0 licence likely rules it out regardless of speed.
   error and Parler 0 errors in 36 words, but on five easy conversational
   sentences only, without numbers.
 - **MMS fails on intelligibility as well as speed** (15.7% WER).
+- **Azure voices were perfect on the one probe sentence.** That includes the
+  multilingual English voice Adam, with and without the Dutch language tag.
+  One easy sentence without numbers says nothing about the number and
+  spelling sentences that dominate Piper's errors. Accent cannot be judged
+  from WER at all.
 
 ### Contract compatibility
 
@@ -267,8 +295,9 @@ laptop.
 ## Limitations
 
 - **No human listening judgement is included.** Naturalness, prosody, and
-  accent quality of the passing Piper voices are therefore unrated, and WER
-  cannot distinguish a natural voice from a robotic but clear one.
+  accent quality of the passing Piper voices and of the Azure voices are
+  therefore unrated. WER cannot distinguish a natural voice from a robotic
+  but clear one, or a native accent from Adam's English-based one.
 - **WER depends on Parakeet.** Number and spelling sentences are penalised
   for formatting, which inflates every voice's WER roughly equally.
 - **Chatterbox and Parler WER covers only five easy sentences.**
@@ -286,9 +315,11 @@ laptop.
 
 ## Open items
 
-1. Listening review of the five passing Piper voices; this decides whether
-   to change the default voice (pim or ronnie are the alternatives with
-   lower or equal WER).
+1. Listening review of the five passing Piper voices on the ten shared
+   sentences, plus every benchmarked Azure voice on all 50 sentences. This
+   decides whether to change the default Piper voice (pim or ronnie are the
+   alternatives with lower or equal WER). It also shows whether an Azure
+   voice is worth its cloud dependency and cost.
 2. The 50-sentence Azure run and live check for `en-US-Adam:DragonHDLatestNeural`
    and `nl-NL-FennaNeural` (chosen by the user), covering first-audio latency,
    cancellation, quotas, and cost. This needs the user's approval before any
