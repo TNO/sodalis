@@ -776,6 +776,71 @@ pnpm stack:up
 pnpm exec tsx scripts/llm-live-check.ts http://127.0.0.1:4176 azure-gpt-5-minimal
 ```
 
+### Enable long-term memory (opt-in)
+
+Memory runs in the AI service ([settings](../apps/server/README.md#long-term-memory))
+and is off by default. With host Ollama, pull an embedding model besides the
+gate and extraction models, enable it in `.env`, and record consent:
+
+```sh
+ollama pull qwen3-embedding:0.6b
+ollama pull gemma4:e4b-mlx   # gate; any small instruction model works
+ollama pull qwen3:14b        # extraction, reconciliation, consolidation
+# In .env: MEMORY_ENABLED=true (the other MEMORY_* values are in .env.example)
+pnpm stack:up
+curl -fsS -X PUT http://127.0.0.1:4176/api/memory/consent \
+  -H 'content-type: application/json' -d '{"kind":"memory","granted":true}'
+curl -fsS http://127.0.0.1:4176/api/memory/status
+```
+
+The database lives in the `memory_data` volume. `DELETE /api/memory/items/<id>`
+forgets one item; removing the volume forgets everything.
+
+### Evaluate long-term memory
+
+`packages/memory/eval` holds the harness for the
+[memory evaluation](evaluations/memory.md); it does not run in `pnpm test`
+(its unit tests do). Every role is configured with `EVAL_<ROLE>_*` variables,
+where the role is `GATE`, `EXTRACT`, `RECONCILE`, `ANSWER`, `JUDGE`,
+`RENDER`, `INDUCE`, or `TRANSLATE`, and the suffix is `BASE_URL`, `MODEL`,
+`API_KEY`, `API_KEY_HEADER`, `EXTRA_BODY`, `RESPONSE_FORMAT`,
+`SEND_TEMPERATURE`, or `TIMEOUT_MS`. `RECONCILE`, `ANSWER`, and `INDUCE`
+default to the `EXTRACT` model, and `TRANSLATE` to `ANSWER`; without a gate
+model the gate passes every turn, and without a judge answers are graded by
+keywords. Embeddings use `EVAL_EMBED_PROVIDER` (`mock` or
+`openai-compatible`), `EVAL_EMBED_BASE_URL`, `EVAL_EMBED_MODEL`, and
+`EVAL_EMBED_DIMS` (512). The CLI refuses non-local URLs unless
+`--allow-cloud` is passed; ask the data owner's consent for each such run.
+
+```sh
+cd packages/memory
+export EVAL_EMBED_PROVIDER=openai-compatible \
+  EVAL_EMBED_BASE_URL=http://localhost:11434/v1 EVAL_EMBED_MODEL=qwen3-embedding:0.6b \
+  EVAL_GATE_BASE_URL=http://localhost:11434/v1 EVAL_GATE_MODEL=gemma4:e4b-mlx \
+  EVAL_EXTRACT_BASE_URL=http://localhost:11434/v1 EVAL_EXTRACT_MODEL=qwen3:14b \
+  EVAL_JUDGE_BASE_URL=http://localhost:11434/v1 EVAL_JUDGE_MODEL=gemma4:12b-mlx \
+  EVAL_GATE_EXTRA_BODY='{"reasoning_effort":"none"}' \
+  EVAL_EXTRACT_EXTRA_BODY='{"reasoning_effort":"none"}' \
+  EVAL_JUDGE_EXTRA_BODY='{"reasoning_effort":"none"}'
+# Synthetic Dutch scenarios: two built-in personas, or sample elderly Flemish
+# personas (CC BY 4.0, attribution kept in each case's source field).
+pnpm eval generate --fixtures --sessions 4          # or: pnpm eval personas --count 10 && pnpm eval generate
+pnpm eval generate --renderer llm                   # natural turns; needs EVAL_RENDER_* (not the EXTRACT model) and EVAL_JUDGE_*
+pnpm eval run --set synthetic --label local-qwen3-14b [--system2] [--threshold 0.3]
+# Public benchmarks (downloaded on first use):
+pnpm eval run --set longmemeval --limit 20 --distractors 4 --types knowledge-update,temporal-reasoning
+pnpm eval translate --limit 50 && pnpm eval run --set longmemeval-nl
+pnpm eval run --set locomo --limit 2                # CC BY-NC 4.0: local use only, never commit
+# Vector index latency (task 0051):
+pnpm eval bench-index --items 10000
+```
+
+Data and results stay in the ignored `packages/memory/eval/.data/`
+(`results/<label>-<time>.json` holds every trace, answer, and the memory
+block each answer saw). LongMemEval-S has about 50 sessions per question;
+`--distractors N` keeps the evidence sessions plus N others, so runs stay
+affordable on local models.
+
 ## Start, smoke, and stop
 
 ```sh

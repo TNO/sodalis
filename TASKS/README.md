@@ -105,9 +105,9 @@ The design is recorded in
 tasks 0045–0048 deliver version 1 and tasks 0049–0052 are follow-ups.
 
 - [ ] 0039 Building Sodalis long-term memory *(needs 0031, 0034)*
-- [ ] 0045 Building the memory store and index *(needs 0031, 0034)*
-- [ ] 0046 Building the memory write path *(needs 0045)*
-- [ ] 0047 Injecting memory into conversations and adding user controls *(needs 0045, 0046)*
+- [x] 0045 Building the memory store and index *(needs 0031, 0034)*
+- [x] 0046 Building the memory write path *(needs 0045)*
+- [x] 0047 Injecting memory into conversations and adding user controls *(needs 0045, 0046)*
 - [ ] 0048 Evaluating long-term memory *(needs 0045, 0046, 0047)*
 - [ ] 0049 Adding the recall_memory tool *(needs 0047)*
 - [ ] 0050 Adding System 2 memory consolidation (L5–L7) *(needs 0048)*

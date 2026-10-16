@@ -1,0 +1,22 @@
+{
+  "name": "@sodalis/memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx eval/cli.ts"
+  },
+  "dependencies": {
+    "sqlite-vec": "^0.1.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.4"
+  }
+}

@@ -17,6 +17,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.9",
     "@sodalis/assistant": "workspace:*",
+    "@sodalis/memory": "workspace:*",
     "@sodalis/speech": "workspace:*",
     "hono": "^4.11.7",
     "microsoft-cognitiveservices-speech-sdk": "1.52.0"

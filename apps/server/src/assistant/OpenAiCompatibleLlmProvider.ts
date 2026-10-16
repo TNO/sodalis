@@ -15,6 +15,12 @@ export interface LlmGenerationRequest {
   readonly messages: readonly ConversationMessage[];
   readonly appContext?: AssistantAppContext;
   readonly availableActions?: readonly AvailableAppAction[];
+  /** The retrieved long-term memory block for this turn. */
+  readonly memoryContext?: string;
+  /** Whether the model may answer with a `recall_memory` request instead. */
+  readonly recallAvailable?: boolean;
+  /** Excerpts returned by an earlier `recall_memory` request in this turn. */
+  readonly recalledContext?: { readonly query: string; readonly excerpts: string };
   readonly signal: AbortSignal;
   /** Evaluation hook; when set, the provider is asked to report token usage. */
   readonly onUsage?: (usage: LlmUsage) => void;
@@ -161,6 +167,23 @@ function parseEventData(frame: string): string | undefined {
     .join("\n") || undefined;
 }
 
+export const RECALL_MEMORY_INSTRUCTION =
+  'If answering needs details from an earlier conversation that the Memory section does not contain, respond with only {"recall_memory":{"query":string,"from"?:"YYYY-MM-DD","to"?:"YYYY-MM-DD"}} to search your memory first; use the query in the language of the conversation.';
+
+/** The memory part of the system prompt (task 0047 and 0049). */
+export function memoryPrompt(request: Pick<LlmGenerationRequest, "memoryContext" | "recallAvailable" | "recalledContext">): string {
+  const parts: string[] = [];
+  if (request.memoryContext) parts.push(request.memoryContext);
+  if (request.recalledContext) {
+    parts.push(
+      `Recalled from earlier conversations for "${request.recalledContext.query}" (dated excerpts; answer from these and do not request another recall):\n${request.recalledContext.excerpts}`,
+    );
+  } else if (request.recallAvailable) {
+    parts.push(RECALL_MEMORY_INSTRUCTION);
+  }
+  return parts.length ? `\n\n${parts.join("\n\n")}` : "";
+}
+
 export class OpenAiCompatibleLlmProvider
   implements LlmTextGenerationProvider
 {
@@ -206,7 +229,7 @@ export class OpenAiCompatibleLlmProvider
       "Use at most one action per response and only an action ID from the available action list. Do not claim that an action succeeded before the application reports its result, and never claim user confirmation.",
       `Available semantic actions: ${JSON.stringify(request.availableActions ?? [])}.`,
       appDescription,
-    ].join(" ");
+    ].join(" ") + memoryPrompt(request);
     const headers: Record<string, string> = {
       "content-type": "application/json",
       accept: "text/event-stream",

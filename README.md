@@ -161,7 +161,9 @@ commercially approved avatar model is selected. The desktop includes the
 TalkingHead brunette example under its separate CC BY-NC 4.0 license as a
 non-commercial pipeline sample; actual model-render FPS is not yet measured.
 Speech, AI, and the simulated Home API are available as separate services.
-The example connects AI to a host Ollama model; real Home Assistant
-integration, long-term memory, and real Mail delivery remain future work.
+The example connects AI to a host Ollama model. Opt-in, consent-based
+long-term memory (`packages/memory`, ADR 0005) runs in the AI service; real
+Home Assistant integration, its memory consent UI, and real Mail delivery
+remain future work.
 See `TASKS/README.md` and
 `docs/architecture/desktop-foundation.md` for boundaries and later work.

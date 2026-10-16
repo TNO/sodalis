@@ -1,6 +1,6 @@
 # 0046 Building the memory write path
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0045
@@ -54,3 +54,23 @@ asynchronously after the reply.
 - Before running against Azure, follow the cloud-consent rule in AGENTS.md.
 
 ## Agent Notes
+
+- 2026-10-16 Copilot: Implemented the write path: L1 storage before any model
+  call, `LlmDecisionGate` (`/v1/systemone` shape, one-token lettered questions
+  with first-token log-probabilities and a text fallback, threshold
+  `MEMORY_GATE_THRESHOLD`, default 0.3), `LlmExtractor` (JSON schema, previous
+  assistant turn as context only), `LlmReconciler` (adapted from Hy-Memory,
+  Apache-2.0; one batched call over the 5 nearest same-subject items),
+  credential redaction, health-consent gating, and a durable SQLite job queue
+  with retries and restart recovery.
+- 2026-10-16 Copilot: After the first evaluation (see 0048), extracted facts
+  state the person's relationship to the user; a turn the gate flags as a
+  correction searches neighbours across subjects so "not Elke but Ruben" can
+  supersede the item stored under the wrong name; and a NOOP on an L2 episode
+  becomes an ADD when no neighbour has the same occurrence day, so repeated
+  episodes stay available to System 2.
+- 2026-10-16 Copilot: Review fixes: queued turns are no longer processed after
+  memory consent is revoked, and memory and health consent are rechecked inside
+  the write transaction, so a revocation while the models run discards the
+  results. Turns the gate or extractor classifies as health are flagged in L1
+  (schema migration 2).

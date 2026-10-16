@@ -27,3 +27,17 @@ preference inference, measured by PersonaMem-v2
   cases, and compare with and without System 2.
 
 ## Agent Notes
+
+- 2026-10-16 Copilot: Added `Consolidator`: union-find clustering of active,
+  non-health L2/L4 facts by subject and embedding similarity without an LLM;
+  `LlmInducer` induces L5–L7 items that need at least two evidence links from
+  the cluster and may supersede an earlier inferred item; a watermark limits
+  work to new facts. `MemoryService` schedules it when idle and at most every
+  20 hours (`MEMORY_CONSOLIDATION`, default on). Deleting an evidence item
+  lowers the confidence of dependent items or deletes them below two evidence
+  links. Retrieval includes L5–L7 within the budget, marked `inferred`; L7 does
+  not trigger behaviour. The optional cross-domain sweep is not implemented.
+- 2026-10-16 Copilot: On the 0048 synthetic set System 2 induced a routine from
+  three walk episodes; with/without comparison: 16/18 against 15/18. Remaining:
+  PersonaMem-v2 and longer generated routine and intention cases. Analysis:
+  [Long-term memory evaluation](../docs/evaluations/memory.md).

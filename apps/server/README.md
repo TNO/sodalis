@@ -158,8 +158,8 @@ requested and token usage, including reasoning tokens, reported. Only the select
 local `LLM_*` and `AZURE_LLM_*` values may coexist; `mock` ignores both.
 Missing or unknown provider IDs and incomplete configuration fail startup
 rather than silently switching to another endpoint. Generation remains behind the AI
-service's provider interface, where future memory can be added without a
-browser API change.
+service's provider interface; long-term memory (below) adds context there
+without a browser API change.
 
 Conversation turns include a short in-memory history (at most 12 messages) and,
 when available, the current built-in Aster app's semantic identity (app ID,
@@ -179,6 +179,58 @@ pending action and arguments, and conversational confirmation requires the
 action-specific phrase shown in the companion card. The initial Mail actions
 operate on deterministic in-memory fixtures only; mock sending never delivers
 real email.
+
+## Long-term memory
+
+`@sodalis/memory` implements [ADR 0005](../../docs/adr/0005-long-term-memory.md)
+in the AI service. It is off unless `MEMORY_ENABLED=true`, and even then
+stores nothing until the user records consent with
+`PUT /api/memory/consent` (`{"kind":"memory","granted":true}`; health facts
+need a separate `health` consent). When active:
+
+- every user turn is stored verbatim (L1) in SQLite, then queued for a
+  background write path: a small **gate** model decides whether the turn is
+  worth analysing, an **extraction** model extracts memories (L2 events,
+  L3 transient states, L4 facts), and the same model **reconciles** them
+  against similar memories (ADD, UPDATE, SUPERSEDE, NOOP) while keeping
+  history;
+- before generating a reply, the server retrieves a token-budgeted memory
+  block (vector and full-text search plus pinned identity and upcoming
+  dates) and adds it to the prompt; the model may answer with a
+  `recall_memory` request for an older or more specific search first;
+- when idle and at most once every 20 hours, **consolidation** (System 2)
+  induces L5–L7 patterns, preferences, and routines from clusters of related
+  memories, with their evidence.
+
+Settings (defaults in brackets):
+
+- `MEMORY_DB_PATH` [`data/memory.db`; `/data/memory/memory.db` in Compose],
+  `MEMORY_REQUIRE_CONSENT` [`true`], `MEMORY_CONSOLIDATION` [`true`],
+  `MEMORY_OBSERVATION_SOURCES` [`home`].
+- Embeddings: `MEMORY_EMBED_PROVIDER` (`openai-compatible` or `mock`),
+  `MEMORY_EMBED_BASE_URL`, `MEMORY_EMBED_MODEL`, `MEMORY_EMBED_DIMS` [512],
+  `MEMORY_EMBED_API_KEY`.
+- Gate: `MEMORY_GATE_PROVIDER` (`openai-compatible` or `pass-through`),
+  `MEMORY_GATE_BASE_URL`, `MEMORY_GATE_MODEL`, `MEMORY_GATE_API_KEY`,
+  `MEMORY_GATE_EXTRA_BODY` (JSON), `MEMORY_GATE_THRESHOLD` [0.3].
+- Extraction, reconciliation, and consolidation: `MEMORY_EXTRACT_PROVIDER`
+  (`openai-compatible` or `azure`, which reuses the `AZURE_LLM_*` resource),
+  `MEMORY_EXTRACT_BASE_URL`, `MEMORY_EXTRACT_MODEL`,
+  `MEMORY_EXTRACT_API_KEY`, `MEMORY_EXTRACT_EXTRA_BODY` (JSON),
+  `MEMORY_EXTRACT_RESPONSE_FORMAT` (`json_schema`, `json_object`, or `none`).
+- Retrieval: `MEMORY_TOKEN_BUDGET` [800], `MEMORY_MIN_SIMILARITY` [0.35].
+
+With the `azure` extraction provider, the user's messages leave the machine;
+obtain consent for that separately. Credentials are redacted before
+storage and extraction.
+
+The `/api/memory/*` routes, reachable through the gateway, let the desktop
+show and manage what is remembered: `status`, `consent`, `retention` (how long transcripts are kept),
+`items` (list, show with sources and history, `PATCH` to correct, `DELETE`
+to forget, cascading to inferred items that lose their evidence), `search`,
+`about?q=` (what is known about a person or topic), `DELETE transcripts`, and
+`POST observations`, through which trusted sources (by default `home`) add
+observed events. Health details in observations are dropped.
 
 ## Home Assistant simulator
 

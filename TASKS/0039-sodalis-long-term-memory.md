@@ -88,3 +88,10 @@ inside the Sodalis AI service, not in a direct Ollama or Azure integration.
 - The memory service stores evidence and derived memories separately. Long
   transcript retention is configurable; derived memories are the primary
   long-term context.
+
+- 2026-10-16 Copilot: Version 1 is implemented by 0045–0047, with evaluation
+  (0048), recall (0049), System 2 (0050), and observations (0052) in progress;
+  see their notes and the [evaluation](../docs/evaluations/memory.md).
+  Remaining here: the desktop's plain-language memory explanation and consent
+  onboarding (top-level and health), and the inspect, correct, and delete UI on
+  top of `/api/memory/*`.

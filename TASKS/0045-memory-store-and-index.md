@@ -1,6 +1,6 @@
 # 0045 Building the memory store and index
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0031, 0034
@@ -48,3 +48,13 @@ not call any models.
   0051.
 
 ## Agent Notes
+
+- 2026-10-16 Copilot: Added `@sodalis/memory` (`packages/memory`): SQLite
+  through `node:sqlite` with migrations for L1 turns, L0/L2–L4 items,
+  revisions, supersedes links, provenance, consent (with policy version),
+  settings, a job table, and an audit log; a synchronous `MemoryIndex` with
+  sqlite-vec plus FTS5, merged by reciprocal rank fusion;
+  `OpenAiCompatibleEmbedder` and `MockEmbedder`; index rebuild when the
+  embedding model or dimensions change; retention purge (default `90d`); and
+  transactional hard deletes. Tests use the mock embedder at the package
+  interface.

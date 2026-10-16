@@ -1,6 +1,6 @@
 # 0047 Injecting memory into conversations and adding user controls
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0045, 0046
@@ -43,3 +43,18 @@ remembers.
   0039's acceptance criteria. Add it here only if no UI task picks it up first.
 
 ## Agent Notes
+
+- 2026-10-16 Copilot: Wired memory into the AI service behind `MEMORY_ENABLED`
+  (off by default) and consent: retrieval before each turn (one embedding of
+  the user and previous assistant turn, hybrid search with per-layer quotas and
+  `MEMORY_MIN_SIMILARITY`, chains up to 3 back, pinned L0/L4 and upcoming L2
+  dates, an 800-token block with date and provenance), and the write path after
+  each turn. Added the `/api/memory/*` routes (status, consent, retention,
+  items with correct and delete, search, about, transcripts, observations), the
+  Compose volume and environment, and gateway routes. Documented in
+  `apps/server/README.md` and `docs/development-stack.md`.
+- User decision: Azure is treated exactly like a local model, so there is no
+  separate remote-context policy or setting. The memory block and recall
+  excerpts are the only memory content sent to any model; the L1 transcript
+  archive is never sent. The existing 12-message conversation history is
+  unchanged.

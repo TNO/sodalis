@@ -7,11 +7,20 @@ import type {
   AssistantAppContext,
   ConversationMessage,
 } from "@sodalis/assistant";
-import type { LlmTextGenerationProvider } from "./OpenAiCompatibleLlmProvider.js";
+import { formatRecallResult, type MemoryService } from "@sodalis/memory";
+import { registerMemoryRoutes } from "./memoryRoutes.js";
+import type {
+  LlmGenerationRequest,
+  LlmTextGenerationProvider,
+} from "./OpenAiCompatibleLlmProvider.js";
 
 interface AssistantAppOptions {
   readonly provider?: LlmTextGenerationProvider;
   readonly maxConcurrentRequests?: number;
+  /** Long-term memory; omit to switch memory off. */
+  readonly memory?: MemoryService;
+  /** Sources allowed to post observations to `/api/memory/observations`. */
+  readonly observationSources?: readonly string[];
 }
 
 const MAX_REQUEST_BYTES = 1024 * 1024;
@@ -31,6 +40,86 @@ const ACTION_RISKS = [
 ] as const satisfies readonly AppActionRisk[];
 
 class BodyLimitError extends Error {}
+
+const RECALL_PREFIX = '{"recall_memory"';
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+interface RecallCall {
+  readonly query: string;
+  readonly from?: string;
+  readonly to?: string;
+}
+
+function readRecallCall(text: string): RecallCall | undefined {
+  try {
+    const payload: unknown = JSON.parse(text);
+    if (!isRecord(payload) || !isRecord(payload.recall_memory)) return undefined;
+    const call = payload.recall_memory;
+    if (typeof call.query !== "string" || call.query.length > 500) return undefined;
+    return {
+      query: call.query,
+      ...(typeof call.from === "string" && DATE_PATTERN.test(call.from) ? { from: call.from } : {}),
+      ...(typeof call.to === "string" && DATE_PATTERN.test(call.to) ? { to: call.to } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Generates one reply. With memory, the model may first answer with a
+ * `recall_memory` request; the start of the stream is held back until that is
+ * ruled out, and a recall triggers a second generation with the excerpts.
+ */
+async function* generateReply(
+  provider: LlmTextGenerationProvider,
+  request: LlmGenerationRequest,
+  memory: MemoryService | undefined,
+): AsyncIterable<string> {
+  if (!memory) {
+    yield* provider.generate(request);
+    return;
+  }
+  let buffer = "";
+  let streaming = false;
+  for await (const delta of provider.generate({ ...request, recallAvailable: true })) {
+    if (streaming) {
+      yield delta;
+      continue;
+    }
+    buffer += delta;
+    const compact = buffer.replace(/\s+/g, "");
+    if (RECALL_PREFIX.startsWith(compact) || compact.startsWith(RECALL_PREFIX)) continue;
+    streaming = true;
+    yield buffer;
+  }
+  if (streaming) return;
+  if (!buffer.replace(/\s+/g, "").startsWith(RECALL_PREFIX)) {
+    if (buffer) yield buffer;
+    return;
+  }
+  const call = readRecallCall(buffer);
+  const result = call?.query.trim()
+    ? await memory.recall({ ...call, signal: request.signal })
+    : { excerpts: [] };
+  request.signal.throwIfAborted();
+  yield* provider.generate({
+    ...request,
+    recallAvailable: false,
+    recalledContext: { query: call?.query ?? "", excerpts: formatRecallResult(result) },
+  });
+}
+
+/** The caption text of a JSON utterance, or the raw reply when it is not JSON. */
+function utteranceText(reply: string): string {
+  try {
+    const payload: unknown = JSON.parse(reply);
+    if (isRecord(payload) && typeof payload.text === "string") return payload.text;
+  } catch {
+    // Not a JSON utterance; keep the raw text.
+  }
+  return reply;
+}
 
 function errorResponse(
   context: Context,
@@ -246,6 +335,13 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
       : errorResponse(context, "LLM is not configured.", 503),
   );
 
+  if (options.memory) {
+    registerMemoryRoutes(app, {
+      memory: options.memory,
+      ...(options.observationSources ? { observationSources: options.observationSources } : {}),
+    });
+  }
+
   app.post("/api/assistant/turns", async (context) => {
     const provider = options.provider;
     if (!provider) return errorResponse(context, "LLM is not configured.", 503);
@@ -310,19 +406,45 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
     requestSignal.addEventListener("abort", onRequestAbort, { once: true });
     if (requestSignal.aborted) onRequestAbort();
     activeRequests += 1;
+    const memory = options.memory;
     const body = new ReadableStream<Uint8Array>({
       async start(streamController) {
         const encoder = new TextEncoder();
         let sequence = 0;
+        let reply = "";
         try {
-          for await (const text of provider.generate({
-            messages,
-            ...(appContext ? { appContext } : {}),
-            ...(availableActions ? { availableActions } : {}),
-            signal: abortController.signal,
-          })) {
+          let memoryContext = "";
+          if (memory?.active()) {
+            const userText = messages.at(-1)!.content;
+            const previous = messages.at(-2);
+            try {
+              memory.recordUserTurn({ sessionId, turnId, text: userText });
+              memoryContext = (
+                await memory.retrieve(
+                  userText,
+                  previous?.role === "assistant" ? utteranceText(previous.content) : undefined,
+                  abortController.signal,
+                )
+              ).block;
+            } catch (error) {
+              abortController.signal.throwIfAborted();
+              console.error(`Memory retrieval failed for "${sessionId}/${turnId}":`, error);
+            }
+          }
+          for await (const text of generateReply(
+            provider,
+            {
+              messages,
+              ...(appContext ? { appContext } : {}),
+              ...(availableActions ? { availableActions } : {}),
+              ...(memoryContext ? { memoryContext } : {}),
+              signal: abortController.signal,
+            },
+            memory?.active() ? memory : undefined,
+          )) {
             abortController.signal.throwIfAborted();
             if (!text) continue;
+            reply += text;
             streamController.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({
@@ -334,7 +456,16 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
               ),
             );
           }
-          if (!abortController.signal.aborted) streamController.close();
+          if (!abortController.signal.aborted) {
+            streamController.close();
+            if (memory && reply) {
+              try {
+                memory.recordAssistantTurn({ sessionId, turnId, text: utteranceText(reply) });
+              } catch (error) {
+                console.error(`Memory recording failed for "${sessionId}/${turnId}":`, error);
+              }
+            }
+          }
         } catch (error) {
           if (!abortController.signal.aborted) {
             console.error(
@@ -346,6 +477,7 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
         } finally {
           requestSignal.removeEventListener("abort", onRequestAbort);
           activeRequests -= 1;
+          memory?.flush();
         }
       },
       cancel(reason) {

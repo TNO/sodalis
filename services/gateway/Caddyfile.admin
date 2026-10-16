@@ -14,6 +14,9 @@
 			flush_interval -1
 		}
 	}
+	handle /api/memory/* {
+		reverse_proxy ai:3002
+	}
 	handle /api/home/* {
 		reverse_proxy {$HOME_API_UPSTREAM} {
 			header_up Host {upstream_hostport}

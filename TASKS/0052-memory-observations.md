@@ -20,3 +20,11 @@ events, from user statements. Version 1 ingests chat only
   statements.
 
 ## Agent Notes
+
+- 2026-10-16 Copilot: Added observation ingestion: `POST
+  /api/memory/observations` for allowed sources (`MEMORY_OBSERVATION_SOURCES`,
+  default `home`) stores an observation turn with its source and optional event
+  ID; derived items get provenance `observed`, health items from observations
+  are dropped, and observations never produce health conclusions. Tests cover
+  source preservation and the separation from statements. Remaining: sending
+  real Home Assistant and app-action events, which waits for 0038.

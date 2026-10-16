@@ -55,3 +55,19 @@ written by hand.
   extraction runs.
 
 ## Agent Notes
+
+- 2026-10-16 Copilot: Added the harness in `packages/memory/eval` (`pnpm
+  eval`): persona sampling from Nemotron-Personas-Belgium (`nl_BE`, age filter,
+  attribution in each case), a seeded event graph with labels derived from the
+  graph, template and LLM renderers (judge verification, regeneration, template
+  fallback; the rendering model must differ from the extraction model), runners
+  for the synthetic set, LongMemEval-S (with `--distractors`), LoCoMo (local
+  only), and a translated Dutch LongMemEval subset, component and QA metrics,
+  and per-role latency and tokens. Unit tests cover the generator, renderers,
+  harness, metrics, loaders, and the cloud-URL guard.
+- 2026-10-16 Copilot: First local run (two fixture personas, template
+  rendering, qwen3:14b, gemma4 gate and judge, qwen3-embedding 0.6B): 16/18 QA,
+  gate and extraction 1.00/1.00, reconciliation 22/22 after three pipeline
+  fixes. Remaining: LLM-rendered sets with sampled personas, LongMemEval-S,
+  LoCoMo, the Dutch subset, and the model comparison. Analysis: [Long-term
+  memory evaluation](../docs/evaluations/memory.md).

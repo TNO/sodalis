@@ -133,6 +133,7 @@ dist
 # pnpm
 .pnpm-store
 models/
+packages/memory/eval/.data/
 
 # yarn v3
 .pnp.*

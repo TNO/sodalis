@@ -32,3 +32,4 @@ a single place to find conclusions.
 | [Dutch TTS providers](tts-providers.md) | 0036 | Complete |
 | [Alternate STT providers](stt-providers.md) | 0035 | Complete; Azure measured on private clips only, Redux not measured |
 | [Alternate LLM providers](llm-providers.md) | 0037 | Complete |
+| [Long-term memory](memory.md) | 0048, 0050, 0051 | In progress; harness and first local run, model comparison open |
