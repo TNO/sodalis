@@ -409,12 +409,82 @@ python3 -m unittest scripts/test_tts_compare.py
 
 The review uses ten sentences: five fixed representatives (greeting,
 apology, choice question, time/number, long sentence) plus the five with
-the highest mean WER across fully scored runs. Each clip gets a 1–5 score for
-Dutch pronunciation and for naturalness, plus error flags. `--score` writes
-`scores.md`/`scores.json` and ranks only runs that pass both gates by the
-mean listener score. Clips go only to a local HTTP origin. MMS needs
+the highest mean WER across fully scored runs. Once `review.json` exists,
+later `--review` runs reuse its sentences so earlier listening scores stay
+comparable; `--repick-review` chooses them afresh. An `azure` run is always
+added to the review, with **all 50** clips, even if it fails a gate. Each clip
+gets a 1–5 score for Dutch pronunciation and for naturalness, plus error
+flags. `--score` writes `scores.md`/`scores.json` and ranks only runs that
+pass both gates by the mean listener score on the shared ten sentences; a
+separate column gives each run's mean over all clips it was reviewed on.
+Clips go only to a local HTTP origin. MMS needs
 `torch` and `transformers`; Parler needs `parler_tts==0.2.2`; Azure runs
 only when `AZURE_TTS_KEY`, `AZURE_TTS_URL`, and a Dutch `AZURE_TTS_VOICE` are set.
+
+#### Run the live Azure evaluation
+
+This sends about 7,000 billed characters to your own Azure Speech resource:
+
+- the 50 benchmark sentences (about 2,300 characters);
+- the live-check replies, including four copies of a 1,000-character reply
+  for the cancellation test (about 4,600 characters).
+
+Put the key in the ignored `.env.azure-eval`. Never put it in a command
+line, in `.env.example`, or in chat:
+
+```dotenv
+AZURE_TTS_URL=https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1
+AZURE_TTS_KEY=<your Speech resource key>
+AZURE_TTS_VOICE=nl-NL-ColetteNeural
+```
+
+```sh
+set -a; . ./.env.azure-eval; set +a
+# Unbilled: checks key, region, and voice, and prints the benchmark's characters.
+python3 scripts/tts-compare.py --azure-preflight
+# Azure TTS and Parakeet STT behind a separate gateway on port 4186.
+COMPOSE_PROJECT_NAME=sodalis-tts-eval SODALIS_SERVICE_PREFIX=sodalis-tts-eval \
+  SODALIS_PORT=4186 STT_PROVIDER=parakeet-tdt PARAKEET_TDT_URL=http://parakeet-tdt:8080 \
+  TTS_PROVIDER=azure LLM_PROVIDER=mock \
+  docker compose -f compose.yaml --profile parakeet-tdt up --build -d gateway speech parakeet-tdt
+# 50 clips direct from Azure: total time, time to first audio, and throttling retries.
+python3 scripts/tts-compare.py --backend azure --out models/tts-comparison-wsl
+pnpm exec tsx scripts/tts-intelligibility.ts models/tts-comparison-wsl http://127.0.0.1:4186 azure
+# Through the Sodalis speech API: first audio, PCM framing, and cancellation.
+pnpm exec tsx scripts/tts-live-check.ts http://127.0.0.1:4186 azure
+python3 scripts/tts-compare.py --out models/tts-comparison-wsl --review
+COMPOSE_PROJECT_NAME=sodalis-tts-eval LLM_PROVIDER=mock docker compose -f compose.yaml --profile "*" down
+```
+
+Handling of failures:
+
+- **401/403.** The scripts stop immediately with a hint about the key and
+  region. They never print the key.
+- **Throttling (429) and transient 5xx.** The benchmark waits for
+  `Retry-After` and retries. The free F0 tier allows about 20 transactions per
+  minute. Only the successful attempt is timed.
+
+`scripts/tts-live-check.ts <origin> <label>` works with any configured TTS
+provider and writes `models/tts-live/<label>.json`.
+
+- **Latency.** It times the short, medium, and longest corpus replies (three
+  times each, after an excluded warm-up) from request to first PCM chunk, and
+  to the end of the stream.
+- **Cancellation.** It first times one uncancelled 1,000-character reply. It
+  then cancels one more copy of that reply than the speech API admits at
+  once. By default each cancel comes just after the first audio arrives;
+  `--cancel-after-ms <ms>` cancels after a fixed delay instead.
+  - A cancellation only counts if it came before half the uncancelled
+    reply's duration. Otherwise synthesis had probably already finished.
+  - The check then requires a new reply to start within 3 s, and a further
+    reply to succeed.
+
+For the Piper baseline, use `STT_PROVIDER=mock TTS_PROVIDER=piper-http
+PIPER_HTTP_URL=http://piper:5000` with `--profile piper` and the services
+`gateway speech piper`, and pass `--cancel-after-ms 500`. Piper HTTP returns
+audio only after it has synthesized the whole reply, so the default
+cancel-after-first-audio mode cannot interrupt synthesis and reports that
+honestly.
 
 | Candidate | Dutch voice / latency | Streaming / cancellation | License and platforms | Decision |
 | --- | --- | --- | --- | --- |

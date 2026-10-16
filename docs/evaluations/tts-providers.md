@@ -1,6 +1,6 @@
 # Dutch TTS provider evaluation (task 0036)
 
-Status: analysis of all measurements up to 2026-10-15. The human listening
+Status: analysis of all measurements up to 2026-10-16. The human listening
 review is **not** part of this analysis; conclusions rest on measured speed,
 memory, automatic intelligibility, licensing, and contract checks only.
 Commands to reproduce every run are in
@@ -65,6 +65,16 @@ Model weights and generated audio stay in the ignored `models/` folder.
   is a proxy, not a quality score.
 - **Gates:** median synthesis ≤ 1.5 s **and** corpus WER ≤ 10% over all 50
   clips. Engines stopped after five clips because of speed cannot pass.
+- **Live Sodalis path:** `scripts/tts-live-check.ts` drives the public
+  `/api/speech/tts` route through the gateway, with the provider configured
+  as in production.
+  - **Latency:** time to the first PCM chunk and to the end of the stream,
+    for the short, medium, and longest corpus replies (18, 46, and 74
+    characters), three times each.
+  - **Cancellation:** it cancels three copies of a 1,007-character reply,
+    one more than the API's concurrent TTS capacity. It then requires a new
+    reply to start within 3 s. A cancel counts only if it came before half
+    the uncancelled reply's duration.
 - **Hardware:**
   - **M4 Max**, 128 GB unified memory, macOS (2026-10-05). Native, Metal,
     MLX, and MPS backends.
@@ -95,6 +105,26 @@ Model weights and generated audio stay in the ignored `models/` folder.
 Chatterbox and Parler were stopped after five clips: each clip took 14–60
 times longer than its audio. A first Chatterbox attempt crashed the WSL VM
 while its ~3 GB of weights were downloading.
+
+### Live Sodalis TTS path (laptop, 2026-10-16)
+
+| Provider | First audio, short / medium / long (median) | Uncancelled 1,007-character reply | Cancellation (3 × in flight) | Speech after cancellation |
+| --- | --- | --- | --- | --- |
+| Piper `nl_BE-nathalie-medium` via Piper HTTP | 72 / 127 / 173 ms | first audio 2.58 s, end 2.65 s, 53.5 s of audio | Passed when cancelled 500 ms after the request | Audio after 200 ms |
+| Azure AI Speech | — | — | — | not run (no key) |
+
+Piper HTTP returns audio only after the whole reply has been synthesized:
+first audio is within a few milliseconds of the end of the stream. A user
+can therefore interrupt Piper synthesis only **before** any audio plays.
+Cancelling just after first audio, the moment of a typical barge-in, came too
+late to interrupt synthesis and is reported as such.
+
+The first live run exposed a crash. Both the Piper HTTP and the Azure
+adapters let a client disconnect during streaming become an unhandled
+promise rejection, which **terminated the speech service** (every later
+request returned HTTP 502). Both adapters now handle it; engine tests
+reproduce real `fetch` behaviour, and the live check above passed after the
+fix.
 
 ### Apple Silicon (M4 Max)
 
@@ -155,8 +185,8 @@ but its CC BY-NC 4.0 licence likely rules it out regardless of speed.
 
 | Candidate | Dutch voice | Streaming / cancellation | Licence (code / weights) | Platforms | Decision |
 | --- | --- | --- | --- | --- | --- |
-| Piper | Nine v1.0.0 voices; five pass both gates | HTTP WAV converted to Sodalis PCM; playback cancellable | Engine `piper-tts` (piper1-gpl) GPL-3.0-or-later, run as a separate service; nathalie, rdh, pim, and ronnie datasets CC0; MLS datasets CC BY 4.0 | CPU via Compose on macOS, Windows, and Linux | **Default; retained** |
-| Azure AI Speech | Dutch neural voices (unverified here) | Server-side adapter streams raw 22,050 Hz PCM and aborts on cancel; contract-tested without a live service | Hosted service; account, key, network, and billing required | Through the Sodalis API on all platforms | Explicit opt-in adapter; live quality and latency unmeasured |
+| Piper | Nine v1.0.0 voices; five pass both gates | HTTP WAV converted to Sodalis PCM; audio starts only after full synthesis (72–173 ms for corpus replies); in-flight cancellation verified live | Engine `piper-tts` (piper1-gpl) GPL-3.0-or-later, run as a separate service; nathalie, rdh, pim, and ronnie datasets CC0; MLS datasets CC BY 4.0 | CPU via Compose on macOS, Windows, and Linux | **Default; retained** |
+| Azure AI Speech | Dutch neural voices (unverified here) | Server-side adapter streams raw 22,050 Hz PCM and aborts on cancel; contract-tested without a live service, including the client-disconnect crash fix | Hosted service; account, key, network, and billing required | Through the Sodalis API on all platforms | Explicit opt-in adapter; live quality and latency unmeasured |
 | Chatterbox Multilingual V3 | Dutch built-in voice, very intelligible | `generate` returns complete audio; no incremental streaming or in-flight cancellation | MIT code and weights; PyPI 0.1.7 lacks V3, so a pinned source install is required | CPU, MPS, CUDA; 6.1 GiB RSS on CPU | Rejected on laptop CPU; GPU/MPS latency unmeasured |
 | Parler-TTS Mini Multilingual v1.1 | Dutch speakers listed; "Mark" very intelligible | Token streaming exists in the library but was not evaluated | Apache-2.0 | PyTorch CPU and CUDA | Rejected on CPU; GPU latency unmeasured |
 | MMS-TTS `nld` | Single voice | Complete waveform per call | CC BY-NC 4.0 weights; evaluation only | PyTorch CPU | Rejected: fails speed, WER, and licence |
@@ -187,9 +217,10 @@ laptop.
   target desktop platforms.
 - **Laptop timings are WSL2 on `/mnt/c`.** Native Windows and native Linux
   timings were not measured separately.
-- **Only file-level synthesis time was measured.** Time to first audio and
-  real interruption of inference were only checked for Fish (where
-  interruption failed).
+- **The live Sodalis path was measured for Piper only.** For other local
+  engines only file-level synthesis time exists; Fish was the only one tested
+  for interruption, and interruption failed. The Piper live check uses the
+  default voice and the laptop only.
 - **Azure was never called.**
 
 ## Open items
@@ -198,7 +229,8 @@ laptop.
    to change the default voice (pim or ronnie are the alternatives with
    lower or equal WER).
 2. A live Azure run (needs a key) for Dutch quality, first-audio latency,
-   quotas, and cost.
+   cancellation, quotas, and cost. The tooling is ready; see
+   [development-stack.md](../development-stack.md#run-the-live-azure-evaluation).
 3. Optional: GPU or Apple Silicon timing for Chatterbox and Parler, if a GPU
    deployment target is ever considered.
 4. The Piper engine is GPL-3.0-or-later. It runs as a separate HTTP service,

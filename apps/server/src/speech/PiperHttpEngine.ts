@@ -37,7 +37,9 @@ export class PiperHttpEngine implements SpeechSynthesisEngine {
     const reader = response.body.getReader();
     const header = new Uint8Array(44);
     let headerLength = 0;
-    const onAbort = () => { void reader.cancel(signal.reason); };
+    // fetch errors the body when its signal aborts, so cancelling then rejects; an unhandled
+    // rejection would crash the speech service on every barge-in.
+    const onAbort = () => { reader.cancel(signal.reason).catch(() => undefined); };
     signal.addEventListener("abort", onAbort, { once: true });
     try {
       while (true) {
@@ -71,7 +73,7 @@ export class PiperHttpEngine implements SpeechSynthesisEngine {
       if (headerLength !== header.length) throw new Error("Piper HTTP returned incomplete WAV audio.");
     } finally {
       signal.removeEventListener("abort", onAbort);
-      await reader.cancel();
+      await reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }
   }

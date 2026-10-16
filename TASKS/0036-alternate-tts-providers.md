@@ -154,3 +154,35 @@ without changing the Sodalis browser contract.
   Most WER on the passing Piper voices comes from number and spelling
   sentences, largely because Parakeet writes digits where the reference
   has words. Also noted that `piper-tts` (piper1-gpl) is GPL-3.0-or-later.
+- 2026-10-16 Copilot: Made the live Azure run a key-only step.
+  `tts-compare.py --backend azure` now streams PCM. It records time to first
+  audio separately from total time and honours `Retry-After` on 429/5xx,
+  timing only the successful attempt (the F0 tier allows about 20
+  requests/min). On 401/403 it stops with a hint about key and region and
+  never prints the key. `--azure-preflight` checks the key, region, and voice
+  through the unbilled voices list. Review sentences are now pinned in
+  `review.json`. An Azure run is always reviewed on all 50 clips; Piper keeps
+  the shared ten. `--score` ranks on the shared ten and reports each run's
+  mean over all of its reviewed clips.
+
+  New `scripts/tts-live-check.ts` drives the public `/api/speech/tts` route.
+  It measures first-chunk and total latency, checks PCM framing, and cancels
+  three copies of a 1,007-character reply while still in flight.
+
+  Its first run found a **crash**: a client disconnect mid-stream became an
+  unhandled `reader.cancel` rejection in the Piper HTTP and Azure adapters,
+  which killed the speech service (gateway 502). The user approved fixing
+  both, test-first, at `engine.synthesize`. Piper live baseline after the fix:
+  - first audio 72 / 127 / 173 ms for 18 / 46 / 74 characters;
+  - in-flight cancellation at 500 ms passed, with new audio after 200 ms;
+  - Piper HTTP starts audio only after full synthesis, so cancelling after
+    first audio cannot interrupt it.
+
+  A rehearsal with a bogus key confirmed preflight, benchmark, and stack all
+  stop at Azure's 401, and the key appeared in no output or log. Results
+  added to `docs/evaluations/tts-providers.md`; runbook in
+  `docs/development-stack.md#run-the-live-azure-evaluation`. Remaining:
+  - the live Azure run (key in the ignored `.env.azure-eval`);
+  - the listening review (5 Piper voices × 10 sentences, Azure × 50);
+  - licence decisions;
+  - final consolidation.

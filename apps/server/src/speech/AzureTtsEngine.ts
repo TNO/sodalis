@@ -61,7 +61,9 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
     if (!response.ok) throw new Error(`Azure TTS returned HTTP ${response.status}.`);
     if (!response.body) throw new Error("Azure TTS returned no audio stream.");
     const reader = response.body.getReader();
-    const onAbort = () => { void reader.cancel(signal.reason); };
+    // fetch errors the body when its signal aborts, so cancelling then rejects; an unhandled
+    // rejection would crash the speech service on every barge-in.
+    const onAbort = () => { reader.cancel(signal.reason).catch(() => undefined); };
     signal.addEventListener("abort", onAbort, { once: true });
     let trailingByte: number | undefined;
     let bytesReceived = 0;
@@ -87,7 +89,7 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
       if (trailingByte !== undefined) throw new Error("Azure TTS returned incomplete PCM audio.");
     } finally {
       signal.removeEventListener("abort", onAbort);
-      await reader.cancel();
+      await reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }
   }
