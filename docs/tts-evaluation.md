@@ -20,8 +20,11 @@ Commands to reproduce every run are in
   short reply). Chatterbox and Parler are highly intelligible, so they may
   be worth re-measuring on a GPU; MMS also fails the WER gate.
 - On Apple Silicon, Voxtral (MLX, 1.32 s median) is the only non-Piper
-  engine near the speed gate, but it is MLX-only, non-commercially licensed,
-  and its HTTP API returns complete files without in-flight cancellation.
+  engine near the speed gate. Its weights, both Mistral's original and the
+  MLX conversion, are **CC BY-NC 4.0**. The non-commercial clause probably
+  puts it out of scope for an organisational or commercial Sodalis
+  deployment, just like MMS, Fish 1.5, and F5. It is also MLX-only, and its
+  HTTP API returns complete files without in-flight cancellation.
 - Azure AI Speech has a tested Sodalis adapter but has **never been run
   live** (no key). Fish Speech 1.5 failed cancellation; F5-TTS has no Dutch
   checkpoint.
@@ -118,7 +121,8 @@ Even the fastest neural alternative, MMS (a small VITS model), takes about
 as long to synthesize as the audio lasts, so a short reply would come
 seconds late. The large autoregressive models (Chatterbox, Parler, Fish,
 KugelAudio) are 3–50 times slower than real time on available hardware.
-Voxtral on Metal is the only non-Piper engine near the 1.5 s median gate.
+Voxtral on Metal is the only non-Piper engine near the 1.5 s median gate,
+but its CC BY-NC 4.0 licence likely rules it out regardless of speed.
 
 ### Intelligibility
 
@@ -158,7 +162,7 @@ Voxtral on Metal is the only non-Piper engine near the 1.5 s median gate.
 | MMS-TTS `nld` | Single voice | Complete waveform per call | CC BY-NC 4.0 weights; evaluation only | PyTorch CPU | Rejected: fails speed, WER, and licence |
 | Fish Speech 1.5 | Dutch in model card; long or hallucinated outputs | Streams WAV, but client disconnect did not stop inference | Apache-2.0 source, but package metadata and weights are CC BY-NC-SA 4.0 | CPU too slow; MPS tested on macOS only | Standalone evaluation-only Compose profile; not selectable |
 | F5-TTS | No Dutch checkpoint | Not evaluated | MIT code, CC BY-NC weights | PyTorch CPU, MPS, CUDA | Ruled out: no Dutch model |
-| Voxtral 4B (MLX) | `nl_female`/`nl_male` presets | Existing `voxtral-api` returns a complete file; no in-flight cancellation | CC BY-NC 4.0 converted weights | Apple Silicon only | Not a provider; possible future native-Mac option |
+| Voxtral 4B (MLX) | `nl_female`/`nl_male` presets | Existing `voxtral-api` returns a complete file; no in-flight cancellation | [Original Mistral weights](https://huggingface.co/mistralai/Voxtral-4B-TTS-2603) and the MLX conversion are both CC BY-NC 4.0 | Apple Silicon only | Likely out of scope: non-commercial licence; also MLX-only and no cancellation |
 | KugelAudio-0-Open (MLX) | Dutch listed, uneven quality | Unverified | MIT | Apple Silicon example only | Rejected: 20 s median on M4 Max |
 | VibeVoice 1.5B | English and Chinese only | — | MIT | MLX | Not a Dutch candidate |
 | XTTS-v2, Kokoro | Not evaluated | — | XTTS: non-commercial CPML, vendor closed; Kokoro: no verified Dutch | — | Not evaluated |
@@ -199,3 +203,6 @@ laptop.
    deployment target is ever considered.
 4. The Piper engine is GPL-3.0-or-later. It runs as a separate HTTP service,
    but confirm this is acceptable for any distributed build.
+5. Confirm that non-commercial (NC) weights are excluded from deployment.
+   This would formally rule out Voxtral, MMS, Fish 1.5, and F5-TTS
+   regardless of their speed or quality.
