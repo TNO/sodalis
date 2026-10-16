@@ -17,26 +17,25 @@ inside the Sodalis AI service, not in a direct Ollama or Azure integration.
 - Store conversation transcripts locally as timestamped, searchable evidence
   with configurable retention: `off`, `7d`, `30d`, `90d`, or `forever`.
 - Default transcript retention to `90d`; do not store raw microphone audio.
-- Provide working memory, semantic memory, episodic memory, health memory,
-  observation records, and pending memory candidates as distinct types with
-  distinct trust, retrieval, and retention semantics.
+- Provide working memory (per-turn retrieved context), the L0–L4 layers from
+  ADR 0005, health sensitivity, and observation records with distinct trust,
+  retrieval, and retention semantics.
 - Keep derived memories as the normal long-term retrieval layer. Consult raw
   transcripts only for explicit/fallback episodic recall, not as the default
   prompt context.
 - Record provenance, confidence, source type, timestamps, lifecycle state, and
   source conversation for durable memories.
 - Distinguish directly stated facts from inferred routines and observations.
-  For example, a repeated Wednesday visit may create a candidate inference,
+  For example, a repeated Wednesday visit may create an inferred routine,
   not a directly stated routine.
-- Do not autonomously consolidate repeated episodes into asserted routines in
-  the first version; keep such conclusions distinguishable as candidates.
-- Apply deterministic promotion policies: repeated, low-sensitivity
-  preferences may be learned automatically; uncertain or consequential claims
-  remain candidates for clarification.
+- Do not ask the user to confirm individual memories. Derived and inferred
+  memories are used directly, marked with their provenance, and remain
+  inspectable, correctable, and deletable (see ADR 0005).
 - Before first normal use, present a clear, plain-language explanation of
   memory: what Sodalis may retain, the configured transcript retention, and
   how the user can inspect, correct, and delete it.
-- Require explicit onboarding consent before health memory is enabled. Record
+- Require one top-level consent before memory is used with real people, and a
+  separate onboarding opt-in before health memory is enabled. Record
   the accepted explanation/policy version; do not ask for repeated approval
   for every health fact after consent.
 - Explain clearly that remembering health information does not authorize
@@ -54,10 +53,16 @@ inside the Sodalis AI service, not in a direct Ollama or Azure integration.
 - Do not implement caregiver/clinician sharing, medical diagnosis, emergency
   escalation, automatic health conclusions from Home Assistant, indefinite
   audio retention, or unrestricted autonomous consolidation.
-- Include tests for retention, consent, candidate promotion, provenance,
+- Include tests for retention, consent, supersession, provenance,
   corrections/deletion, retrieval, and remote-context minimization.
 
 ## Implementation Notes
+
+- Design: [ADR 0005](../docs/adr/0005-long-term-memory.md). This task is the
+  umbrella milestone. Work happens in tasks 0045–0048 (version 1) and
+  0049–0052 (follow-ups). Close it when 0045–0048 are done.
+- Sodalis is a research prototype on synthetic data. ADR 0005 replaces the
+  earlier candidate and confirmation flow with top-level consent.
 
 - Initial defaults: memory enabled; transcript, semantic, episodic, and
   observations enabled; derived memory retained indefinitely; raw audio
@@ -74,7 +79,7 @@ inside the Sodalis AI service, not in a direct Ollama or Azure integration.
 - Observation ingestion must preserve its source and must not independently
   produce health conclusions.
 - Inferred routines must remain visibly distinguishable from direct
-  statements.
+  statements (provenance `inferred`), but do not need per-item confirmation.
 - This is a separate milestone from the AI service/provider facade in task
   `0031`.
 

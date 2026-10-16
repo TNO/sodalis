@@ -100,7 +100,19 @@ transcripts, derived memories, observations, and inferences, and requires
 dedicated consent and user controls for health memory. Multi-house connectivity
 is intentionally later than the single-instance Home Assistant adapter.
 
+The design is recorded in
+[ADR 0005](../docs/adr/0005-long-term-memory.md). Task 0039 is the umbrella;
+tasks 0045–0048 deliver version 1 and tasks 0049–0052 are follow-ups.
+
 - [ ] 0039 Building Sodalis long-term memory *(needs 0031, 0034)*
+- [ ] 0045 Building the memory store and index *(needs 0031, 0034)*
+- [ ] 0046 Building the memory write path *(needs 0045)*
+- [ ] 0047 Injecting memory into conversations and adding user controls *(needs 0045, 0046)*
+- [ ] 0048 Evaluating long-term memory *(needs 0045, 0046, 0047)*
+- [ ] 0049 Adding the recall_memory tool *(needs 0047)*
+- [ ] 0050 Adding System 2 memory consolidation (L5–L7) *(needs 0048)*
+- [ ] 0051 Adding a Zvec memory index adapter *(needs 0048)*
+- [ ] 0052 Ingesting observations into memory *(needs 0047, 0038)*
 - [ ] 0040 Designing multi-house Home Assistant connectivity *(needs 0038)*
 
 ## Speech accuracy and live captions
