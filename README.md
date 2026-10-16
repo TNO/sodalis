@@ -56,7 +56,9 @@ update it: set `LLM_PROVIDER=openai-compatible`,
 deterministic mock instead, set `LLM_PROVIDER=mock`; other LLM settings are
 then ignored. An explicit Azure OpenAI opt-in (`LLM_PROVIDER=azure`) is
 described in the
-[LLM guide](docs/development-stack.md#use-an-azure-openai-llm-opt-in).
+[LLM guide](docs/development-stack.md#use-an-azure-openai-llm-opt-in); the
+[LLM provider evaluation](docs/evaluations/llm-providers.md) compares it with
+the local model.
 
 Then start the stack:
 

@@ -414,7 +414,7 @@ function price(value: string | undefined, name: string): number | undefined {
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
-      env: { type: "string", default: ".env" },
+      env: { type: "string" },
       configs: { type: "string", default: DEFAULT_CONFIGS.join(",") },
       repetitions: { type: "string", default: "3" },
       "timeout-ms": { type: "string", default: "180000" },
@@ -442,7 +442,11 @@ async function main(): Promise<void> {
     rescore(resolve(root, values.rescore), set, prices);
     return;
   }
-  const env = parseEnv(readFileSync(resolve(root, values.env), "utf8"));
+  // Like `pnpm stack:up --env`, an explicit overlay (for example .env.azure) replaces matching .env settings.
+  const env = {
+    ...parseEnv(readFileSync(resolve(root, ".env"), "utf8")),
+    ...(values.env ? parseEnv(readFileSync(resolve(root, values.env), "utf8")) : {}),
+  };
   const configs = configurations(
     values.configs.split(",").map((name) => name.trim()).filter(Boolean),
     env, values["local-url"], values["local-model"],

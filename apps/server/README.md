@@ -151,8 +151,10 @@ v1 API (provider ID `azure-openai-v1`). It requires:
   `medium`, or `high`.
 
 No temperature or token limit is sent, and 429/5xx responses are surfaced as
-errors without retries. Azure content-filter blocks fail the turn with a
-"content filter" error. Only the selected provider's settings are read, so
+errors without retries. Azure content-filter blocks fail the turn with an
+`LlmContentFilterError`. A generation request may pass an `onUsage` callback
+(used by the evaluation scripts); only then is `stream_options.include_usage`
+requested and token usage, including reasoning tokens, reported. Only the selected provider's settings are read, so
 local `LLM_*` and `AZURE_LLM_*` values may coexist; `mock` ignores both.
 Missing or unknown provider IDs and incomplete configuration fail startup
 rather than silently switching to another endpoint. Generation remains behind the AI

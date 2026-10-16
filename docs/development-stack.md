@@ -698,7 +698,9 @@ messages), the trusted app context (app ID, name, category), and the
 available semantic action list to Azure. Use your own Azure OpenAI or
 Foundry resource, with your consent; a **Data Zone EU** deployment is
 recommended. The browser still talks only to the Sodalis AI API, and the key
-stays in the AI container. Set in your ignored `.env`:
+stays in the AI container. Set these in your ignored `.env`, or in the same
+git-ignored `.env.azure` overlay as
+[Azure STT](#optional-azure-ai-speech-stt) and pass `--env .env.azure`:
 
 ```dotenv
 LLM_PROVIDER=azure
@@ -708,6 +710,11 @@ AZURE_LLM_DEPLOYMENT=gpt-5
 # Optional: minimal (default), low, medium, or high
 AZURE_LLM_REASONING_EFFORT=
 ```
+
+Keep `minimal` for conversation: in the
+[LLM provider evaluation](evaluations/llm-providers.md), gpt-5 chose actions
+as accurately at `minimal` as at higher efforts, with a median complete reply
+of 1.8 s instead of 4.8–15.6 s, at a fraction of the cost.
 
 **`AZURE_LLM_URL`** must be the HTTPS v1 resource endpoint. Hosts ending in
 `.openai.azure.com`, `.services.ai.azure.com`, or
@@ -733,7 +740,9 @@ Two opt-in scripts measure LLM providers for the
 `scripts/llm-compare.ts` calls the providers in-process through the same
 factory as the AI service, with the fixed Dutch prompt set and action list in
 `scripts/llm-prompts.json` (10 chat and 10 action prompts). It reads `.env`
-(or `--env <file>`), runs one excluded warm-up per configuration, and then
+plus an optional `--env <overlay>` such as `.env.azure` (the same overlay
+semantics as `pnpm stack:up --env`), runs one excluded warm-up per
+configuration, and then
 `--repetitions` passes (default 3). Configurations: `local` (`LLM_BASE_URL`
 and `LLM_MODEL`, with `host.docker.internal` rewritten to `127.0.0.1`, or
 `--local-url` and `--local-model`), `azure-minimal`, `azure-low`,
