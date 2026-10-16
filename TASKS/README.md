@@ -88,7 +88,9 @@ consolidated analysis belongs in [`docs/evaluations/`](../docs/evaluations/READM
 
 - [x] 0035 Evaluating alternate STT providers *(needs 0030, 0034)*
 - [x] 0036 Evaluating alternate TTS providers *(needs 0030, 0034)*
-- [ ] 0037 Evaluating alternate LLM providers *(needs 0031, 0034)*
+- [x] 0037 Evaluating alternate LLM providers *(needs 0031, 0034)*
+- [ ] 0043 Measuring vLLM and constrained utterance output *(needs 0037)*
+- [ ] 0044 Letting the model propose confirmed actions *(needs 0037)*
 - [ ] 0038 Connecting to a real Home Assistant instance *(needs 0032, 0033, 0034)*
 
 ## Long-term memory and future scale

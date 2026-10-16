@@ -1,6 +1,6 @@
 # 0037 Evaluating alternate LLM providers
 
-Status: in_progress
+Status: done
 Priority: medium
 Subsystem: assistant
 Depends on: 0031, 0034
@@ -50,8 +50,12 @@ service.
   3, latency, JSON/schema validity, action correctness, tokens, cost,
   `review.md` for ratings, `--rescore`) and `scripts/llm-live-check.ts`
   (round trips and cancellation through the gateway). Measured the host
-  Ollama `llama3.2:3b` baseline on the laptop CPU. Azure gpt-5 at the four
-  reasoning efforts, its live check, and the ratings are pending the user's
-  key. Analysis: [LLM provider evaluation](../docs/evaluations/llm-providers.md).
+  Ollama `llama3.2:3b` baseline on the laptop CPU.
 - vLLM publishes a CPU image (`vllm/vllm-openai-cpu`, x86 AVX2/AVX-512), so
   it need not wait for a GPU; it remains documentation-only here.
+- 2026-10-16 Copilot: Measured Azure gpt-5 (Data Zone EU) at `minimal`,
+  `low`, `medium`, and `high` (240 turns, $2.41 at list prices) and ran the
+  live check through the full Compose stack. The user preferred `minimal`
+  for speed at equal quality; it stays the default. Closed with follow-ups
+  0043 (vLLM, `json_schema`) and 0044 (prompt for confirmed actions).
+  Analysis: [LLM provider evaluation](../docs/evaluations/llm-providers.md).

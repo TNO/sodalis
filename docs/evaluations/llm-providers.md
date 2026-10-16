@@ -1,28 +1,45 @@
 # LLM provider evaluation (task 0037)
 
-Status: in progress, 2026-10-16. The Azure provider is implemented and the
-local baseline is measured; the Azure comparison runs and the subjective
-ratings are pending. Commands to reproduce the measurements are in
+Status: complete, 2026-10-16. All measurements were taken on 2026-10-16.
+Commands to reproduce them are in
 [development-stack.md](../development-stack.md#compare-llm-providers).
 
 ## Summary and recommendation
 
+- **Recommended for conversation: Azure gpt-5 at `minimal` reasoning.**
+  `minimal` stays the default effort; the user preferred it because it is
+  much faster at the same answer quality as higher efforts.
+  - Every Azure reply was valid JSON that matched the utterance schema. It
+    never added an action to a chat turn or invented one, and it chose the
+    correct action in 90% of action turns.
+  - At `minimal` a reply completes in a median 1.8 s for about $0.003.
+  - Higher efforts did not choose actions more accurately (90–93%) but were
+    2.6–8.5 times slower and 2–7 times more expensive.
 - **The local baseline, Ollama `llama3.2:3b` on a laptop CPU, is not good
-  enough for semantic actions.** It returned valid JSON every time, but only
-  49% of replies matched the utterance schema. It chose the correct action in
-  55% of action turns and attached an action to 47% of plain chat turns.
-  Replies take a median 18.5 s to finish. Its Dutch has grammar errors, and
-  it once claimed to have ordered a pizza it cannot order.
-  Keep it as the offline development default, not as the quality target.
-- **Azure OpenAI v1 (Microsoft Foundry) is supported as an explicit opt-in.**
-  `LLM_PROVIDER=azure` uses the existing OpenAI-compatible streaming adapter
-  with Azure's `api-key` header, the deployment name as `model`, and a
-  configurable `reasoning_effort` (default `minimal`). Local and Azure
-  settings can coexist in `.env`; switching changes only `LLM_PROVIDER` and
-  restarts the stack. There is no automatic fallback, and the Azure key is
-  blanked for the AI container when a local provider is selected.
-- **Azure results are pending.** The gpt-5 comparison at the four reasoning
-  efforts, the live check, and the ratings will complete this evaluation.
+  enough for semantic actions.** Keep it as the offline development default,
+  not as the quality target.
+  - It returned valid JSON every time, but only 49% of replies matched the
+    utterance schema.
+  - It chose the correct action in 55% of action turns and attached an
+    action to 47% of chat turns. It once claimed to have ordered a pizza it
+    cannot order.
+  - Replies are short, sometimes odd, with Dutch grammar errors, and take a
+    median 18.5 s to finish.
+- **Azure is supported as an explicit opt-in behind the Sodalis AI API.**
+  `LLM_PROVIDER=azure` reuses the OpenAI-compatible streaming adapter with
+  Azure's `api-key` header, the deployment name as `model`, and a validated
+  `reasoning_effort`. Local and Azure settings can coexist in `.env`;
+  switching changes only `LLM_PROVIDER` and restarts the stack. There is no
+  automatic fallback, and the Azure key is blanked for the AI container when
+  a local provider is selected.
+- **The system prompt needs a fix for confirmed actions**
+  ([task 0044](../../TASKS/0044-propose-confirmed-actions.md)). For "send a
+  mail", gpt-5 at `low` and above (and once at `minimal`) asked the user to
+  say "confirm send" instead of proposing `mail.send`, so the Sodalis
+  confirmation flow never starts. All 7 of its misses at `low`–`high` are
+  this case.
+- **Measured cost:** the four Azure comparison runs (240 turns) cost $2.41
+  at Data Zone list prices; with warm-ups and the live check, about $2.60.
 
 ## Scope
 
@@ -100,12 +117,12 @@ Persistent memory is out of scope (task 0037 Implementation Notes).
 | Sodalis selection | `openai-compatible` | `openai-compatible`, blank `LLM_BASE_URL` | `openai-compatible` (not run) | `azure` |
 | Endpoint | `http://<host>:11434/v1/chat/completions` | `http://llm:8080/v1/chat/completions` | `/v1/chat/completions` | `https://<resource>.openai.azure.com/openai/v1/chat/completions` |
 | Auth | none (key ignored) | optional `--api-key`, Bearer | optional `--api-key`, Bearer | `api-key` header |
-| Streaming (SSE) | yes, measured | yes | yes (docs) | yes (docs) |
-| `json_object` | yes, measured | yes (docs) | yes (docs) | yes (docs) |
+| Streaming (SSE) | yes, measured | yes | yes (docs) | yes, measured (arrives in bursts) |
+| `json_object` | yes, measured | yes (docs) | yes (docs) | yes, measured |
 | `json_schema` | yes (docs) | yes (docs) | yes (docs) | yes, strict mode (not used) |
-| Usage in stream | yes, measured | not documented | yes (docs) | yes (docs) |
+| Usage in stream | yes, measured | not documented | yes (docs) | yes, measured (incl. reasoning) |
 | Reasoning control | `reasoning_effort` per model (docs); not sent | `--reasoning-effort` / `reasoning_effort` to the template (docs) | per reasoning parser (docs) | `reasoning_effort`, sent |
-| Cancellation | stops generating on disconnect, measured | not measured | not verified | Sodalis disconnects; upstream stop not observable |
+| Cancellation | stops generating on disconnect, measured | not measured | not verified | Sodalis cancels, measured; upstream stop not observable |
 | Container | host install (example) | `ghcr.io/ggml-org/llama.cpp:server` | `vllm/vllm-openai` (GPU) or `vllm/vllm-openai-cpu` (x86 AVX2/AVX-512) | cloud |
 
 Sources: Ollama
@@ -152,24 +169,60 @@ the AI service's system prompt and `json_object`.
 
 ### Azure gpt-5 by reasoning effort
 
-Pending: run by the user with the Azure key (see
-[development-stack.md](../development-stack.md#compare-llm-providers)).
+Measured 2026-10-16, deployment `gpt-5` (Data Zone Standard, EU), 60 turns
+per effort after one warm-up, sequentially. Prices are the Azure retail list
+prices for gpt-5 Data Zone (effective 2025-08-01): $1.375 per million input
+tokens and $11 per million output tokens; reasoning tokens bill as output.
+
+| Effort | Failures | JSON / schema valid | Chat without action | Correct action | First text median / p90 | Complete reply median / p90 | Mean tokens in / out (reasoning) | Cost per turn | Cost, 60 turns |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `minimal` | 0 | 100% / 100% | 30/30 | 27/30 (90%) | 1.4 s / 1.7 s | 1.8 s / 4.3 s | 1,085 / 129 (0) | $0.0029 | $0.17 |
+| `low` | 0 | 100% / 100% | 30/30 | 28/30 (93%) | 3.6 s / 5.1 s | 4.8 s / 7.0 s | 1,085 / 375 (230) | $0.0056 | $0.34 |
+| `medium` | 0 | 100% / 100% | 30/30 | 27/30 (90%) | 9.4 s / 13.8 s | 10.2 s / 15.2 s | 1,085 / 889 (746) | $0.0113 | $0.68 |
+| `high` | 0 | 100% / 100% | 30/30 | 28/30 (93%) | 15.4 s / 28.3 s | 15.6 s / 28.8 s | 1,085 / 1,712 (1,570) | $0.0203 | $1.22 |
+
+- **Misses:** `low`–`high` missed only "send a mail" (7 of 9 turns), by
+  listing the message and asking for "confirm send" without proposing
+  `mail.send`. At `minimal`, the misses were one "send" proposed as
+  `mail.create-draft`, one search and one fan request answered with a
+  clarifying or confirming question instead of the action.
+- **No invented actions:** for the pizza request, every effort explained
+  that it cannot order and offered a draft or checklist instead.
+- **Dutch:** natural and grammatical in the samples reviewed (for example
+  "Goedemorgen! Met mij gaat het goed, dank je. Hoe gaat het met jou
+  vandaag?"). Longer replies at `low` and above often use line-broken lists
+  although the system prompt asks for no Markdown.
+- **Streaming arrives in bursts:** the reply completes a median 0.2–0.7 s
+  after the first chunk, consistent with Azure's default content filter
+  releasing streamed output in batches. Time to first text is therefore
+  close to the full reply time.
 
 ### Live check
 
 | Provider | Round trips (first chunk / total) | Long reply | Cancelled after first chunk | Recovery |
 | --- | --- | --- | --- | --- |
 | Ollama `llama3.2:3b`, AI service on the host (no gateway) | 3/3 valid; 0.2–0.5 s / 12–20 s | 94 s uncancelled | 5/5, at 0.7–3.3 s | HTTP 200, 10 s |
-| Azure gpt-5 | Pending | | | |
+| Azure gpt-5, `medium`, full Compose stack through the gateway | 3/3 valid; 3.2–5.8 s / 3.4–6.0 s | 14.3 s uncancelled (first chunk 10.6 s) | 5/5, at 8.6–13.2 s | HTTP 200, 5.6 s |
 
 All five cancelled turns released their slot (one more than the capacity of
 four). The recovery turn took a normal 10 s rather than waiting behind five
 94 s replies, which indicates that Ollama stopped generating when Sodalis
-closed the upstream connection.
+closed the upstream connection. For Azure, the stack check confirmed that
+the AI container received only the `AZURE_LLM_*` settings (local `LLM_*`
+blanked) and that the speech container received none of them.
 
 ### Ratings
 
-Pending: the user rates each configuration from the generated `review.md`.
+The user reviewed both `review.md` files and gave a qualitative assessment
+instead of numeric ratings:
+
+- **Azure gpt-5 `minimal`: preferred.** "Very fast, with the same answer
+  quality as low or high. In a setting where you are conversing, speed is
+  also an important factor, so that is preferred."
+- **Azure gpt-5 `low`, `medium`, `high`:** same answer quality as `minimal`,
+  but slower.
+- **Local `llama3.2:3b`:** "made a lot of mistakes in expected tool calls.
+  The answers were also very short and sometimes a bit weird."
 
 ## Analysis
 
@@ -189,7 +242,22 @@ Pending: the user rates each configuration from the generated `review.md`.
 - **Streaming hides little for speech.** The caption starts after about
   1.4 s locally, but Sodalis sends the complete reply to TTS, so speech
   starts only after the full reply, a median 18.5 s on this laptop.
-- <!-- AZURE-ANALYSIS -->Azure analysis pending the gpt-5 runs.
+- **gpt-5 removes the quality problem but not every latency problem.** It
+  is schema-perfect and never invents actions, so `json_schema` is not
+  needed for it. At `minimal` it is about 10 times faster than the local 3B
+  model end to end (1.8 s versus 18.5 s median) on this laptop.
+- **More reasoning buys nothing measurable here.** Action accuracy is flat
+  from `minimal` to `high` (90–93%), while latency and cost rise steeply.
+  Higher efforts also make replies longer and list-shaped, which suits a
+  spoken avatar less. Keep `AZURE_LLM_REASONING_EFFORT=minimal`; the `.env`
+  used for the stack check had `medium`, which costs about 8 s per turn.
+- **The confirmation miss is a prompt contract issue, not a model issue.**
+  The system prompt lists each action's `confirmationPhrase` and forbids
+  claiming confirmation, so a careful model asks for confirmation itself.
+  Telling the model to *propose* confirmed actions and let Sodalis ask should
+  fix it for every provider; re-run the comparison after that change.
+- **Cost is small for development use.** At `minimal`, 1,000 turns cost
+  about $2.90 at Data Zone list prices.
 
 ## Limitations
 
@@ -201,7 +269,11 @@ Pending: the user rates each configuration from the generated `review.md`.
   discounts, so it is an upper bound.
 - Cancellation is checked at the Sodalis API. For Ollama, the recovery
   timing shows upstream generation stops; for Azure, whether generation
-  (and billing) stops on disconnect is not observable from outside.
+  (and billing) stops on disconnect is not observable from outside, and the
+  burst delivery means cancellation often lands after most of the reply was
+  generated.
+- Azure was measured from one location at one time of day, on one
+  deployment; the subjective quality notes are from a sample of replies.
 - The local live check ran against the AI service directly, without Compose
   and the gateway.
 - The laptop had about 7 GiB of RAM and other workloads; one local turn
@@ -210,9 +282,10 @@ Pending: the user rates each configuration from the generated `review.md`.
 
 ## Open items
 
-- Run the Azure comparison at the four reasoning efforts, with prices.
-- Run the live check with `LLM_PROVIDER=azure` through the gateway.
-- Rate each configuration from `review.md`.
-- Follow-up task: measure vLLM (CPU image on x86 AVX2, or GPU), and decide
-  on `json_schema` strict output if JSON validity is poor.
+- [Task 0044](../../TASKS/0044-propose-confirmed-actions.md): change the
+  system prompt so the model proposes confirmed actions and Sodalis asks for
+  confirmation, then re-run both comparisons.
+- [Task 0043](../../TASKS/0043-vllm-and-constrained-utterance-output.md):
+  measure vLLM (CPU image on x86 AVX2, or GPU) and evaluate `json_schema`
+  output for local models.
 - Entra ID (keyless) authentication for Azure is not implemented.
