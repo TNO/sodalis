@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSpeechProviders } from "./providers.js";
+import { isStreamingEngine } from "./StreamingRecognition.js";
 
 describe("speech provider selection", () => {
   it("selects STT and TTS independently and provides deterministic mocks", async () => {
@@ -8,6 +9,7 @@ describe("speech provider selection", () => {
       TTS_PROVIDER: "mock",
     });
     const signal = new AbortController().signal;
+    if (isStreamingEngine(stt)) throw new Error("The mock STT provider must buffer audio.");
     await expect(stt.transcribe({
       audio: new Uint8Array([1]), mimeType: "audio/wav", language: "nl-NL", signal,
     })).resolves.toEqual({ text: "Dit is een test." });
@@ -30,7 +32,7 @@ describe("speech provider selection", () => {
     })).toThrow("PIPER_HTTP_URL");
     expect(() => createSpeechProviders({
       STT_PROVIDER: "azure", TTS_PROVIDER: "mock",
-    })).toThrow("AZURE_STT_URL");
+    })).toThrow("AZURE_STT_ENDPOINT");
     expect(() => createSpeechProviders({
       STT_PROVIDER: "whistle", TTS_PROVIDER: "mock",
     })).toThrow("WHISTLE_URL");
@@ -60,27 +62,26 @@ describe("speech provider selection", () => {
     })).toThrow("HTTPS");
   });
 
-  it("selects final-only Azure STT only with its own explicit endpoint and key", () => {
-    const azureSttUrl =
-      "https://example.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15";
+  it("selects Azure real-time STT only with its own explicit endpoint and key", () => {
+    const azureSttEndpoint = "https://soladis-foundry.cognitiveservices.azure.com/";
     const { stt } = createSpeechProviders({
       STT_PROVIDER: "azure",
       TTS_PROVIDER: "mock",
-      AZURE_STT_URL: azureSttUrl,
+      AZURE_STT_ENDPOINT: azureSttEndpoint,
       AZURE_STT_KEY: "stt-key",
     });
-    expect(stt.partialResults).toBe(false);
+    expect(stt).toMatchObject({ provider: "azure", cloud: true });
     expect(() => createSpeechProviders({
       STT_PROVIDER: "azure",
       TTS_PROVIDER: "mock",
-      AZURE_STT_URL: azureSttUrl,
+      AZURE_STT_ENDPOINT: azureSttEndpoint,
       AZURE_TTS_KEY: "tts-key",
     })).toThrow("AZURE_STT_KEY");
     expect(createSpeechProviders({
       PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
       TTS_PROVIDER: "mock",
-      AZURE_STT_URL: azureSttUrl,
+      AZURE_STT_ENDPOINT: azureSttEndpoint,
       AZURE_STT_KEY: "stt-key",
-    }).stt.partialResults).not.toBe(false);
+    }).stt).not.toHaveProperty("cloud");
   });
 });

@@ -125,35 +125,67 @@ describe("ServerSpeechToTextProvider", () => {
       .toEqual(["POST", "POST", "POST", "POST", "POST"]);
   });
 
-  it("skips interim requests when the server's provider only returns final transcripts", async () => {
+  it("polls a streaming recognizer on the server's interval, independent of uploads, and reports cloud use", async () => {
+    vi.useFakeTimers();
+    try {
+      const partials = ["Hoe", "Hoe oud"];
+      const fetcher = vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/sessions")) {
+          return jsonResponse({
+            sessionId: "live", partialIntervalMs: 250, provider: "azure", cloud: true,
+          }, 201);
+        }
+        if (url.endsWith("/audio")) return jsonResponse({ acceptedBytes: 1 });
+        if (url.endsWith("/partial")) return jsonResponse({ text: partials.shift() ?? "" });
+        return jsonResponse({ text: "Hoe oud bent u?" });
+      });
+      const provider = new ServerSpeechToTextProvider({ fetch: fetcher });
+      const session = await provider.createSession({
+        sessionId: "live", language: "nl-NL",
+        signal: new AbortController().signal,
+      });
+      expect(session.recognizer).toEqual({ provider: "azure", cloud: true });
+      const partialCalls = () =>
+        fetcher.mock.calls.filter(([url]) => String(url).endsWith("/partial")).length;
+
+      await session.writeAudio({ data: new Uint8Array([1]), mimeType: "audio/webm" });
+      await vi.advanceTimersByTimeAsync(249);
+      expect(partialCalls()).toBe(0);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(partialCalls()).toBe(1);
+      await vi.advanceTimersByTimeAsync(250);
+      expect(partialCalls()).toBe(2);
+
+      const events = session.events[Symbol.asyncIterator]();
+      expect((await events.next()).value).toEqual({ type: "partial", text: "Hoe", sessionId: "live" });
+      expect((await events.next()).value).toEqual({ type: "partial", text: "Hoe oud", sessionId: "live" });
+      await session.finish();
+      expect((await events.next()).value)
+        .toEqual({ type: "final", text: "Hoe oud bent u?", sessionId: "live" });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(partialCalls()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the default interim interval and no recognizer details for local engines", async () => {
     let clock = 0;
-    const onPartialError = vi.fn();
     const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse({ sessionId: "final-only", partialResults: false }, 201))
+      .mockResolvedValueOnce(jsonResponse({ sessionId: "local" }, 201))
       .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 1 }))
-      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 2 }))
-      .mockResolvedValueOnce(jsonResponse({ text: "Hoe oud bent u?" }));
-    const provider = new ServerSpeechToTextProvider({
-      fetch: fetcher, now: () => clock, onPartialError,
-    });
+      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 2 }));
+    const provider = new ServerSpeechToTextProvider({ fetch: fetcher, now: () => clock });
     const session = await provider.createSession({
-      sessionId: "final-only", language: "nl-NL",
+      sessionId: "local", language: "nl-NL",
       signal: new AbortController().signal,
     });
+    expect(session.recognizer).toBeUndefined();
     await session.writeAudio({ data: new Uint8Array([1]), mimeType: "audio/webm" });
-    clock = 1600;
+    clock = 300;
     await session.writeAudio({ data: new Uint8Array([2]), mimeType: "audio/webm" });
-    await session.finish();
-
-    expect((await session.events[Symbol.asyncIterator]().next()).value)
-      .toEqual({ type: "final", text: "Hoe oud bent u?", sessionId: "final-only" });
-    expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual([
-      "/api/speech/stt/sessions",
-      "/api/speech/stt/sessions/final-only/audio",
-      "/api/speech/stt/sessions/final-only/audio",
-      "/api/speech/stt/sessions/final-only/finish",
-    ]);
-    expect(onPartialError).not.toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it("cancels the remote session and rejects stale writes", async () => {

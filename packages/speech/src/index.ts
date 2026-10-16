@@ -65,6 +65,11 @@ export interface SpeechToTextSessionConfig {
 export interface SpeechToTextSession {
   readonly id: SpeechSessionId;
   readonly events: AsyncIterable<SpeechToTextEvent>;
+  /** Present when the server identifies the recognizer, e.g. to disclose cloud processing. */
+  readonly recognizer?: {
+    readonly provider: string;
+    readonly cloud: boolean;
+  };
   /** Submit an audio segment; rejects after finish or cancellation. */
   writeAudio(chunk: SpeechAudioChunk): Promise<void>;
   /**

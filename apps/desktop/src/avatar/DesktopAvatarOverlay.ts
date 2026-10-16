@@ -55,6 +55,7 @@ interface DesktopAvatarOverlayAttrs {
   actionRuntime?: AssistantActionRuntime;
 }
 
+const CLOUD_RECOGNIZER_NAMES: Readonly<Record<string, string>> = { azure: "Azure" };
 const TASKBAR_FLOOR_OVERLAP = 3;
 const TASKBAR_AVATAR_OCCLUSION_RATIO = 0.5;
 const MOCK_NOTIFICATIONS: AvatarNotification[] = [
@@ -151,6 +152,7 @@ export const DesktopAvatarOverlay =
     let userTranscript: string | undefined;
     let assistantText: string | undefined;
     let activeRecognition: ActiveSpeechRecognition | undefined;
+    let cloudSpeechRecognizer: string | undefined;
     const speechApiBaseUrl = import.meta.env.VITE_SODALIS_API_URL ?? "/api";
     const speechToTextProvider = new ServerSpeechToTextProvider({
       baseUrl: speechApiBaseUrl,
@@ -301,6 +303,10 @@ export const DesktopAvatarOverlay =
             return;
           }
           recognition.session = session;
+          const recognizer = session.recognizer;
+          cloudSpeechRecognizer = recognizer?.cloud
+            ? CLOUD_RECOGNIZER_NAMES[recognizer.provider] ?? recognizer.provider
+            : undefined;
           void (async () => {
             try {
               for await (const event of session.events) {
@@ -913,6 +919,7 @@ export const DesktopAvatarOverlay =
               ? m(AvatarConversationCard, {
                   speechInput,
                   speechActivityMessage,
+                  cloudSpeechRecognizer,
                   speechError,
                   speechOutputError,
                   conversationError,

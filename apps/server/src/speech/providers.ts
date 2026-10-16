@@ -5,7 +5,8 @@ import type { SpeechSynthesisEngine } from "./PiperTtsEngine.js";
 import { PiperTtsEngine } from "./PiperTtsEngine.js";
 import { PiperHttpEngine } from "./PiperHttpEngine.js";
 import { AzureTtsEngine } from "./AzureTtsEngine.js";
-import { AzureSttEngine } from "./AzureSttEngine.js";
+import { AzureRealtimeSttEngine } from "./AzureRealtimeSttEngine.js";
+import type { StreamingSpeechRecognitionEngine } from "./StreamingRecognition.js";
 
 export interface SpeechProviderSettings {
   readonly STT_PROVIDER?: string;
@@ -13,7 +14,7 @@ export interface SpeechProviderSettings {
   readonly WHISPER_CPP_URL?: string;
   readonly WHISTLE_URL?: string;
   readonly PARAKEET_TDT_URL?: string;
-  readonly AZURE_STT_URL?: string;
+  readonly AZURE_STT_ENDPOINT?: string;
   readonly AZURE_STT_KEY?: string;
   readonly PIPER_MODEL_PATH?: string;
   readonly PIPER_EXECUTABLE?: string;
@@ -29,10 +30,10 @@ function required(value: string | undefined, name: string): string {
 }
 
 export function createSpeechProviders(settings: SpeechProviderSettings): {
-  stt: SpeechRecognitionEngine;
+  stt: SpeechRecognitionEngine | StreamingSpeechRecognitionEngine;
   tts: SpeechSynthesisEngine;
 } {
-  const stt: SpeechRecognitionEngine = (() => {
+  const stt: SpeechRecognitionEngine | StreamingSpeechRecognitionEngine = (() => {
     switch (settings.STT_PROVIDER ?? "parakeet-tdt") {
       case "whisper-cpp":
         return new WhisperCppHttpEngine({
@@ -49,8 +50,8 @@ export function createSpeechProviders(settings: SpeechProviderSettings): {
           name: "Parakeet TDT",
         });
       case "azure":
-        return new AzureSttEngine({
-          endpoint: required(settings.AZURE_STT_URL, "AZURE_STT_URL"),
+        return new AzureRealtimeSttEngine({
+          endpoint: required(settings.AZURE_STT_ENDPOINT, "AZURE_STT_ENDPOINT"),
           key: required(settings.AZURE_STT_KEY, "AZURE_STT_KEY"),
         });
       case "mock":

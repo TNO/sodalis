@@ -30,5 +30,5 @@ a single place to find conclusions.
 | Evaluation | Task | Status |
 | --- | --- | --- |
 | [Dutch TTS providers](tts-providers.md) | 0036 | Automatic gates complete; listening review pending |
-| [Alternate STT providers](stt-providers.md) | 0035 | Complete; Azure and Parakeet Redux not measured live |
+| [Alternate STT providers](stt-providers.md) | 0035 | In progress: Azure real-time adapter built, live Dutch run pending; Redux not measured |
 | Alternate LLM providers | 0037 | Not started |

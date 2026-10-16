@@ -1,8 +1,9 @@
 # Alternate STT provider evaluation (task 0035)
 
-Status: complete as of 2026-10-16. Covers every Sodalis STT measurement up
-to 2026-10-15. No live Azure measurement and no Parakeet Redux measurement
-exist; see [Limitations](#limitations).
+Status: in progress as of 2026-10-16. Covers every Sodalis STT measurement
+up to 2026-10-15. The Azure real-time adapter is implemented; its live Dutch
+measurement is pending. No Parakeet Redux measurement exists; see
+[Limitations](#limitations).
 Setup and reproduction commands are in
 [development-stack.md](../development-stack.md#try-local-whistle-or-parakeet-tdt-in-compose).
 
@@ -27,12 +28,14 @@ Setup and reproduction commands are in
   European ones, or on a Mac with Metal.
 - **Cactus Whistle is the fastest but least accurate.** It made 30.2% WER on
   the MLS subset and stays an opt-in profile.
-- **Azure AI Speech now has an opt-in, final-transcript-only adapter**
+- **Azure AI Speech real-time recognition is an opt-in cloud provider**
   (`STT_PROVIDER=azure`).
-  - It uses fast transcription and uploads each finished utterance once. It
-    offers no interim captions, and there is no fallback to or from it.
-  - It is verified only with contract tests: no audio has been sent to
-    Azure, so its Dutch accuracy and latency are unmeasured.
+  - It streams each utterance to Azure while the user speaks and serves
+    Azure's running hypothesis as live captions.
+  - At most 30 s of audio per utterance is sent; there is no fallback to or
+    from it, and the conversation card discloses cloud processing.
+  - Contract tests and a connection probe pass. Dutch accuracy, caption
+    timing, and cost are unmeasured until the live run.
 - **No Parakeet Redux adapter.** Its weights are CC BY 4.0, but its Photon
   runtime depends on `kestrel-kernels`, which requires a separate written
   agreement. The broader Cactus engine is also not bundled, because of its
@@ -73,10 +76,11 @@ During the work the comparison was extended to:
 4. `/finish`;
 5. `DELETE` to cancel.
 
-Engines are selected only by server-side `STT_PROVIDER`. An engine may now
-declare itself final-only. Session creation then returns
-`partialResults: false`, the browser skips interim requests, and `/partial`
-answers 501.
+Engines are selected only by server-side `STT_PROVIDER`. A streaming engine
+receives each audio chunk as it arrives. Session creation then returns
+`partialIntervalMs`, `provider`, and `cloud`: the browser polls `/partial`
+at that interval, and `/partial` returns the recognizer's latest hypothesis
+without new recognition.
 
 ## Method
 
@@ -210,7 +214,7 @@ cover two repeat runs.
 | **Parakeet TDT v3**, sherpa-onnx, CPU | Most accurate within real time on CPU: MLS 17.2%, private clips 8.6% | Sodalis snapshot interim | Aborts the request; inference already running continues | RTF 0.12 on laptop CPU | Weights CC BY 4.0 (attribution); runtime Apache-2.0; conversion repo terms to check before publishing an image | Compose on all three; tested on Linux/WSL2 and in a macOS Podman VM; needs more than 2 GB of VM memory | **Default.** `STT_PROVIDER=parakeet-tdt`, profile `parakeet-tdt`, or `PARAKEET_TDT_URL` |
 | Whisper.cpp | Base 30.9–35.8%; Small 11.1–22.8%; Medium 6.2–11.6% | Sodalis snapshot interim; Small is too slow for live captions on CPU | Session cancellation | CPU: only Base is within real time; Metal makes Medium usable on a Mac | MIT runtime and models | Compose CPU on all three; native Metal on macOS | Opt-in. `whisper-cpp`, profile `whisper` (`WHISPER_MODEL`), or `WHISPER_CPP_URL` |
 | Cactus Whistle/Needle | MLS 30.2% | Sodalis snapshot interim | Aborts the request; inference continues | ~137–252 ms per clip | Apache-2.0 model and runtime | Compose CPU | Opt-in. `whistle`, profile `whistle`, or `WHISTLE_URL` |
-| Azure AI Speech (fast transcription) | Dutch supported by the service; **not measured** | None (final only, `partialResults: false`) | Aborts the upstream HTTP request | Not measured | Commercial cloud service; billing, data transfer | Any host with network access | Opt-in. `STT_PROVIDER=azure`, `AZURE_STT_URL`, `AZURE_STT_KEY`; no container |
+| Azure AI Speech real-time (Speech SDK) | Dutch (`nl-NL`) supported by the service; **not measured** | True incremental: Azure's running hypothesis, polled every 250 ms | Stops recognition and closes the connection | Not measured; at most 30 s of audio per utterance | Commercial cloud service (~$1 per audio hour, S1, West Europe); MIT-licensed SDK; LGPL FFmpeg | Any host with network access; FFmpeg in the API image, or on `PATH` natively | Opt-in. `STT_PROVIDER=azure`, `AZURE_STT_ENDPOINT`, `AZURE_STT_KEY`; no container |
 | Nemotron 3.5 ASR streaming | Private clips 13.6% (560 ms); one phrase came out German | True incremental; no rewrites | Not integrated | Lag ~0.2 s; final ~0.5 s | Not reviewed | Linux/WSL2 CPU in an experiment | Not integrated; follow-up |
 | Moondream Parakeet Redux / Photon | Dutch claimed; not measured | Photon documents live PCM snapshots; unverified | Unverified | Not measured | Weights CC BY 4.0; `kestrel-kernels` needs a written agreement | CPU, Apple silicon, CUDA per vendor | Not integrated; runtime not installed |
 | Cactus engine (other models) | Not measured | Chunked `confirmed` / `pending` API | Unverified | Not measured | Restricts organizations above funding or revenue thresholds | Vendor-dependent | Not bundled |
@@ -261,23 +265,33 @@ explicitly and is never replaced by another one.
   before choosing between the two for live captions.
 - **Cancellation.** For every local engine, cancellation aborts the Sodalis
   request but cannot interrupt CPU inference that is already running. For
-  Azure, aborting the upload or response is enough.
+  Azure, cancelling stops recognition and closes the connection.
 - **Request length.** The Whistle and Parakeet services reject requests over
-  30 s. Whisper.cpp has no such limit in Sodalis: a 44 s recording with
-  three distinct passages returned all three.
+  30 s, so such an utterance fails. Azure instead stops sending audio after
+  30 s and returns the transcript so far. Whisper.cpp has no such limit in
+  Sodalis: a 44 s recording with three distinct passages returned all three.
 
 ### Azure
 
-- **Why fast transcription.** Its REST API accepts the browser's WebM/Opus
-  directly and takes explicit locales, so it fits the existing
-  buffered-session contract without a native SDK.
-- **Why final-only.** Re-uploading the growing snapshot every 1.5 s would
-  multiply billed audio and data transfer. The adapter therefore declares
-  itself final-only.
-- **Not chosen: the real-time SDK.** It provides interim events, but would
-  need a separate streaming path in the speech API.
-- **Not evaluated live.** Measuring Dutch accuracy and latency needs
-  credentials and authorization to send test recordings.
+- **Route.** Azure Speech real-time recognition through the official Speech
+  SDK, on a Speech (Foundry Tools) resource addressed by endpoint and key.
+  - Chosen for live captions.
+  - **Fast transcription:** a first final-only adapter was replaced, because
+    it had no captions.
+  - **Foundry model deployments** (`gpt-4o-transcribe`, Realtime API) were
+    not chosen.
+- **Audio conversion.** The Node SDK accepts only PCM, so FFmpeg in the
+  speech API converts the browser's WebM/Opus per session. A minimal LGPL
+  build adds about 2 MB to the API image; Debian's package would have added
+  472 MB.
+- **Caption delivery.** Polling `/partial` every 250 ms keeps one caption
+  path for every provider, at about 0.1–0.2 s of extra delay compared with
+  pushing captions.
+- **Cost bound.** Recognition starts with the first audio chunk, not when
+  the microphone opens, and each utterance is capped at 30 s of audio.
+- **Not evaluated live.** Dutch accuracy, caption timing, and the endpoint
+  form still need the real key and authorization to send the test
+  recordings. A probe with an invalid key failed cleanly within 2 s.
 
 ### Licensing and deployment
 
@@ -321,8 +335,11 @@ explicitly and is never replaced by another one.
   before treating WER differences of a few points as meaningful.
 - Measure longer, noisier, and continuous-microphone speech, including
   pre-roll, sustained-speech rollover, and the 30 s request limit.
-- Run Azure STT live, once credentials and authorization to send test audio
-  exist.
+- Run the Azure live smoke test and `scripts/stt-live-captions.ts` on the
+  six private clips and the MLS subset against the `soladis-foundry`
+  resource. Record WER, time to first caption, final latency, and rewrites
+  here, and confirm that the resource endpoint form works with the Speech
+  SDK.
 - Check the redistribution terms of the Parakeet ONNX conversion before
   publishing an image, and review Nemotron's license before integrating it.
 - Re-evaluate Parakeet Redux only if a written `kestrel-kernels` agreement is

@@ -10,6 +10,8 @@ import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
 interface AvatarConversationCardAttrs {
   speechInput?: SpeechInputController;
   speechActivityMessage?: string;
+  /** Display name of a cloud recognizer that receives microphone audio. */
+  cloudSpeechRecognizer?: string;
   speechError?: string;
   speechOutputError?: string;
   userTranscript?: string;
@@ -223,6 +225,12 @@ export const AvatarConversationCard =
               "p.avatar-conversation-status[role=status][aria-live=polite]",
               statusMessage,
             ),
+            listening && vnode.attrs.cloudSpeechRecognizer
+              ? m(
+                  "p.avatar-conversation-cloud-notice",
+                  `Speech recognized by ${vnode.attrs.cloudSpeechRecognizer} (cloud)`,
+                )
+              : null,
             m(
               "button.avatar-conversation-listening[type=button]",
               {

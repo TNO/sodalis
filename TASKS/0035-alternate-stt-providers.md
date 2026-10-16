@@ -1,6 +1,6 @@
 # 0035 Evaluating alternate STT providers
 
-Status: done
+Status: in_progress
 Priority: medium
 Subsystem: speech
 Depends on: 0030, 0034
@@ -114,3 +114,10 @@ contract.
 - Redux stays unintegrated because of its runtime license.
 - Consolidated analysis written; stale-partial cancellation and Nemotron
   streaming moved to task 0042.
+- 2026-10-16: reopened after a design review.
+  - Replaced the fast-transcription adapter with Azure Speech real-time
+    recognition (live captions, 30 s cap, cloud notice).
+  - Decisions and findings are in the evaluation's Azure section.
+  - Remaining before done: run the live smoke test and
+    `scripts/stt-live-captions.ts` with the real key, and record the results
+    in the evaluation.

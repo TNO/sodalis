@@ -40,10 +40,12 @@ Whisper.cpp is used because its self-hosted multilingual models provide a
 privacy-preserving server-side path and support Dutch without binding Sodalis
 to a hosted speech API. Its HTTP interface returns only a final transcript;
 the speech API derives replaceable interim transcripts by re-transcribing the
-growing audio snapshot, and does not synthesize confidence values. Engines that
-cannot afford repeated uploads (Azure STT) advertise `partialResults: false`
-when a session is created; the browser then skips interim requests and the
-`/partial` route returns 501.
+growing audio snapshot, and does not synthesize confidence values. Streaming
+engines (Azure STT) instead receive each audio chunk as it arrives: the speech
+API converts WebM/Opus to 16 kHz PCM with FFmpeg, `/partial` returns the
+recognizer's latest hypothesis without new recognition, and session creation
+returns `partialIntervalMs`, `provider`, and `cloud` so the browser polls more
+often and can disclose cloud processing.
 
 The requested Whistle comparison used two synthetic Dutch utterances. Whistle
 misheard “Anne” as “alle” once and changed “afspraak” to “afspraken” once.
@@ -78,8 +80,9 @@ desktop's “Read aloud” control plays the response and drives approximate,
 amplitude-based mouth movement; Piper's CLI does not provide phoneme or viseme
 timing. `STT_PROVIDER` defaults to `parakeet-tdt` (requires `PARAKEET_TDT_URL`);
 other choices are `whisper-cpp` (`WHISPER_CPP_URL`), `whistle`
-(`WHISTLE_URL`), and opt-in cloud `azure` (`AZURE_STT_URL`, `AZURE_STT_KEY`;
-final transcripts only, never selected implicitly).
+(`WHISTLE_URL`), and opt-in cloud `azure` (`AZURE_STT_ENDPOINT`,
+`AZURE_STT_KEY`; Azure Speech real-time recognition, never selected
+implicitly; requires `ffmpeg` on `PATH` when run natively).
 `TTS_PROVIDER` defaults to `piper` (requires `PIPER_MODEL_PATH` and the
 matching `.onnx.json`). The speech service fails startup for missing settings
 or unknown provider IDs rather than falling back. Either role can instead
