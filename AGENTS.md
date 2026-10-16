@@ -14,3 +14,8 @@
 - Put the final, consolidated analysis of each evaluation (for example
   provider comparisons) in `docs/evaluations/`, following its README, and
   link it from the task. Keep only progress notes in `TASKS/`.
+- Get the user's explicit consent for each run before a command can send
+  data to a cloud provider (Azure STT, TTS, or LLM): `pnpm stack:smoke`, live
+  checks, comparison scripts, and live tests. First check which providers
+  `.env` and any `--env` overlay select; without consent for that run, ask,
+  or verify with a local or mock selection instead.

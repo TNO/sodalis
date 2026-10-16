@@ -1,0 +1,160 @@
+{
+  "description": "Fixed Dutch prompt set for scripts/llm-compare.ts (task 0037). Every prompt is sent with the same available-action list, so chat prompts also measure spurious actions. An expected argument value of null accepts any value of the schema type; other values must match exactly (strings case-insensitively).",
+  "actions": [
+    {
+      "id": "mail.list-messages",
+      "description": "List the most recent messages in the deterministic mock Mail app.",
+      "risk": "read",
+      "requiresConfirmation": false,
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "id": "mail.search-messages",
+      "description": "Search mock Mail by message text, sender, or subject.",
+      "risk": "read",
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "query": { "type": "string", "description": "Text to search for.", "maxLength": 200 } },
+        "required": ["query"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "mail.open-message",
+      "description": "Open a mock Mail message by its semantic message ID. Visible messages: msg-001 (Anna, Vergadering dinsdag), msg-002 (Bakkerij, Uw bestelling), msg-003 (Huisarts, Afspraak).",
+      "risk": "navigate",
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "messageId": { "type": "string", "description": "Semantic message ID.", "maxLength": 128 } },
+        "required": ["messageId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "mail.create-draft",
+      "description": "Create a local mock Mail draft without sending it.",
+      "risk": "draft",
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": { "type": "string", "description": "Recipient address.", "maxLength": 200 },
+          "subject": { "type": "string", "description": "Draft subject.", "maxLength": 300 },
+          "body": { "type": "string", "description": "Draft message body.", "maxLength": 8000 }
+        },
+        "required": ["to", "subject", "body"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "mail.send",
+      "description": "Send a message through the mock Mail app.",
+      "risk": "external-effect",
+      "requiresConfirmation": true,
+      "confirmationPhrase": "confirm send",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": { "type": "string", "description": "Recipient address.", "maxLength": 200 },
+          "subject": { "type": "string", "description": "Message subject.", "maxLength": 300 },
+          "body": { "type": "string", "description": "Message body.", "maxLength": 8000 }
+        },
+        "required": ["to", "subject", "body"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "desktop.open-app",
+      "description": "Open a trusted built-in desktop application by its app ID. Apps: calculator (Rekenmachine), notes (Notities), calendar (Agenda), mail (Mail).",
+      "risk": "navigate",
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "appId": { "type": "string", "description": "Trusted built-in app ID.", "maxLength": 128 } },
+        "required": ["appId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "home.light.turn-on",
+      "description": "turn_on on a light entity. Lights: light.bed_light (slaapkamer), light.kitchen_lights (keuken).",
+      "risk": "safe-control",
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "entityId": { "type": "string", "maxLength": 128 } },
+        "required": ["entityId"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "home.fan.speed",
+      "description": "set_percentage on a fan entity; value is a percentage 0-100. Fans: fan.living_room_fan (woonkamer).",
+      "risk": "safe-control",
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "entityId": { "type": "string", "maxLength": 128 }, "value": { "type": "number" } },
+        "required": ["entityId", "value"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "home.climate.target-temperature",
+      "description": "set_temperature on a climate entity; value in degrees Celsius. Thermostats: climate.hvac (woonkamer).",
+      "risk": "safe-control",
+      "requiresConfirmation": false,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "entityId": { "type": "string", "maxLength": 128 }, "value": { "type": "number" } },
+        "required": ["entityId", "value"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "home.lock.lock",
+      "description": "lock on a lock entity. Locks: lock.front_door (voordeur).",
+      "risk": "external-effect",
+      "requiresConfirmation": true,
+      "confirmationPhrase": "confirm home action",
+      "inputSchema": {
+        "type": "object",
+        "properties": { "entityId": { "type": "string", "maxLength": 128 } },
+        "required": ["entityId"],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "prompts": [
+    { "id": "chat-greeting", "category": "chat", "messages": [{ "role": "user", "content": "Goedemorgen! Hoe gaat het met je?" }], "expectedAction": null },
+    { "id": "chat-introduce", "category": "chat", "messages": [{ "role": "user", "content": "Wie ben jij en waarmee kun je me helpen?" }], "expectedAction": null },
+    { "id": "chat-lonely", "category": "chat", "messages": [{ "role": "user", "content": "Ik voel me vandaag een beetje eenzaam." }], "expectedAction": null },
+    { "id": "chat-explain", "category": "chat", "messages": [{ "role": "user", "content": "Kun je in twee zinnen uitleggen wat een warmtepomp doet?" }], "expectedAction": null },
+    { "id": "chat-recipe", "category": "chat", "messages": [{ "role": "user", "content": "Wat kan ik vanavond koken met aardappelen, prei en kaas?" }], "expectedAction": null },
+    { "id": "chat-weather", "category": "chat", "messages": [{ "role": "user", "content": "Gaat het morgen regenen in Amsterdam?" }], "expectedAction": null },
+    { "id": "chat-joke", "category": "chat", "messages": [{ "role": "user", "content": "Vertel me een korte, vrolijke grap." }], "expectedAction": null },
+    { "id": "chat-advice", "category": "chat", "messages": [{ "role": "user", "content": "Ik slaap slecht de laatste tijd. Heb je een tip?" }], "expectedAction": null },
+    { "id": "chat-mail-question", "category": "chat", "messages": [{ "role": "user", "content": "Wat is het verschil tussen een concept en een verzonden e-mail?" }], "expectedAction": null },
+    {
+      "id": "chat-follow-up", "category": "chat",
+      "messages": [
+        { "role": "user", "content": "Mijn kleindochter is morgen jarig." },
+        { "role": "assistant", "content": "{\"text\":\"Wat leuk! Hoe oud wordt ze?\",\"affect\":{\"expression\":\"happy\",\"valence\":0.6,\"arousal\":0.3,\"intensity\":0.3},\"interruptible\":true}" },
+        { "role": "user", "content": "Ze wordt acht. Wat zou ik haar kunnen geven?" }
+      ],
+      "expectedAction": null
+    },
+    { "id": "action-list-mail", "category": "action", "messages": [{ "role": "user", "content": "Laat mijn laatste e-mails zien." }], "expectedAction": { "id": "mail.list-messages", "arguments": {} } },
+    { "id": "action-search-mail", "category": "action", "messages": [{ "role": "user", "content": "Zoek de mail van Anna." }], "expectedAction": { "id": "mail.search-messages", "arguments": { "query": null } } },
+    { "id": "action-open-mail", "category": "action", "messages": [{ "role": "user", "content": "Open het bericht van de huisarts." }], "expectedAction": { "id": "mail.open-message", "arguments": { "messageId": "msg-003" } } },
+    { "id": "action-draft", "category": "action", "messages": [{ "role": "user", "content": "Maak een concept voor jan@example.com met als onderwerp Lunch en als tekst: Zullen we morgen samen lunchen?" }], "expectedAction": { "id": "mail.create-draft", "arguments": { "to": "jan@example.com", "subject": "Lunch", "body": null } } },
+    { "id": "action-send", "category": "action", "messages": [{ "role": "user", "content": "Stuur een mail naar jan@example.com met onderwerp Bedankt en tekst: Dank je wel voor je hulp gisteren." }], "expectedAction": { "id": "mail.send", "arguments": { "to": "jan@example.com", "subject": "Bedankt", "body": null } } },
+    { "id": "action-open-app", "category": "action", "messages": [{ "role": "user", "content": "Open de rekenmachine." }], "expectedAction": { "id": "desktop.open-app", "arguments": { "appId": "calculator" } } },
+    { "id": "action-light", "category": "action", "messages": [{ "role": "user", "content": "Doe de lamp in de slaapkamer aan." }], "expectedAction": { "id": "home.light.turn-on", "arguments": { "entityId": "light.bed_light" } } },
+    { "id": "action-fan", "category": "action", "messages": [{ "role": "user", "content": "Zet de ventilator in de woonkamer op 35 procent." }], "expectedAction": { "id": "home.fan.speed", "arguments": { "entityId": "fan.living_room_fan", "value": 35 } } },
+    { "id": "action-thermostat", "category": "action", "messages": [{ "role": "user", "content": "Zet de verwarming op 21 graden." }], "expectedAction": { "id": "home.climate.target-temperature", "arguments": { "entityId": "climate.hvac", "value": 21 } } },
+    { "id": "action-unavailable", "category": "action", "messages": [{ "role": "user", "content": "Bestel een pizza margherita voor me." }], "expectedAction": null }
+  ]
+}

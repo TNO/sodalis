@@ -227,7 +227,7 @@ describe("development stack selection", () => {
     expect(() => resolveStack({ STT_PROVIDER: "mock", TTS_PROVIDER: "mock" }))
       .toThrow("LLM_PROVIDER");
     expect(() => resolveStack({ ...base, HOME_PROVIDER: "" })).toThrow("HOME_PROVIDER");
-    expect(() => resolveStack({ ...base, LLM_PROVIDER: "azure" })).toThrow("LLM_PROVIDER");
+    expect(() => resolveStack({ ...base, LLM_PROVIDER: "azure" })).toThrow("AZURE_LLM_URL");
     expect(() => resolveStack({ ...base, STT_PROVIDER: "azure-speech" })).toThrow("STT_PROVIDER");
     expect(() => resolveStack({ ...base, TTS_PROVIDER: "piper-http" })).toThrow("PIPER_HTTP_URL");
     expect(() => resolveStack({ ...base, TTS_PROVIDER: "fish-speech-1.5" }))

@@ -35,7 +35,7 @@ Parakeet needs more than a 2 GB Podman VM; see the
 | --- | --- | --- |
 | STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL`; `azure` with `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` (real-time, max 30 s per utterance) |
 | TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
-| LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; the example targets host Ollama |
+| LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL` (the example targets host Ollama); `azure` with `AZURE_LLM_URL`, `AZURE_LLM_KEY`, and `AZURE_LLM_DEPLOYMENT` |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
 
 External URLs must be reachable **from the containers**, not just the host.
@@ -50,7 +50,8 @@ External Whistle and Parakeet TDT endpoints must speak Sodalis's local
 External Piper TTS must speak Piper HTTP (`POST /synthesize` with a WAV
 response); Azure TTS uses its own HTTPS SSML endpoint and streams raw
 22,050 Hz PCM through the speech API. The LLM endpoint
-must stream OpenAI-compatible Chat Completions; and the Home endpoint must
+must stream OpenAI-compatible Chat Completions (Azure OpenAI uses its v1 API
+with an `api-key` header); and the Home endpoint must
 implement Sodalis's `/api/home/*` contract. Azure STT (real-time Speech SDK)
 and Azure TTS (SSML) have explicit server-side adapters; other hosted
 services are usable **only when their
@@ -680,17 +681,100 @@ To opt out of the model download, edit your ignored `.env`:
 
 ```dotenv
 LLM_PROVIDER=mock
-LLM_BASE_URL=
-LLM_MODEL=
-LLM_API_KEY=
 ```
 
 `pnpm stack:up` then selects the deterministic mock without starting a
-local LLM engine or connecting to Ollama. For a different local GGUF model,
+local LLM engine or connecting to Ollama; other LLM settings are ignored. For a different local GGUF model,
 clear `LLM_BASE_URL` and set `LLM_MODEL` to the file in `models/llm/`;
 the stack selects its CPU llama.cpp profile. STT and TTS can also be
 selected independently: `STT_PROVIDER=mock` skips Whisper, and
 `TTS_PROVIDER=mock` skips Piper; leave the other role unchanged.
+
+### Use an Azure OpenAI LLM (opt-in)
+
+The optional `azure` LLM selection calls Azure OpenAI **only when explicitly
+selected**. Each turn sends the conversation text (up to 12 recent
+messages), the trusted app context (app ID, name, category), and the
+available semantic action list to Azure. Use your own Azure OpenAI or
+Foundry resource, with your consent; a **Data Zone EU** deployment is
+recommended. The browser still talks only to the Sodalis AI API, and the key
+stays in the AI container. Set these in your ignored `.env`, or in the same
+git-ignored `.env.azure` overlay as
+[Azure STT](#optional-azure-ai-speech-stt) and pass `--env .env.azure`:
+
+```dotenv
+LLM_PROVIDER=azure
+AZURE_LLM_URL=https://<resource>.openai.azure.com/openai/v1
+AZURE_LLM_KEY=<your resource key>
+AZURE_LLM_DEPLOYMENT=gpt-5
+# Optional: minimal (default), low, medium, or high
+AZURE_LLM_REASONING_EFFORT=
+```
+
+Keep `minimal` for conversation: in the
+[LLM provider evaluation](evaluations/llm-providers.md), gpt-5 chose actions
+as accurately at `minimal` as at higher efforts, with a median complete reply
+of 1.8 s instead of 4.8–15.6 s, at a fraction of the cost.
+
+**`AZURE_LLM_URL`** must be the HTTPS v1 resource endpoint. Hosts ending in
+`.openai.azure.com`, `.services.ai.azure.com`, or
+`.cognitiveservices.azure.com` are accepted; a bare host is completed to
+`/openai/v1`. Deployment URLs (`/openai/deployments/...`) and Foundry
+**project** endpoints (`/api/projects/...`) are rejected.
+**`AZURE_LLM_DEPLOYMENT`** is your deployment name, not the model family.
+Sodalis sends no temperature or token limit (GPT-5 rejects them) and does
+not retry 429 or 5xx responses. A content-filter block ends the turn with a
+"content filter" error.
+
+Local `LLM_*` and `AZURE_LLM_*` settings may coexist: to switch, change only
+`LLM_PROVIDER` and run `pnpm stack:up` again. The unselected provider's
+settings are blanked for the AI container, so the Azure key never reaches a
+local selection. There is no automatic fallback between providers.
+
+### Compare LLM providers
+
+Two opt-in scripts measure LLM providers for the
+[LLM provider evaluation](evaluations/llm-providers.md); neither runs in
+`pnpm test`. Azure configurations are billed.
+
+`scripts/llm-compare.ts` calls the providers in-process through the same
+factory as the AI service, with the fixed Dutch prompt set and action list in
+`scripts/llm-prompts.json` (10 chat and 10 action prompts). It reads `.env`
+plus an optional `--env <overlay>` such as `.env.azure` (the same overlay
+semantics as `pnpm stack:up --env`), runs one excluded warm-up per
+configuration, and then
+`--repetitions` passes (default 3). Configurations: `local` (`LLM_BASE_URL`
+and `LLM_MODEL`, with `host.docker.internal` rewritten to `127.0.0.1`, or
+`--local-url` and `--local-model`), `azure-minimal`, `azure-low`,
+`azure-medium`, `azure-high` (the `AZURE_LLM_*` settings with that reasoning
+effort), and `mock`. Pass the deployment's prices per million tokens to
+estimate cost; reasoning tokens are billed as output.
+
+```sh
+# Local baseline only (host Ollama):
+pnpm exec tsx scripts/llm-compare.ts --configs local --label local-llama3.2-3b
+# Azure at all four reasoning efforts (billed); prices per 1M tokens:
+pnpm exec tsx scripts/llm-compare.ts \
+  --configs azure-minimal,azure-low,azure-medium,azure-high \
+  --input-price <input> --output-price <output> --currency USD --label azure-gpt-5
+```
+
+Each run writes `results.json` (every raw response), `summary.md`, and
+`review.md` to `models/llm-eval/<label>/`. Rate each configuration in
+`review.md`. After changing the scoring rules or expectations, re-score a
+stored run without new (billed) requests:
+`pnpm exec tsx scripts/llm-compare.ts --rescore models/llm-eval/<label>`.
+
+`scripts/llm-live-check.ts <origin> <label>` checks the running stack's
+selected provider through the gateway: streamed round trips, utterance
+validity, and five turns cancelled after their first chunk (one more than the
+AI service's capacity of four), followed by a recovery turn. It writes
+`models/llm-live/<label>.json`.
+
+```sh
+pnpm stack:up
+pnpm exec tsx scripts/llm-live-check.ts http://127.0.0.1:4176 azure-gpt-5-minimal
+```
 
 ## Start, smoke, and stop
 
