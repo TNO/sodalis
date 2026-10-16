@@ -171,6 +171,23 @@ describe("development stack selection", () => {
     })).toThrow("AZURE_TTS_KEY");
   });
 
+  it("selects an Azure voice from a Foundry resource, but not from a Foundry project endpoint", () => {
+    const foundry = {
+      ...base,
+      TTS_PROVIDER: "azure",
+      AZURE_TTS_URL: "https://soladis-foundry.cognitiveservices.azure.com/",
+      AZURE_TTS_KEY: "test-key",
+      AZURE_TTS_VOICE: "en-US-Adam:DragonHDLatestNeural",
+    };
+    expect(resolveStack(foundry).environment).toMatchObject({
+      AZURE_TTS_URL: "https://soladis-foundry.cognitiveservices.azure.com",
+      AZURE_TTS_VOICE: "en-US-Adam:DragonHDLatestNeural",
+    });
+    expect(() => resolveStack({
+      ...foundry, AZURE_TTS_URL: "https://soladis-foundry.services.ai.azure.com/api/projects/sodalis",
+    })).toThrow(/project endpoint/);
+  });
+
   it("requires explicit LLM and Home providers and rejects incomplete or invalid selections", () => {
     expect(() => resolveStack({ STT_PROVIDER: "mock", TTS_PROVIDER: "mock" }))
       .toThrow("LLM_PROVIDER");

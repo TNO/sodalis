@@ -42,6 +42,8 @@ VOICES = {"piper": PIPER_VOICES[0], "fish": "unconditioned",
 DEVICES = {"piper": "CPU", "fish": "MPS (verify server log)", "voxtral": "Metal/MLX",
            "kugelaudio": "Metal/MLX", "chatterbox": "CPU", "mms": "CPU", "parler": "CPU",
            "azure": "Azure AI Speech (cloud)"}
+# Azure voice short name, optionally with a model suffix such as ":DragonHDLatestNeural".
+AZURE_VOICE = r"[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9]+(?::[A-Za-z0-9.-]+)?"
 MAX_MEDIAN_SECONDS = 1.5
 MAX_WER = 0.10
 # Greeting, apology, choice question, time/number, and long sentence; five more come from WER.
@@ -53,7 +55,9 @@ FLAGS = ("missing/extra words", "mispronunciation", "truncation", "artifacts", "
 
 
 def run_name(backend, voice):
-    return backend if voice == VOICES[backend] or backend == "azure" else f"{backend}-{voice}"
+    if backend == "azure":
+        return f"azure-{voice.replace(':', '-')}"
+    return backend if voice == VOICES[backend] else f"{backend}-{voice}"
 
 
 def piper_voice_urls(voice):
@@ -85,17 +89,28 @@ def azure_config(environ):
     url = environ.get("AZURE_TTS_URL", "").strip()
     voice = environ.get("AZURE_TTS_VOICE", "").strip()
     parts = urllib.parse.urlsplit(url)
+    host = parts.hostname or ""
+    if host.endswith(".services.ai.azure.com"):
+        raise ValueError("AZURE_TTS_URL is a Foundry project endpoint, which has no speech route; use the "
+                         "resource endpoint https://<resource>.cognitiveservices.azure.com/ instead.")
+    if host.endswith(".cognitiveservices.azure.com") and parts.path in ("", "/"):
+        parts = parts._replace(path="/tts/cognitiveservices/v1")
     if (parts.scheme != "https" or parts.username or parts.password or parts.fragment
             or not parts.path.endswith("/cognitiveservices/v1")):
-        raise ValueError("AZURE_TTS_URL must be an HTTPS Azure TTS /cognitiveservices/v1 endpoint.")
-    if not re.fullmatch(r"nl-(?:NL|BE)-[A-Za-z0-9]+Neural", voice):
-        raise ValueError("AZURE_TTS_VOICE must name a Dutch Azure neural voice.")
-    return {"url": url, "key": key, "voice": voice}
+        raise ValueError("AZURE_TTS_URL must be an HTTPS Azure Speech resource or /cognitiveservices/v1 endpoint.")
+    if not re.fullmatch(AZURE_VOICE, voice):
+        raise ValueError("AZURE_TTS_VOICE must be an Azure voice name such as nl-NL-FennaNeural or "
+                         "en-US-Adam:DragonHDLatestNeural.")
+    return {"url": urllib.parse.urlunsplit(parts), "key": key, "voice": voice}
 
 
-def azure_ssml(text, voice):
-    return (f'<speak version="1.0" xml:lang="{voice[:5]}"><voice name="{voice}">'
-            f"{html.escape(text, quote=True)}</voice></speak>")
+def azure_ssml(text, voice, language="nl-NL"):
+    """SSML in the speech API's form; multilingual voices from other locales get the reply marked as Dutch."""
+    body = html.escape(text, quote=True)
+    if not voice.lower().startswith("nl-"):
+        body = f'<lang xml:lang="{language}">{body}</lang>'
+    return (f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{language}">'
+            f'<voice name="{voice}">{body}</voice></speak>')
 
 
 AZURE_RETRY_STATUSES = (429, 500, 502, 503, 504)
@@ -123,10 +138,12 @@ def azure_preflight(config, opener=urllib.request.urlopen, timeout=30):
         if error.code in (401, 403):
             raise azure_credential_error(error.code) from None
         raise RuntimeError(f"Azure voices list returned HTTP {error.code}.") from None
-    names = {voice["ShortName"] for voice in voices}
+    configured = next((voice for voice in voices if voice["ShortName"] == config["voice"]), None)
+    locales = [configured["Locale"], *configured.get("SecondaryLocaleList", [])] if configured else []
     return {
         "voice": config["voice"],
-        "voice_found": config["voice"] in names,
+        "voice_found": configured is not None,
+        "voice_speaks_dutch": any(locale.startswith("nl-") for locale in locales),
         "dutch_voices": sorted(voice["ShortName"] for voice in voices
                                if voice.get("Locale") in ("nl-NL", "nl-BE")),
         "benchmark_characters": sum(len(html.escape(text, quote=True)) for text in (WARMUP_TEXT, *SENTENCES)),
@@ -710,9 +727,12 @@ def main():
             parser.error("set AZURE_TTS_KEY, AZURE_TTS_URL, and AZURE_TTS_VOICE first")
         report_data = azure_preflight(config)
         print(f"Dutch voices in this region: {', '.join(report_data['dutch_voices']) or 'none'}")
-        print(f"Configured voice {report_data['voice']}: {'available' if report_data['voice_found'] else 'NOT FOUND'}")
+        print(f"Configured voice {report_data['voice']}: "
+              + ("NOT FOUND" if not report_data["voice_found"] else
+                 "available, speaks Dutch" if report_data["voice_speaks_dutch"] else
+                 "available, but Dutch is NOT among its languages"))
         print(f"A full 50-sentence benchmark sends about {report_data['benchmark_characters']} billed characters.")
-        sys.exit(0 if report_data["voice_found"] else 1)
+        sys.exit(0 if report_data["voice_speaks_dutch"] else 1)
     if args.backend:
         if not 1 <= args.limit <= 50:
             parser.error("--limit must be between 1 and 50")

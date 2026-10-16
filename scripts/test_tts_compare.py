@@ -173,6 +173,17 @@ class AzurePreflightTest(unittest.TestCase):
         self.assertGreater(report["benchmark_characters"], corpus)
         self.assertLess(report["benchmark_characters"], corpus + 100)
 
+    def test_reports_whether_a_multilingual_voice_from_another_locale_speaks_dutch(self):
+        voices = [{"ShortName": "en-US-Adam:DragonHDLatestNeural", "Locale": "en-US",
+                   "SecondaryLocaleList": ["de-DE", "nl-NL"]},
+                  {"ShortName": "en-US-GuyNeural", "Locale": "en-US"}]
+        opener, _requests = self.opener(json.dumps(voices).encode())
+        adam = dict(AZURE, voice="en-US-Adam:DragonHDLatestNeural")
+        self.assertTrue(tts.azure_preflight(adam, opener=opener)["voice_speaks_dutch"])
+        opener, _requests = self.opener(json.dumps(voices).encode())
+        self.assertFalse(tts.azure_preflight(dict(AZURE, voice="en-US-GuyNeural"),
+                                             opener=opener)["voice_speaks_dutch"])
+
     def test_reports_a_configured_voice_that_the_region_does_not_offer(self):
         opener, _requests = self.opener(json.dumps([{"ShortName": "nl-NL-FennaNeural", "Locale": "nl-NL"}]).encode())
         self.assertFalse(tts.azure_preflight(AZURE, opener=opener)["voice_found"])
@@ -189,7 +200,9 @@ class TtsCompareTest(unittest.TestCase):
         self.assertEqual(tts.run_name("piper", tts.PIPER_VOICES[0]), "piper")
         self.assertEqual(tts.run_name("piper", "nl_NL-pim-medium"), "piper-nl_NL-pim-medium")
         self.assertEqual(tts.run_name("mms", tts.VOICES["mms"]), "mms")
-        self.assertEqual(tts.run_name("azure", "nl-NL-FennaNeural"), "azure")
+        self.assertEqual(tts.run_name("azure", "nl-NL-FennaNeural"), "azure-nl-NL-FennaNeural")
+        self.assertEqual(tts.run_name("azure", "en-US-Adam:DragonHDLatestNeural"),
+                         "azure-en-US-Adam-DragonHDLatestNeural")
 
     def test_piper_voice_urls_follow_release_layout(self):
         self.assertEqual(tts.piper_voice_urls("nl_NL-mls_5809-low"), {
@@ -207,8 +220,27 @@ class TtsCompareTest(unittest.TestCase):
             tts.azure_config({"AZURE_TTS_KEY": "k", "AZURE_TTS_URL": url.replace("https", "http"),
                               "AZURE_TTS_VOICE": "nl-NL-FennaNeural"})
         with self.assertRaises(ValueError):
-            tts.azure_config({"AZURE_TTS_KEY": "k", "AZURE_TTS_URL": url, "AZURE_TTS_VOICE": "en-US-AriaNeural"})
+            tts.azure_config({"AZURE_TTS_KEY": "k", "AZURE_TTS_URL": url, "AZURE_TTS_VOICE": "Aria"})
         self.assertIn("&lt;b&gt;", tts.azure_ssml("<b>", "nl-NL-FennaNeural"))
+
+    def test_azure_accepts_a_foundry_resource_and_a_multilingual_voice_but_not_a_project_endpoint(self):
+        config = tts.azure_config({"AZURE_TTS_KEY": "k",
+                                   "AZURE_TTS_URL": "https://soladis-foundry.cognitiveservices.azure.com/",
+                                   "AZURE_TTS_VOICE": "en-US-Adam:DragonHDLatestNeural"})
+        self.assertEqual(config["url"], "https://soladis-foundry.cognitiveservices.azure.com/tts/cognitiveservices/v1")
+        self.assertEqual(config["voice"], "en-US-Adam:DragonHDLatestNeural")
+        with self.assertRaisesRegex(ValueError, "project endpoint"):
+            tts.azure_config({"AZURE_TTS_KEY": "k",
+                              "AZURE_TTS_URL": "https://soladis-foundry.services.ai.azure.com/api/projects/sodalis",
+                              "AZURE_TTS_VOICE": "nl-NL-FennaNeural"})
+
+    def test_azure_ssml_marks_the_reply_as_dutch_only_for_non_dutch_voices(self):
+        adam = tts.azure_ssml("Hallo", "en-US-Adam:DragonHDLatestNeural")
+        self.assertIn('xml:lang="nl-NL"><voice name="en-US-Adam:DragonHDLatestNeural">'
+                      '<lang xml:lang="nl-NL">Hallo</lang></voice>', adam)
+        fenna = tts.azure_ssml("Hallo", "nl-NL-FennaNeural")
+        self.assertIn('xml:lang="nl-NL"><voice name="nl-NL-FennaNeural">Hallo</voice>', fenna)
+        self.assertNotIn("<lang", fenna)
 
     def test_write_wav_rejects_empty_audio(self):
         with tempfile.TemporaryDirectory() as temp:

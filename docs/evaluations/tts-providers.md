@@ -25,9 +25,12 @@ Commands to reproduce every run are in
   puts it out of scope for an organisational or commercial Sodalis
   deployment, just like MMS, Fish 1.5, and F5. It is also MLX-only, and its
   HTTP API returns complete files without in-flight cancellation.
-- Azure AI Speech has a tested Sodalis adapter but has **never been run
-  live** (no key). Fish Speech 1.5 failed cancellation; F5-TTS has no Dutch
-  checkpoint.
+- Azure AI Speech, reached through a Microsoft Foundry resource, was
+  probed live with one sentence per voice. Every probed voice was fully
+  intelligible to Parakeet, including the English HD voice Adam, and all
+  accept the Sodalis 22,050 Hz format. The 50-sentence benchmark and
+  listening review are still to do. Fish Speech 1.5 failed cancellation;
+  F5-TTS has no Dutch checkpoint.
 - **Recommendation:** keep Piper `nl_BE-nathalie-medium` as the default; no
   provider change is justified by this evidence. The voice choice among the
   five passing Piper voices awaits the listening review.
@@ -119,6 +122,63 @@ can therefore interrupt Piper synthesis only **before** any audio plays.
 Cancelling just after first audio, the moment of a typical barge-in, came too
 late to interrupt synthesis and is reported as such.
 
+### Azure AI Speech through Microsoft Foundry (probe, 2026-10-16)
+
+**Setup.** "Azure Speech – Text to speech" in Microsoft Foundry is the same
+Speech REST API that the Sodalis adapter calls.
+
+- **Endpoint.** The resource endpoint
+  `https://<resource>.cognitiveservices.azure.com/` serves synthesis at
+  `/tts/cognitiveservices/v1` and voices at `/tts/cognitiveservices/voices/list`;
+  without the `/tts` prefix both return 404. The Foundry *project* endpoint
+  (`*.services.ai.azure.com/api/projects/…`) has no speech route.
+- **Key.** The resource key works through `Ocp-Apim-Subscription-Key`.
+- **Region.** The evaluation resource is in France Central, which supports
+  standard neural, HD, and MAI voices.
+
+**Dutch-capable voices.** The resource lists 917 voices:
+
+- **Native Dutch, standard:** Colette, Fenna, and Maarten (nl-NL); Dena and
+  Arnaud (nl-BE).
+- **Native Dutch, MAI (preview, 24 kHz):** Fleur, Grant, Harper, and Sander,
+  on `MAI-Voice-2.1-Flash` (low latency) and `MAI-Voice-2.1` (HD).
+- **No native Dutch Dragon HD voice.**
+- **Multilingual voices from other locales:** 302 list Dutch as a secondary
+  language, among them `en-US-Adam:DragonHDLatestNeural`.
+
+**Probe results.** One request per voice and setting, for "Goedemorgen, uw
+afspraak is morgen om half tien." (49 characters), from the WSL laptop.
+First audio includes a fresh TLS connection.
+
+| Voice | Output | First audio / total | Audio | Parakeet word errors |
+| --- | --- | ---: | ---: | ---: |
+| `en-US-Adam:DragonHDLatestNeural`, English SSML language | 22,050 Hz | 420 / 1,700 ms | 4.05 s | 0/8 |
+| `en-US-Adam:DragonHDLatestNeural`, `<lang xml:lang="nl-NL">` | 22,050 Hz | 454 / 1,857 ms | 3.20 s | 0/8 |
+| `en-US-Adam:DragonHDLatestNeural`, `<lang xml:lang="nl-NL">` | 24,000 Hz | 393 / 1,889 ms | 4.00 s | 0/8 |
+| `nl-NL-Sander:MAI-Voice-2.1-Flash` | 22,050 Hz | 462 / 603 ms | 3.04 s | 0/8 |
+| `nl-NL-Sander:MAI-Voice-2.1-Flash` | 24,000 Hz | 546 / 685 ms | 3.21 s | 0/8 |
+| `nl-NL-Harper:MAI-Voice-2.1-Flash` | 22,050 Hz | 457 / 607 ms | 3.12 s | 0/8 |
+| `nl-NL-FennaNeural` | 22,050 Hz | 359 / 493 ms | 4.36 s | 0/8 |
+| `nl-NL-ColetteNeural` | 22,050 Hz | 536 / 741 ms | 4.21 s | 0/8 |
+
+**What the probe shows:**
+
+- **Format.** Every voice, HD and MAI included, returned the
+  `raw-22050hz-16bit-mono-pcm` format that the Sodalis browser contract
+  expects. No resampling in Sodalis is needed.
+- **Adam's Dutch.** Adam spoke Dutch even without the language tag
+  (automatic language detection).
+- **Adapter change.** The adapter now accepts any Azure voice name and marks
+  the reply as Dutch only for voices from other locales. Before, a voice like
+  Adam was rejected at startup and every Dutch request was refused.
+- **Duration.** Adam's audio length varied by up to 25% between identical
+  requests, consistent with the HD voices' deliberate prosody variation.
+- **Latency.** Adam's HD synthesis took about three times as long as the
+  standard and MAI-Flash voices.
+
+Accent and naturalness, especially Adam's, need the listening review. One
+sentence per voice is not a latency or quality measurement.
+
 The first live run exposed a crash. Both the Piper HTTP and the Azure
 adapters let a client disconnect during streaming become an unhandled
 promise rejection, which **terminated the speech service** (every later
@@ -186,7 +246,7 @@ but its CC BY-NC 4.0 licence likely rules it out regardless of speed.
 | Candidate | Dutch voice | Streaming / cancellation | Licence (code / weights) | Platforms | Decision |
 | --- | --- | --- | --- | --- | --- |
 | Piper | Nine v1.0.0 voices; five pass both gates | HTTP WAV converted to Sodalis PCM; audio starts only after full synthesis (72–173 ms for corpus replies); in-flight cancellation verified live | Engine `piper-tts` (piper1-gpl) GPL-3.0-or-later, run as a separate service; nathalie, rdh, pim, and ronnie datasets CC0; MLS datasets CC BY 4.0 | CPU via Compose on macOS, Windows, and Linux | **Default; retained** |
-| Azure AI Speech | Dutch neural voices (unverified here) | Server-side adapter streams raw 22,050 Hz PCM and aborts on cancel; contract-tested without a live service, including the client-disconnect crash fix | Hosted service; account, key, network, and billing required | Through the Sodalis API on all platforms | Explicit opt-in adapter; live quality and latency unmeasured |
+| Azure AI Speech (Foundry resource) | Five standard and four preview MAI native Dutch voices; multilingual HD voices such as Adam; all probed voices fully intelligible on one sentence | Server-side adapter streams raw 22,050 Hz PCM (accepted live by standard, HD, and MAI voices) and aborts on cancel; client-disconnect crash fixed | Hosted service; account, key, network, and billing required; MAI voices are preview | Through the Sodalis API on all platforms | Explicit opt-in adapter; 50-sentence benchmark, live cancellation, and listening review pending |
 | Chatterbox Multilingual V3 | Dutch built-in voice, very intelligible | `generate` returns complete audio; no incremental streaming or in-flight cancellation | MIT code and weights; PyPI 0.1.7 lacks V3, so a pinned source install is required | CPU, MPS, CUDA; 6.1 GiB RSS on CPU | Rejected on laptop CPU; GPU/MPS latency unmeasured |
 | Parler-TTS Mini Multilingual v1.1 | Dutch speakers listed; "Mark" very intelligible | Token streaming exists in the library but was not evaluated | Apache-2.0 | PyTorch CPU and CUDA | Rejected on CPU; GPU latency unmeasured |
 | MMS-TTS `nld` | Single voice | Complete waveform per call | CC BY-NC 4.0 weights; evaluation only | PyTorch CPU | Rejected: fails speed, WER, and licence |
@@ -221,15 +281,18 @@ laptop.
   engines only file-level synthesis time exists; Fish was the only one tested
   for interruption, and interruption failed. The Piper live check uses the
   default voice and the laptop only.
-- **Azure was never called.**
+- **Azure was probed with one sentence per voice only.** No corpus timing,
+  live cancellation, quota behaviour, or cost was measured.
 
 ## Open items
 
 1. Listening review of the five passing Piper voices; this decides whether
    to change the default voice (pim or ronnie are the alternatives with
    lower or equal WER).
-2. A live Azure run (needs a key) for Dutch quality, first-audio latency,
-   cancellation, quotas, and cost. The tooling is ready; see
+2. The 50-sentence Azure run and live check for `en-US-Adam:DragonHDLatestNeural`
+   and `nl-NL-FennaNeural` (chosen by the user), covering first-audio latency,
+   cancellation, quotas, and cost. This needs the user's approval before any
+   Azure call. See
    [development-stack.md](../development-stack.md#run-the-live-azure-evaluation).
 3. Optional: GPU or Apple Silicon timing for Chatterbox and Parler, if a GPU
    deployment target is ever considered.

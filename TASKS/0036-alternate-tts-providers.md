@@ -186,3 +186,28 @@ without changing the Sodalis browser contract.
   - the listening review (5 Piper voices × 10 sentences, Azure × 50);
   - licence decisions;
   - final consolidation.
+- 2026-10-16 Copilot: Checked the user's Microsoft Foundry setup.
+  "Azure Speech – Text to speech" in Foundry is the same Speech REST API. It
+  is reached through the resource endpoint plus `/tts/cognitiveservices/v1`,
+  not the project endpoint, using the resource key. The resource is in France
+  Central, not westeurope. The user approved:
+  - the unbilled voice list: 917 voices, including native Dutch MAI-Voice-2.1
+    (preview) and Adam HD with Dutch as a secondary language;
+  - 8 one-sentence probes (about 400 characters).
+
+  All probes accepted 22,050 Hz PCM and scored 0/8 Parakeet word errors.
+  Adam's HD synthesis took about 1.8 s in total for 3–4 s of audio. Details
+  are in `docs/evaluations/tts-providers.md`.
+
+  With approval and test-first, the adapter, stack config, and
+  `tts-compare.py` now:
+  - accept any Azure voice name, including `:` model suffixes;
+  - mark replies as Dutch with SSML `<lang>` for voices from other locales;
+  - accept a bare Foundry resource URL;
+  - reject project endpoints with an explanation.
+
+  Azure benchmark runs are now named per voice, and the preflight reports
+  whether a voice speaks Dutch. The user chose
+  `en-US-Adam:DragonHDLatestNeural` and `nl-NL-FennaNeural` for the
+  50-sentence benchmark. Per the user, **no Azure call may be made without
+  their explicit approval**.

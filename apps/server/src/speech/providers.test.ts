@@ -42,7 +42,7 @@ describe("speech provider selection", () => {
     })).toThrow("AZURE_TTS_URL");
   });
 
-  it("selects Azure TTS only when its HTTPS endpoint, key and Dutch voice are explicit", () => {
+  it("selects Azure TTS only when its HTTPS endpoint, key and voice are explicit", () => {
     const { tts } = createSpeechProviders({
       STT_PROVIDER: "mock",
       TTS_PROVIDER: "azure",

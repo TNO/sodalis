@@ -225,10 +225,35 @@ your ignored `.env`, supply credentials from your own resource, and run
 
 ```dotenv
 TTS_PROVIDER=azure
-AZURE_TTS_URL=https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1
-AZURE_TTS_KEY=<your Speech resource key>
-AZURE_TTS_VOICE=nl-NL-ColetteNeural
+AZURE_TTS_URL=https://<resource>.cognitiveservices.azure.com/
+AZURE_TTS_KEY=<your Speech or Foundry resource key>
+AZURE_TTS_VOICE=nl-NL-FennaNeural
 ```
+
+**`AZURE_TTS_URL`** accepts either of two endpoints:
+
+- the **Foundry resource** endpoint, `https://<resource>.cognitiveservices.azure.com/`
+  (Foundry's Keys and Endpoint page). The adapter appends the text-to-speech
+  path `/tts/cognitiveservices/v1`.
+- a regional endpoint such as
+  `https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1`. Use the
+  region where your resource lives.
+
+A Foundry **project** endpoint (`https://<resource>.services.ai.azure.com/api/projects/<name>`)
+has no speech route and is rejected. The resource key works with both endpoint
+forms.
+
+**`AZURE_TTS_VOICE`** is any Azure voice name, including model-suffixed
+voices:
+
+- **Native Dutch:** standard voices such as `nl-NL-FennaNeural`, and the
+  preview MAI voices such as `nl-NL-Sander:MAI-Voice-2.1-Flash`.
+- **Multilingual voices from other locales:** for example the HD voice
+  `en-US-Adam:DragonHDLatestNeural`. For these, the adapter marks the reply as
+  Dutch with SSML `<lang xml:lang="nl-NL">`.
+
+`python3 scripts/tts-compare.py --azure-preflight` (unbilled) confirms that
+the voice exists in your region and lists Dutch among its languages.
 
 Keep `PIPER_HTTP_URL` blank. The adapter requests
 `raw-22050hz-16bit-mono-pcm` and relays PCM chunks through the existing
@@ -419,39 +444,48 @@ pass both gates by the mean listener score on the shared ten sentences; a
 separate column gives each run's mean over all clips it was reviewed on.
 Clips go only to a local HTTP origin. MMS needs
 `torch` and `transformers`; Parler needs `parler_tts==0.2.2`; Azure runs
-only when `AZURE_TTS_KEY`, `AZURE_TTS_URL`, and a Dutch `AZURE_TTS_VOICE` are set.
+only when `AZURE_TTS_KEY`, `AZURE_TTS_URL`, and an `AZURE_TTS_VOICE` are set.
 
 #### Run the live Azure evaluation
 
-This sends about 7,000 billed characters to your own Azure Speech resource:
+Each voice sends about 7,000 billed characters to your own Azure resource:
 
 - the 50 benchmark sentences (about 2,300 characters);
 - the live-check replies, including four copies of a 1,000-character reply
   for the cancellation test (about 4,600 characters).
 
+HD voices are billed at a higher rate per character than standard voices.
+
 Put the key in the ignored `.env.azure-eval`. Never put it in a command
 line, in `.env.example`, or in chat:
 
 ```dotenv
-AZURE_TTS_URL=https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1
-AZURE_TTS_KEY=<your Speech resource key>
-AZURE_TTS_VOICE=nl-NL-ColetteNeural
+AZURE_TTS_URL=https://<resource>.cognitiveservices.azure.com/
+AZURE_TTS_KEY=<your resource key>
+AZURE_TTS_VOICE=en-US-Adam:DragonHDLatestNeural
 ```
+
+Each voice gets its own run, `azure-<voice>` with `:` replaced by `-`, so
+several voices can be compared side by side:
 
 ```sh
 set -a; . ./.env.azure-eval; set +a
-# Unbilled: checks key, region, and voice, and prints the benchmark's characters.
-python3 scripts/tts-compare.py --azure-preflight
-# Azure TTS and Parakeet STT behind a separate gateway on port 4186.
-COMPOSE_PROJECT_NAME=sodalis-tts-eval SODALIS_SERVICE_PREFIX=sodalis-tts-eval \
-  SODALIS_PORT=4186 STT_PROVIDER=parakeet-tdt PARAKEET_TDT_URL=http://parakeet-tdt:8080 \
-  TTS_PROVIDER=azure LLM_PROVIDER=mock \
-  docker compose -f compose.yaml --profile parakeet-tdt up --build -d gateway speech parakeet-tdt
-# 50 clips direct from Azure: total time, time to first audio, and throttling retries.
-python3 scripts/tts-compare.py --backend azure --out models/tts-comparison-wsl
-pnpm exec tsx scripts/tts-intelligibility.ts models/tts-comparison-wsl http://127.0.0.1:4186 azure
-# Through the Sodalis speech API: first audio, PCM framing, and cancellation.
-pnpm exec tsx scripts/tts-live-check.ts http://127.0.0.1:4186 azure
+for AZURE_TTS_VOICE in en-US-Adam:DragonHDLatestNeural nl-NL-FennaNeural; do
+  export AZURE_TTS_VOICE
+  run="azure-${AZURE_TTS_VOICE//:/-}"
+  # Unbilled: checks key, region, and voice, and prints the benchmark's characters.
+  python3 scripts/tts-compare.py --azure-preflight || break
+  # Azure TTS and Parakeet STT behind a separate gateway on port 4186 (recreated per voice).
+  COMPOSE_PROJECT_NAME=sodalis-tts-eval SODALIS_SERVICE_PREFIX=sodalis-tts-eval \
+    SODALIS_PORT=4186 STT_PROVIDER=parakeet-tdt PARAKEET_TDT_URL=http://parakeet-tdt:8080 \
+    TTS_PROVIDER=azure LLM_PROVIDER=mock \
+    docker compose -f compose.yaml --profile parakeet-tdt up --build -d gateway speech parakeet-tdt
+  # 50 clips direct from Azure: total time, time to first audio, and throttling retries.
+  python3 scripts/tts-compare.py --backend azure --out models/tts-comparison-wsl
+  pnpm exec tsx scripts/tts-intelligibility.ts models/tts-comparison-wsl http://127.0.0.1:4186 "$run"
+  # Through the Sodalis speech API: first audio, PCM framing, and cancellation.
+  pnpm exec tsx scripts/tts-live-check.ts http://127.0.0.1:4186 "$run"
+done
 python3 scripts/tts-compare.py --out models/tts-comparison-wsl --review
 COMPOSE_PROJECT_NAME=sodalis-tts-eval LLM_PROVIDER=mock docker compose -f compose.yaml --profile "*" down
 ```

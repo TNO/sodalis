@@ -112,9 +112,16 @@ export function resolveStack(settings: Settings): StackSelection {
       throw new Error("PIPER_HTTP_URL requires a Piper TTS provider.");
     }
     const url = endpoint(settings.AZURE_TTS_URL, "AZURE_TTS_URL");
-    if (!url.startsWith("https://") ||
-        !new URL(url).pathname.endsWith("/cognitiveservices/v1")) {
-      throw new Error("AZURE_TTS_URL must be an HTTPS Azure TTS /cognitiveservices/v1 endpoint.");
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith(".services.ai.azure.com")) {
+      throw new Error("AZURE_TTS_URL is a Foundry project endpoint, which has no speech route; use the " +
+        "resource endpoint https://<resource>.cognitiveservices.azure.com/ instead.");
+    }
+    const foundryResource = parsed.hostname.endsWith(".cognitiveservices.azure.com") &&
+      ["", "/"].includes(parsed.pathname);
+    if (parsed.protocol !== "https:" ||
+        !(foundryResource || parsed.pathname.endsWith("/cognitiveservices/v1"))) {
+      throw new Error("AZURE_TTS_URL must be an HTTPS Azure Speech resource or /cognitiveservices/v1 endpoint.");
     }
     if (!settings.AZURE_TTS_KEY?.trim()) throw new Error("Set AZURE_TTS_KEY.");
     if (!settings.AZURE_TTS_VOICE?.trim()) throw new Error("Set AZURE_TTS_VOICE.");
