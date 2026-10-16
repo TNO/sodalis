@@ -1,6 +1,6 @@
 # 0037 Evaluating alternate LLM providers
 
-Status: open
+Status: in_progress
 Priority: medium
 Subsystem: assistant
 Depends on: 0031, 0034
@@ -39,3 +39,19 @@ service.
 
 - Ollama, vLLM, and Azure are evaluation targets; integrate when their APIs
   satisfy the required streaming and structured-output behavior.
+- 2026-10-16 Copilot: Added `LLM_PROVIDER=azure` (Azure OpenAI v1 through a
+  Microsoft Foundry resource) on the existing OpenAI-compatible adapter:
+  `api-key` header, deployment as `model`, configurable `reasoning_effort`
+  (default `minimal`), optional usage reporting, and content-filter errors.
+  Local and Azure settings coexist; only `LLM_PROVIDER` selects, the
+  unselected provider's settings are blanked for the AI container, and there
+  is no fallback. Tests use injected fetch only and never call Azure.
+- 2026-10-16 Copilot: Added `scripts/llm-compare.ts` (20 fixed Dutch turns ×
+  3, latency, JSON/schema validity, action correctness, tokens, cost,
+  `review.md` for ratings, `--rescore`) and `scripts/llm-live-check.ts`
+  (round trips and cancellation through the gateway). Measured the host
+  Ollama `llama3.2:3b` baseline on the laptop CPU. Azure gpt-5 at the four
+  reasoning efforts, its live check, and the ratings are pending the user's
+  key. Analysis: [LLM provider evaluation](../docs/evaluations/llm-providers.md).
+- vLLM publishes a CPU image (`vllm/vllm-openai-cpu`, x86 AVX2/AVX-512), so
+  it need not wait for a GPU; it remains documentation-only here.

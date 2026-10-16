@@ -724,6 +724,49 @@ Local `LLM_*` and `AZURE_LLM_*` settings may coexist: to switch, change only
 settings are blanked for the AI container, so the Azure key never reaches a
 local selection. There is no automatic fallback between providers.
 
+### Compare LLM providers
+
+Two opt-in scripts measure LLM providers for the
+[LLM provider evaluation](evaluations/llm-providers.md); neither runs in
+`pnpm test`. Azure configurations are billed.
+
+`scripts/llm-compare.ts` calls the providers in-process through the same
+factory as the AI service, with the fixed Dutch prompt set and action list in
+`scripts/llm-prompts.json` (10 chat and 10 action prompts). It reads `.env`
+(or `--env <file>`), runs one excluded warm-up per configuration, and then
+`--repetitions` passes (default 3). Configurations: `local` (`LLM_BASE_URL`
+and `LLM_MODEL`, with `host.docker.internal` rewritten to `127.0.0.1`, or
+`--local-url` and `--local-model`), `azure-minimal`, `azure-low`,
+`azure-medium`, `azure-high` (the `AZURE_LLM_*` settings with that reasoning
+effort), and `mock`. Pass the deployment's prices per million tokens to
+estimate cost; reasoning tokens are billed as output.
+
+```sh
+# Local baseline only (host Ollama):
+pnpm exec tsx scripts/llm-compare.ts --configs local --label local-llama3.2-3b
+# Azure at all four reasoning efforts (billed); prices per 1M tokens:
+pnpm exec tsx scripts/llm-compare.ts \
+  --configs azure-minimal,azure-low,azure-medium,azure-high \
+  --input-price <input> --output-price <output> --currency USD --label azure-gpt-5
+```
+
+Each run writes `results.json` (every raw response), `summary.md`, and
+`review.md` to `models/llm-eval/<label>/`. Rate each configuration in
+`review.md`. After changing the scoring rules or expectations, re-score a
+stored run without new (billed) requests:
+`pnpm exec tsx scripts/llm-compare.ts --rescore models/llm-eval/<label>`.
+
+`scripts/llm-live-check.ts <origin> <label>` checks the running stack's
+selected provider through the gateway: streamed round trips, utterance
+validity, and five turns cancelled after their first chunk (one more than the
+AI service's capacity of four), followed by a recovery turn. It writes
+`models/llm-live/<label>.json`.
+
+```sh
+pnpm stack:up
+pnpm exec tsx scripts/llm-live-check.ts http://127.0.0.1:4176 azure-gpt-5-minimal
+```
+
 ## Start, smoke, and stop
 
 ```sh
