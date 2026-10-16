@@ -128,14 +128,34 @@ them.
 ## Conversation assistant
 
 The AI service requires `LLM_PROVIDER=mock` for deterministic local development,
-or `LLM_PROVIDER=openai-compatible` for an OpenAI Chat Completions-compatible
-streaming provider. For the latter, set `LLM_BASE_URL` to the service's API base (for example,
+`LLM_PROVIDER=openai-compatible` for an OpenAI Chat Completions-compatible
+streaming provider, or `LLM_PROVIDER=azure` for Azure OpenAI. For
+`openai-compatible`, set `LLM_BASE_URL` to the service's API base (for example,
 `http://127.0.0.1:1234/v1`) and `LLM_MODEL` to an enabled model. Set
 `LLM_API_KEY` only when that service requires it; the key remains on the server.
 Local, remote, and cloud endpoints can use this adapter when they implement
-its protocol; unsupported vendors need their own explicit adapter. Missing
-or unknown provider IDs and incomplete model configuration fail startup rather
-than silently switching to another endpoint. Generation remains behind the AI
+its protocol; unsupported vendors need their own explicit adapter.
+
+`LLM_PROVIDER=azure` uses the same streaming adapter against the Azure OpenAI
+v1 API (provider ID `azure-openai-v1`). It requires:
+
+- `AZURE_LLM_URL`: the HTTPS resource endpoint
+  `https://<resource>.openai.azure.com/openai/v1` (`.services.ai.azure.com`
+  and `.cognitiveservices.azure.com` resource hosts are also accepted; a bare
+  host is completed to `/openai/v1`). Deployment URLs and Foundry project
+  endpoints (`/api/projects/...`) are rejected.
+- `AZURE_LLM_KEY`: the resource key, sent server-side as the `api-key` header.
+- `AZURE_LLM_DEPLOYMENT`: the deployment name, sent as `model` (for example
+  `gpt-5`).
+- `AZURE_LLM_REASONING_EFFORT` (optional): `minimal` (default), `low`,
+  `medium`, or `high`.
+
+No temperature or token limit is sent, and 429/5xx responses are surfaced as
+errors without retries. Azure content-filter blocks fail the turn with a
+"content filter" error. Only the selected provider's settings are read, so
+local `LLM_*` and `AZURE_LLM_*` values may coexist; `mock` ignores both.
+Missing or unknown provider IDs and incomplete configuration fail startup
+rather than silently switching to another endpoint. Generation remains behind the AI
 service's provider interface, where future memory can be added without a
 browser API change.
 

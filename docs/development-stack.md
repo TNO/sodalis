@@ -35,7 +35,7 @@ Parakeet needs more than a 2 GB Podman VM; see the
 | --- | --- | --- |
 | STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL`; `azure` with `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` (real-time, max 30 s per utterance) |
 | TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
-| LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; the example targets host Ollama |
+| LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL` (the example targets host Ollama); `azure` with `AZURE_LLM_URL`, `AZURE_LLM_KEY`, and `AZURE_LLM_DEPLOYMENT` |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
 
 External URLs must be reachable **from the containers**, not just the host.
@@ -50,7 +50,8 @@ External Whistle and Parakeet TDT endpoints must speak Sodalis's local
 External Piper TTS must speak Piper HTTP (`POST /synthesize` with a WAV
 response); Azure TTS uses its own HTTPS SSML endpoint and streams raw
 22,050 Hz PCM through the speech API. The LLM endpoint
-must stream OpenAI-compatible Chat Completions; and the Home endpoint must
+must stream OpenAI-compatible Chat Completions (Azure OpenAI uses its v1 API
+with an `api-key` header); and the Home endpoint must
 implement Sodalis's `/api/home/*` contract. Azure STT (real-time Speech SDK)
 and Azure TTS (SSML) have explicit server-side adapters; other hosted
 services are usable **only when their
@@ -680,17 +681,48 @@ To opt out of the model download, edit your ignored `.env`:
 
 ```dotenv
 LLM_PROVIDER=mock
-LLM_BASE_URL=
-LLM_MODEL=
-LLM_API_KEY=
 ```
 
 `pnpm stack:up` then selects the deterministic mock without starting a
-local LLM engine or connecting to Ollama. For a different local GGUF model,
+local LLM engine or connecting to Ollama; other LLM settings are ignored. For a different local GGUF model,
 clear `LLM_BASE_URL` and set `LLM_MODEL` to the file in `models/llm/`;
 the stack selects its CPU llama.cpp profile. STT and TTS can also be
 selected independently: `STT_PROVIDER=mock` skips Whisper, and
 `TTS_PROVIDER=mock` skips Piper; leave the other role unchanged.
+
+### Use an Azure OpenAI LLM (opt-in)
+
+The optional `azure` LLM selection calls Azure OpenAI **only when explicitly
+selected**. Each turn sends the conversation text (up to 12 recent
+messages), the trusted app context (app ID, name, category), and the
+available semantic action list to Azure. Use your own Azure OpenAI or
+Foundry resource, with your consent; a **Data Zone EU** deployment is
+recommended. The browser still talks only to the Sodalis AI API, and the key
+stays in the AI container. Set in your ignored `.env`:
+
+```dotenv
+LLM_PROVIDER=azure
+AZURE_LLM_URL=https://<resource>.openai.azure.com/openai/v1
+AZURE_LLM_KEY=<your resource key>
+AZURE_LLM_DEPLOYMENT=gpt-5
+# Optional: minimal (default), low, medium, or high
+AZURE_LLM_REASONING_EFFORT=
+```
+
+**`AZURE_LLM_URL`** must be the HTTPS v1 resource endpoint. Hosts ending in
+`.openai.azure.com`, `.services.ai.azure.com`, or
+`.cognitiveservices.azure.com` are accepted; a bare host is completed to
+`/openai/v1`. Deployment URLs (`/openai/deployments/...`) and Foundry
+**project** endpoints (`/api/projects/...`) are rejected.
+**`AZURE_LLM_DEPLOYMENT`** is your deployment name, not the model family.
+Sodalis sends no temperature or token limit (GPT-5 rejects them) and does
+not retry 429 or 5xx responses. A content-filter block ends the turn with a
+"content filter" error.
+
+Local `LLM_*` and `AZURE_LLM_*` settings may coexist: to switch, change only
+`LLM_PROVIDER` and run `pnpm stack:up` again. The unselected provider's
+settings are blanked for the AI container, so the Azure key never reaches a
+local selection. There is no automatic fallback between providers.
 
 ## Start, smoke, and stop
 

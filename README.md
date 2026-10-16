@@ -53,8 +53,10 @@ If you already have an ignored `.env`, pulling these changes will not
 update it: set `LLM_PROVIDER=openai-compatible`,
 `LLM_BASE_URL=http://host.docker.internal:11434/v1`, and
 `LLM_MODEL=llama3.2:3b` there before restarting the stack. To use the
-deterministic mock instead, set `LLM_PROVIDER=mock` and clear
-`LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY` in `.env`.
+deterministic mock instead, set `LLM_PROVIDER=mock`; other LLM settings are
+then ignored. An explicit Azure OpenAI opt-in (`LLM_PROVIDER=azure`) is
+described in the
+[LLM guide](docs/development-stack.md#use-an-azure-openai-llm-opt-in).
 
 Then start the stack:
 

@@ -4,11 +4,20 @@ import type {
   ConversationMessage,
 } from "@sodalis/assistant";
 
+export interface LlmUsage {
+  readonly promptTokens: number;
+  readonly completionTokens: number;
+  readonly reasoningTokens?: number;
+  readonly totalTokens: number;
+}
+
 export interface LlmGenerationRequest {
   readonly messages: readonly ConversationMessage[];
   readonly appContext?: AssistantAppContext;
   readonly availableActions?: readonly AvailableAppAction[];
   readonly signal: AbortSignal;
+  /** Evaluation hook; when set, the provider is asked to report token usage. */
+  readonly onUsage?: (usage: LlmUsage) => void;
 }
 
 export interface LlmTextGenerationProvider {
@@ -17,16 +26,34 @@ export interface LlmTextGenerationProvider {
 }
 
 export interface OpenAiCompatibleLlmProviderOptions {
+  readonly id?: string;
   readonly baseUrl: string;
   readonly model: string;
   readonly apiKey?: string;
+  /** `authorization` sends `Bearer <key>`; `api-key` sends the key as Azure expects. */
+  readonly apiKeyHeader?: "authorization" | "api-key";
+  /** Provider-specific request fields, such as `reasoning_effort`. */
+  readonly extraBody?: Readonly<Record<string, unknown>>;
   readonly fetch?: typeof fetch;
 }
+
+const contentFilterMessage = "LLM provider blocked the response with its content filter.";
 
 function serverError(response: Response): Promise<Error> {
   return response
     .json()
     .then((payload: unknown) => {
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        "error" in payload &&
+        typeof payload.error === "object" &&
+        payload.error !== null &&
+        "code" in payload.error &&
+        payload.error.code === "content_filter"
+      ) {
+        return new Error(contentFilterMessage);
+      }
       if (
         typeof payload === "object" &&
         payload !== null &&
@@ -61,7 +88,15 @@ function readTextDelta(payload: unknown): string | undefined {
     Array.isArray(payload.choices) &&
     payload.choices.length > 0
   ) {
-    const choice = payload.choices[0];
+    const choice: unknown = payload.choices[0];
+    if (
+      typeof choice === "object" &&
+      choice !== null &&
+      "finish_reason" in choice &&
+      choice.finish_reason === "content_filter"
+    ) {
+      throw new Error(contentFilterMessage);
+    }
     if (
       typeof choice === "object" &&
       choice !== null &&
@@ -77,6 +112,41 @@ function readTextDelta(payload: unknown): string | undefined {
   return undefined;
 }
 
+function readUsage(payload: unknown): LlmUsage | undefined {
+  if (typeof payload !== "object" || payload === null || !("usage" in payload)) {
+    return undefined;
+  }
+  const usage = payload.usage;
+  if (
+    typeof usage !== "object" ||
+    usage === null ||
+    !("prompt_tokens" in usage) ||
+    typeof usage.prompt_tokens !== "number" ||
+    !("completion_tokens" in usage) ||
+    typeof usage.completion_tokens !== "number" ||
+    !("total_tokens" in usage) ||
+    typeof usage.total_tokens !== "number"
+  ) {
+    return undefined;
+  }
+  const details =
+    "completion_tokens_details" in usage &&
+    typeof usage.completion_tokens_details === "object" &&
+    usage.completion_tokens_details !== null
+      ? usage.completion_tokens_details
+      : undefined;
+  const reasoningTokens =
+    details && "reasoning_tokens" in details && typeof details.reasoning_tokens === "number"
+      ? details.reasoning_tokens
+      : undefined;
+  return {
+    promptTokens: usage.prompt_tokens,
+    completionTokens: usage.completion_tokens,
+    ...(reasoningTokens === undefined ? {} : { reasoningTokens }),
+    totalTokens: usage.total_tokens,
+  };
+}
+
 function parseEventData(frame: string): string | undefined {
   return frame
     .split(/\r?\n/)
@@ -88,20 +158,25 @@ function parseEventData(frame: string): string | undefined {
 export class OpenAiCompatibleLlmProvider
   implements LlmTextGenerationProvider
 {
-  readonly id = "openai-compatible-chat-completions";
+  readonly id: string;
 
   private readonly endpoint: string;
   private readonly model: string;
   private readonly apiKey: string | undefined;
+  private readonly apiKeyHeader: "authorization" | "api-key";
+  private readonly extraBody: Readonly<Record<string, unknown>>;
   private readonly fetcher: typeof fetch;
 
   constructor(options: OpenAiCompatibleLlmProviderOptions) {
     if (!options.baseUrl.trim() || !options.model.trim()) {
       throw new Error("LLM base URL and model are required.");
     }
+    this.id = options.id ?? "openai-compatible-chat-completions";
     this.endpoint = `${options.baseUrl.replace(/\/+$/, "")}/chat/completions`;
     this.model = options.model;
     this.apiKey = options.apiKey;
+    this.apiKeyHeader = options.apiKeyHeader ?? "authorization";
+    this.extraBody = options.extraBody ?? {};
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
@@ -130,13 +205,18 @@ export class OpenAiCompatibleLlmProvider
       "content-type": "application/json",
       accept: "text/event-stream",
     };
-    if (this.apiKey) headers.authorization = `Bearer ${this.apiKey}`;
+    if (this.apiKey) {
+      if (this.apiKeyHeader === "api-key") headers["api-key"] = this.apiKey;
+      else headers.authorization = `Bearer ${this.apiKey}`;
+    }
     const response = await this.fetcher(this.endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify({
+        ...this.extraBody,
         model: this.model,
         stream: true,
+        ...(request.onUsage ? { stream_options: { include_usage: true } } : {}),
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -158,6 +238,14 @@ export class OpenAiCompatibleLlmProvider
       throw new Error("LLM provider returned no response stream.");
     }
 
+    const handle = (data: string): string | undefined => {
+      const payload: unknown = JSON.parse(data);
+      if (request.onUsage) {
+        const usage = readUsage(payload);
+        if (usage) request.onUsage(usage);
+      }
+      return readTextDelta(payload);
+    };
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -185,7 +273,7 @@ export class OpenAiCompatibleLlmProvider
             return;
           }
           if (data) {
-            const delta = readTextDelta(JSON.parse(data));
+            const delta = handle(data);
             if (delta) yield delta;
           }
           delimiter = buffer.search(/\r?\n\r?\n/);
@@ -193,7 +281,7 @@ export class OpenAiCompatibleLlmProvider
         if (result.done) {
           const data = parseEventData(buffer);
           if (data && data !== "[DONE]") {
-            const delta = readTextDelta(JSON.parse(data));
+            const delta = handle(data);
             if (delta) yield delta;
           }
           complete = true;

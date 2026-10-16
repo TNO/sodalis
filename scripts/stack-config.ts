@@ -1,3 +1,5 @@
+import { azureLlmEndpoint, azureLlmReasoningEffort } from "../apps/server/src/assistant/providers.js";
+
 export interface StackSelection {
   readonly profiles: readonly string[];
   readonly environment: Readonly<Record<string, string>>;
@@ -154,16 +156,20 @@ export function resolveStack(settings: Settings): StackSelection {
     environment.AZURE_TTS_VOICE = settings.AZURE_TTS_VOICE;
   } else throw new Error(`Unsupported TTS_PROVIDER "${tts}".`);
 
+  // Compose prefers shell variables over --env-file, so blank the unselected
+  // provider's settings to keep a cloud key out of a local selection.
+  const localLlm = { LLM_BASE_URL: "", LLM_MODEL: "", LLM_API_KEY: "" };
+  const azureLlm = {
+    AZURE_LLM_URL: "", AZURE_LLM_KEY: "", AZURE_LLM_DEPLOYMENT: "", AZURE_LLM_REASONING_EFFORT: "",
+  };
   switch (settings.LLM_PROVIDER) {
     case "mock":
-      if (settings.LLM_BASE_URL || settings.LLM_MODEL || settings.LLM_API_KEY) {
-        throw new Error("LLM settings are not used by LLM_PROVIDER=mock.");
-      }
-      environment.LLM_PROVIDER = "mock";
+      Object.assign(environment, localLlm, azureLlm, { LLM_PROVIDER: "mock" });
       break;
     case "openai-compatible": {
       const model = settings.LLM_MODEL;
       if (!model?.trim()) throw new Error("Set LLM_MODEL for the selected LLM provider.");
+      Object.assign(environment, azureLlm);
       environment.LLM_PROVIDER = "openai-compatible";
       environment.LLM_MODEL = model;
       environment.LLM_API_KEY = settings.LLM_API_KEY || "";
@@ -179,10 +185,26 @@ export function resolveStack(settings: Settings): StackSelection {
       }
       break;
     }
+    case "azure": {
+      if (!settings.AZURE_LLM_URL?.trim()) throw new Error("Set AZURE_LLM_URL for LLM_PROVIDER=azure.");
+      const url = azureLlmEndpoint(settings.AZURE_LLM_URL);
+      if (!settings.AZURE_LLM_KEY?.trim()) throw new Error("Set AZURE_LLM_KEY for LLM_PROVIDER=azure.");
+      if (!settings.AZURE_LLM_DEPLOYMENT?.trim()) {
+        throw new Error("Set AZURE_LLM_DEPLOYMENT for LLM_PROVIDER=azure.");
+      }
+      Object.assign(environment, localLlm, {
+        LLM_PROVIDER: "azure",
+        AZURE_LLM_URL: url,
+        AZURE_LLM_KEY: settings.AZURE_LLM_KEY.trim(),
+        AZURE_LLM_DEPLOYMENT: settings.AZURE_LLM_DEPLOYMENT.trim(),
+        AZURE_LLM_REASONING_EFFORT: azureLlmReasoningEffort(settings.AZURE_LLM_REASONING_EFFORT),
+      });
+      break;
+    }
     default:
       throw new Error(settings.LLM_PROVIDER
-        ? `Unsupported LLM_PROVIDER "${settings.LLM_PROVIDER}".`
-        : "Set LLM_PROVIDER to mock or openai-compatible.");
+        ? `Unsupported LLM_PROVIDER "${settings.LLM_PROVIDER}". Set LLM_PROVIDER to mock, openai-compatible or azure.`
+        : "Set LLM_PROVIDER to mock, openai-compatible or azure.");
   }
 
   switch (settings.HOME_PROVIDER) {

@@ -50,6 +50,10 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      AZURE_LLM_URL: ${AZURE_LLM_URL:-}
+      AZURE_LLM_KEY: ${AZURE_LLM_KEY:-}
+      AZURE_LLM_DEPLOYMENT: ${AZURE_LLM_DEPLOYMENT:-}
+      AZURE_LLM_REASONING_EFFORT: ${AZURE_LLM_REASONING_EFFORT:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
