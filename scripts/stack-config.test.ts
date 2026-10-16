@@ -19,6 +19,10 @@ describe("development stack selection", () => {
     );
     const selected = resolveStack(example);
     expect(selected.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
+    expect(selected.models).toEqual(expect.arrayContaining([
+      "models/piper/nl_NL-ronnie-medium.onnx",
+      "models/piper/nl_NL-ronnie-medium.onnx.json",
+    ]));
     expect(selected.environment).toMatchObject({
       STT_PROVIDER: "parakeet-tdt",
       PARAKEET_TDT_URL: "http://parakeet-tdt:8080",

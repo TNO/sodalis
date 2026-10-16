@@ -1,6 +1,6 @@
 # 0036 Evaluating alternate TTS providers
 
-Status: in_progress
+Status: done
 Priority: medium
 Subsystem: speech
 Depends on: 0030, 0034
@@ -211,3 +211,22 @@ without changing the Sodalis browser contract.
   `en-US-Adam:DragonHDLatestNeural` and `nl-NL-FennaNeural` for the
   50-sentence benchmark. Per the user, **no Azure call may be made without
   their explicit approval**.
+- 2026-10-16 Copilot: Closed the task.
+  - **Listening review:** the user reviewed the voices. Grades out of 10:
+    Azure Sander (MAI-Voice-2.1-Flash) 8.5, Adam (HD) 8, other Azure voices
+    6 or below; Piper Ronnie 5, other Piper voices 4; Chatterbox good but
+    too slow.
+  - **Azure:** the user decided against further Azure runs, so Azure
+    remains judged on its one-sentence probes.
+  - **Default voice:** switched to `nl_NL-ronnie-medium`, test-first, across
+    the voice constant, Compose, the stack's required model files, and the
+    docs. Verified live through Sodalis: in-flight cancellation passed.
+  - **Docs:** rewrote `docs/evaluations/tts-providers.md` as the final
+    analysis, and trimmed the TTS section of `docs/development-stack.md`
+    to configuration and reproduction.
+  - **Open follow-ups**, listed in the evaluation:
+    - legal review of the Piper GPL-3.0-or-later engine;
+    - a decision on non-commercial weights;
+    - sentence-by-sentence synthesis for long replies;
+    - Azure corpus, cost, and cancellation checks before any production use;
+    - optional GPU timing.

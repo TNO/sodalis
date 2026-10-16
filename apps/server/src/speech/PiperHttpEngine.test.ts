@@ -113,4 +113,16 @@ describe("Piper HTTP engine", () => {
       await iterator.next();
     })).toEqual([]);
   });
+
+  it("speaks the default Ronnie voice and refuses the former default voice", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(Uint8Array.from(wav(new Uint8Array([1, 0])))));
+    const engine = new PiperHttpEngine({ serverUrl: "http://localhost:5000", fetch: fetcher });
+    const speak = async (voice: string) => {
+      for await (const _chunk of engine.synthesize({ ...request, voice }, new AbortController().signal)) {
+        // Consume the stream.
+      }
+    };
+    await expect(speak("nl_NL-ronnie-medium")).resolves.toBeUndefined();
+    await expect(speak("nl_BE-nathalie-medium")).rejects.toThrow("voice");
+  });
 });

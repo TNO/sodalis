@@ -29,7 +29,7 @@ Then start the Sodalis server:
 
 ```sh
 STT_PROVIDER=whisper-cpp WHISPER_CPP_URL=http://127.0.0.1:8081 \
-TTS_PROVIDER=piper PIPER_MODEL_PATH=/path/to/nl_BE-nathalie-medium.onnx \
+TTS_PROVIDER=piper PIPER_MODEL_PATH=/path/to/nl_NL-ronnie-medium.onnx \
 pnpm dev:speech
 ```
 
@@ -54,10 +54,12 @@ it. These measurements are specific to synthetic samples and that machine.
 
 ## Text-to-speech
 
-The streamed TTS endpoint uses the Piper CLI and the female Belgian-Dutch
-`nl_BE-nathalie-medium` voice. Install Piper separately, then download both the
-`.onnx` model and its matching `.onnx.json` configuration from the
-[official Piper voice catalog](https://huggingface.co/rhasspy/piper-voices/tree/main/nl/nl_BE/nathalie/medium).
+The streamed TTS endpoint uses the Piper CLI and the male Netherlands-Dutch
+`nl_NL-ronnie-medium` voice. It was chosen in the
+[Dutch TTS evaluation](../../docs/evaluations/tts-providers.md) and replaces
+the earlier `nl_BE-nathalie-medium`. Install Piper separately, then download
+both the `.onnx` model and its matching `.onnx.json` configuration from the
+[official Piper voice catalog](https://huggingface.co/rhasspy/piper-voices/tree/main/nl/nl_NL/ronnie/medium).
 The model is not bundled with Sodalis.
 
 Configure the server with the model path and, if `piper` is not on `PATH`, its
@@ -65,7 +67,7 @@ executable path:
 
 ```sh
 STT_PROVIDER=whisper-cpp WHISPER_CPP_URL=http://127.0.0.1:8081 \
-TTS_PROVIDER=piper PIPER_MODEL_PATH=/path/to/nl_BE-nathalie-medium.onnx \
+TTS_PROVIDER=piper PIPER_MODEL_PATH=/path/to/nl_NL-ronnie-medium.onnx \
 PIPER_EXECUTABLE=piper \
 pnpm dev:speech
 ```
@@ -83,12 +85,25 @@ that Piper HTTP service must return standard 22,050 Hz mono PCM16 WAV for a
 JSON `{"text": "..."}` request to `/synthesize`. STT's Whisper.cpp URL can likewise point to
 a remote/native host instance; keep such endpoints private and trusted.
 Piper HTTP's format is specific to that adapter, not a generic engine
-protocol. STT and TTS can be mixed freely, retain the existing browser
+protocol. `TTS_PROVIDER=azure` streams from Azure AI Speech instead. It
+requires `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE`.
+
+- `AZURE_TTS_URL` is a Speech or Foundry resource endpoint, or a regional
+  `/cognitiveservices/v1` endpoint.
+- `AZURE_TTS_VOICE` is any Azure voice name, such as
+  `nl-NL-Sander:MAI-Voice-2.1-Flash`.
+
+Azure is only ever an explicit choice, never a fallback. See the
+[configuration guide](../../docs/development-stack.md#use-azure-ai-speech-opt-in).
+
+STT and TTS can be mixed freely, retain the existing browser
 session/stream contract, and require no GPU; model CPU performance varies.
 
-Piper is GPL-3.0. The voice card lists the underlying training dataset under
-CC0; check the upstream voice repository's terms for the separate model files
-before redistributing them.
+The Piper engine (`piper-tts`, piper1-gpl) is GPL-3.0-or-later; whether that
+is acceptable for a distributed build is an open legal review item. The
+Ronnie voice card lists its training dataset under CC0. Check the upstream
+voice repository's terms for the separate model files before redistributing
+them.
 
 ## Conversation assistant
 

@@ -69,10 +69,10 @@ select `STT_PROVIDER=whisper-cpp`:
 
 ```sh
 mkdir -p models/piper
-curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx \
-  -o models/piper/nl_BE-nathalie-medium.onnx
-curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx.json \
-  -o models/piper/nl_BE-nathalie-medium.onnx.json
+curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/ronnie/medium/nl_NL-ronnie-medium.onnx \
+  -o models/piper/nl_NL-ronnie-medium.onnx
+curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/ronnie/medium/nl_NL-ronnie-medium.onnx.json \
+  -o models/piper/nl_NL-ronnie-medium.onnx.json
 ```
 
 For the optional Whisper.cpp profile:
@@ -212,22 +212,24 @@ not the differently licensed `cactus` engine.
 
 ### Evaluate alternative speech synthesis
 
-The consolidated findings of the Dutch TTS comparison are in
-[evaluations/tts-providers.md](evaluations/tts-providers.md); final analyses
-of all evaluations live in [evaluations/](evaluations/README.md). This
-section covers configuration and reproduction.
+All results, listening grades, and the provider recommendation are in
+[evaluations/tts-providers.md](evaluations/tts-providers.md). This section
+covers only configuration and reproduction. Generated audio, weights, and
+metrics stay in the ignored `models/` folder.
 
-Piper remains the default. The optional `azure` TTS selection calls Azure
-Speech **only when explicitly selected**, sending assistant reply text (not
-microphone audio) to your configured Speech resource. Set these values in
-your ignored `.env`, supply credentials from your own resource, and run
-`pnpm stack:config` then `pnpm stack:up`:
+#### Use Azure AI Speech (opt-in)
+
+Piper (`nl_NL-ronnie-medium`) is the default. The optional `azure` TTS
+selection calls Azure Speech **only when explicitly selected**. It sends
+assistant reply text (not microphone audio) to your own Speech or Foundry
+resource. Set these values in your ignored `.env`, then run
+`pnpm stack:config` and `pnpm stack:up`:
 
 ```dotenv
 TTS_PROVIDER=azure
 AZURE_TTS_URL=https://<resource>.cognitiveservices.azure.com/
 AZURE_TTS_KEY=<your Speech or Foundry resource key>
-AZURE_TTS_VOICE=nl-NL-FennaNeural
+AZURE_TTS_VOICE=nl-NL-Sander:MAI-Voice-2.1-Flash
 ```
 
 **`AZURE_TTS_URL`** accepts either of two endpoints:
@@ -252,45 +254,45 @@ voices:
   `en-US-Adam:DragonHDLatestNeural`. For these, the adapter marks the reply as
   Dutch with SSML `<lang xml:lang="nl-NL">`.
 
-`python3 scripts/tts-compare.py --azure-preflight` (unbilled) confirms that
-the voice exists in your region and lists Dutch among its languages.
+Keep `PIPER_HTTP_URL` blank.
 
-Keep `PIPER_HTTP_URL` blank. The adapter requests
-`raw-22050hz-16bit-mono-pcm` and relays PCM chunks through the existing
-Sodalis TTS endpoint; cancellation aborts the upstream HTTP response.
-Azure endpoint, voice, and key are required at startup, and a missing or
-failing service never falls back to Piper. The browser receives none of
-these settings. Contract tests cover the adapter with an isolated HTTP
-response, **not a live Azure resource**: Dutch voice quality, real
-time-to-first-audio, quota handling, and billing are still unmeasured.
+- **Streaming:** the adapter requests `raw-22050hz-16bit-mono-pcm` and
+  relays PCM chunks through the existing Sodalis TTS endpoint.
+- **Cancellation** aborts the upstream HTTP response.
+- **Required settings:** endpoint, voice, and key must be set at startup. A
+  missing or failing service never falls back to Piper.
+- **Browser:** receives none of these settings.
+
 Never put a real key in `.env.example` or commit your `.env`.
 
-#### Compare fifty Dutch avatar utterances locally
+#### Compare the fifty Dutch avatar utterances
 
-`scripts/tts-sentences.json` is a fixed set of 50 synthetic avatar replies:
-greetings, confirmations, clarification, silence, dates, numbers, email and
-calendar summaries, and errors. `scripts/tts-compare.py` writes one WAV per
-sentence per engine, per-sentence synthesis time, CPU time where measurable,
-audio duration, real-time factor (compute time / audio duration), process
-high-water RSS, and MLX Metal allocator peak. It first synthesizes a separate
-warm-up phrase for **each** engine; neither the warm-up nor model startup
-enters the scored timings. `warmup_seconds` includes model loading and any
-engine-internal warm-up, so it is not a pure one-utterance latency. For Fish
-it measures only the excluded warm-up request; the separate server startup
-and its own internal warm-up are not included. Compare
-matching numbered clips in
-`models/tts-comparison/index.html` (open it locally in a browser), or inspect
-each `metrics.json`. Generated audio, weights, and metrics stay under the
-ignored `models/` folder and are not committed. Use headphones to judge Dutch
-pronunciation, prosody, omissions, and hallucinations; timing alone is not a
-quality score. Do **not** run engines concurrently when comparing throughput
-on shared hardware.
+`scripts/tts-sentences.json` is a fixed set of 50 synthetic avatar replies.
+For each engine, `scripts/tts-compare.py` writes one WAV per sentence, plus
+`metrics.json` with:
+
+- synthesis time and CPU time where measurable;
+- audio duration and real-time factor;
+- process high-water RSS and, on Apple Silicon, the MLX Metal allocator peak.
+
+A separate warm-up phrase per engine, which includes model loading, is
+excluded from the scored timings. `--limit N` pilots the first N sentences;
+a later full run skips existing clips. Compare matching clips in
+`<out>/index.html`.
+
+Points to keep in mind:
+
+- **One engine at a time.** Do not run engines concurrently when comparing
+  throughput.
+- **Apple Silicon memory.** RSS is not GPU memory, and RSS and the MLX
+  allocator peak must not be added together.
 
 ```sh
-# Native CPU baseline using the already downloaded models/piper voice.
+# Native CPU Piper; other Dutch voices download into models/piper on first use.
 uv venv --python 3.11 models/piper-native/.venv
 uv pip install --python models/piper-native/.venv/bin/python 'piper-tts==1.8.0'
 models/piper-native/.venv/bin/python scripts/tts-compare.py --backend piper
+models/piper-native/.venv/bin/python scripts/tts-compare.py --backend piper --voice nl_NL-ronnie-medium
 
 # Use the *existing* tts-mlx Python environment and cached weights, read-only.
 # Pin this to your checkout's location; nothing is installed into that project.
@@ -303,15 +305,19 @@ PYTHONDONTWRITEBYTECODE=1 HF_HUB_OFFLINE=1 \
   --backend kugelaudio --tts-mlx-root "$TTS_MLX_ROOT"
 ```
 
-Voxtral uses the cached 6-bit MLX model and `nl_female` preset; KugelAudio
-uses its `warm` preset and `nl` language hint. Neither needs an unlicensed
-reference recording.
+The run directory `piper` holds the former default `nl_BE-nathalie-medium`.
+Every other voice gets `piper-<voice>`.
 
-Chatterbox Multilingual V3 uses its built-in reference voice with
-`language_id="nl"` on CPU (fixed seed, no cloning). PyPI `chatterbox-tts`
-0.1.7 predates V3, so install the pinned source commit over it in an ignored
-virtual environment; the first run downloads about 3 GB of weights into the
-Hugging Face cache:
+Engine-specific notes:
+
+- **Voxtral** uses the cached 6-bit MLX model and the `nl_female` preset.
+- **KugelAudio** uses its `warm` preset and the `nl` language hint.
+- **MMS** needs `torch` and `transformers`.
+- **Parler** needs `parler_tts==0.2.2`.
+- **Chatterbox Multilingual V3** uses its built-in voice with
+  `language_id="nl"` on CPU (fixed seed, no cloning). PyPI `chatterbox-tts`
+  0.1.7 predates V3, so install the pinned source commit over it. The first
+  run downloads about 3 GB of weights:
 
 ```sh
 python3 -m venv ~/.venvs/tts-chatterbox
@@ -324,105 +330,29 @@ python3 -m venv ~/.venvs/tts-chatterbox
   --backend chatterbox --limit 5 --out models/tts-comparison-wsl
 ```
 
-`tts-mlx` also exposes other model families, but they
-are **not** interchangeable Dutch candidates: VibeVoice 1.5B's model card
-lists English/Chinese, while cloning backends need approved reference audio.
-To add Fish, start the native MPS server described below in a separate
-terminal, note its Python PID, and then run:
+To add **Fish 1.5**, start the native MPS server described below, note its
+Python PID, and run the benchmark against it:
 
 ```sh
 models/fish-native/.venv/bin/python scripts/tts-compare.py \
   --backend fish --fish-pid <server-python-PID>
 ```
 
-Fish is unconditioned (no voice clone); the benchmark rewraps its streaming
-44.1 kHz PCM because the streamed WAV header advertises zero frames.
-The server must be loopback-only and its startup log must confirm MPS.
-`--limit 1` pilots the first sentence; a later full invocation skips already
-generated numbered clips and performs a fresh, excluded warm-up. In the
-recorded run, sample 01 for Piper, Voxtral, and KugelAudio came from
-separate warmed pilot processes; samples 02–50 came from their respective
-full runs. The Fish
-server may continue computing after a client disconnect: stop only its own
-PID at the end of the trial. `rss_gib` for Fish samples that server PID, while
-its `cpu_seconds` and Metal allocator peak are not available through this
-external HTTP call. RSS on Apple Silicon is **not** GPU memory; MLX allocator
-peak is only model-managed GPU allocation, not total device memory. These
-engines use different runtimes, voices, sample rates, and processing pipelines,
-so timings should be read as end-to-end local synthesis measurements, not
-isolated model-token benchmarks. No Azure traffic or voice cloning is involved.
-
-On the M4 Max with 128 GB unified memory, the 2026-10-05 local run generated
-and verified **all 200 nonempty mono PCM16 WAV clips** (50 per engine).
-All times below exclude the separate warm-up utterance; model startup is
-included in the measured warm-up for in-process backends, but **not** Fish's
-separate server startup. Lower RTF is faster. Audio quality is deliberately
-**unrated** until a person listens to matching numbered clips in the report.
-
-| Engine / voice | Acceleration | Warm-up (excluded) | Median / total synthesis, 50 clips | Median RTF | Peak process RSS | Peak MLX Metal allocation |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Piper / `nl_BE-nathalie-medium` | Native CPU; no GPU required | 0.46 s | 0.044 s / 2.23 s | 0.017 | 0.28 GiB | n/a |
-| Voxtral 4B 6-bit / `nl_female` via `tts-mlx` | Apple Silicon Metal/MLX | 6.37 s | 1.32 s / 68.64 s | 0.427 | 3.84 GiB | 4.28 GiB |
-| Fish Speech 1.5 / unconditioned | PyTorch MPS; CPU container previously too slow | 9.08 s (request only) | 11.72 s / 684.86 s | 2.786 | 6.64 GiB (server) | not measured |
-| KugelAudio-0-Open / `warm` via `tts-mlx` | Apple Silicon Metal/MLX | 33.97 s | 20.06 s / 1067.56 s | 5.775 | 16.58 GiB | 19.26 GiB |
-
-These RSS and MLX high-water figures are different metrics and **must not
-be added** to estimate required RAM: Apple Silicon shares CPU/GPU memory.
-Fish's server RSS increased during the 50-request run (sample 01: 1.75 GiB;
-sample 50: 6.64 GiB), so the short single-request RSS from the earlier trial
-is not a capacity estimate. The KugelAudio run took nearly 18 minutes for
-around 200 seconds of audio, far too slow for interactive replies in this
-configuration. Some Fish outputs are unusually long for short input
-(sample 01: 12.17 s; sample 36: 13.65 s): **listen** before interpreting
-this as fluent speech. Voxtral synthesized faster than real time in these
-short tests, but its existing HTTP API still buffers a complete file; these
-numbers do not establish time to first audio or interruption on disconnect.
-Piper remains the proven local default. The benchmark is a listening
-comparison, **not** evidence to close task 0036 or select a new provider.
-
-On Linux (WSL2 Ubuntu 24.04 on an Intel i7-1355U laptop, 12 logical CPUs,
-about 7.6 GB RAM assigned to WSL, no GPU) the 2026-10-08/15 runs measured CPU
-only; these times are not comparable with the M4 Max table above. Parakeet
-WER is the corpus word error rate after transcribing each clip through the
-local Sodalis STT API (see the workflow below); it includes recognizer
-mistakes and is an intelligibility proxy, not a quality score.
-
-| Engine / voice | Clips | Warm-up (excluded) | Median synthesis | Median RTF | Peak process RSS | Parakeet WER | Gates (≤ 1.5 s median, ≤ 10% WER) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| Piper / `nl_NL-pim-medium` | 50 | 0.35 s | 0.52 s | 0.12 | 0.31 GiB | 3.9% | pass |
-| Piper / `nl_BE-nathalie-medium` (default) | 50 | 0.40 s | 0.36 s | 0.13 | 0.26 GiB | 5.3% | pass |
-| Piper / `nl_NL-ronnie-medium` | 50 | 0.58 s | 0.48 s | 0.12 | 0.30 GiB | 5.6% | pass |
-| Piper / `nl_BE-nathalie-x_low` (16 kHz) | 50 | 0.43 s | 0.24 s | 0.09 | 0.19 GiB | 7.0% | pass |
-| Piper / `nl_BE-rdh-medium` | 50 | 0.74 s | 0.72 s | 0.30 | 0.27 GiB | 8.7% | pass |
-| Piper / `nl_BE-rdh-x_low` (16 kHz) | 50 | 0.45 s | 0.32 s | 0.13 | 0.18 GiB | 11.1% | fails WER |
-| Piper / `nl_NL-mls_5809-low` (16 kHz) | 50 | 0.28 s | 0.41 s | 0.10 | 0.28 GiB | 39.4% | fails WER |
-| Piper / `nl_NL-mls-medium` | 50 | 0.49 s | 0.61 s | 0.12 | 0.32 GiB | 55.6% | fails WER |
-| Piper / `nl_NL-mls_7432-low` (16 kHz) | 50 | 0.39 s | 0.33 s | 0.13 | 0.22 GiB | 68.4% | fails WER |
-| MMS-TTS `facebook/mms-tts-nld` (16 kHz) | 50 | 9.15 s | 4.21 s | 1.01 | 0.92 GiB | 15.7% | fails speed and WER |
-| Chatterbox Multilingual V3 / built-in voice, `nl` | 5 | 42–70 s | 38.69 s (26.9–75.1 s) | 15.6 | 6.10 GiB | 2.8% (5 clips) | fails speed |
-| Parler-TTS Mini Multilingual v1.1 / Mark | 5 | 175 s | 152.4 s (102–205 s) | 49.5 | 4.49 GiB | 0% (5 clips) | fails speed |
-
-Chatterbox sample 01 came from a separate pilot process. Chatterbox and
-Parler stopped at five sentences because every clip was at least 14 (Parler:
-47) times slower than real time; a first Chatterbox attempt also crashed the
-WSL VM while weights were still downloading. On this class of laptop CPU,
-neither is viable for interactive replies. The three Multilingual LibriSpeech
-Piper voices are largely unintelligible to Parakeet; the passing five Piper
-voices go to the listening review. MMS-TTS is CC BY-NC and was run for local
-evaluation only. Azure was skipped in that run because no key was configured; for the later Foundry probe see the [evaluation](evaluations/tts-providers.md).
+- `rss_gib` samples that server PID. CPU time and Metal peak are not
+  available through its HTTP API.
+- The benchmark rewraps Fish's 44.1 kHz PCM, because the streamed WAV
+  header reports zero frames.
 
 #### Score intelligibility and listen
 
-With the Parakeet STT profile running locally (a separate Compose project
-avoids touching a running stack; `/api/speech` is proxied by the gateway):
+With the Parakeet STT profile running locally, in a separate Compose project
+so a running stack is not touched:
 
 ```sh
 COMPOSE_PROJECT_NAME=sodalis-tts-eval SODALIS_SERVICE_PREFIX=sodalis-tts-eval \
   SODALIS_PORT=4186 STT_PROVIDER=parakeet-tdt PARAKEET_TDT_URL=http://parakeet-tdt:8080 \
   TTS_PROVIDER=piper-http PIPER_HTTP_URL=http://piper:5000 LLM_PROVIDER=mock \
   docker compose -f compose.yaml --profile parakeet-tdt up --build -d gateway speech parakeet-tdt
-# Other Dutch Piper voices download into models/piper on first use.
-python scripts/tts-compare.py --backend piper --voice nl_NL-pim-medium --out models/tts-comparison-wsl
 # Transcribe every clip (resumable) into <run>/intelligibility.json.
 pnpm exec tsx scripts/tts-intelligibility.ts models/tts-comparison-wsl http://127.0.0.1:4186
 # Listening page for runs passing both gates (--review-all includes the others).
@@ -432,130 +362,99 @@ python3 scripts/tts-compare.py --out models/tts-comparison-wsl --score review-sc
 python3 -m unittest scripts/test_tts_compare.py
 ```
 
-The review uses ten sentences: five fixed representatives (greeting,
-apology, choice question, time/number, long sentence) plus the five with
-the highest mean WER across fully scored runs. Once `review.json` exists,
-later `--review` runs reuse its sentences so earlier listening scores stay
-comparable; `--repick-review` chooses them afresh. An `azure` run is always
-added to the review, with **all 50** clips, even if it fails a gate. Each clip
-gets a 1–5 score for Dutch pronunciation and for naturalness, plus error
-flags. `--score` writes `scores.md`/`scores.json` and ranks only runs that
-pass both gates by the mean listener score on the shared ten sentences; a
-separate column gives each run's mean over all clips it was reviewed on.
-Clips go only to a local HTTP origin. MMS needs
-`torch` and `transformers`; Parler needs `parler_tts==0.2.2`; Azure runs
-only when `AZURE_TTS_KEY`, `AZURE_TTS_URL`, and an `AZURE_TTS_VOICE` are set.
+**Gates:** median synthesis ≤ 1.5 s and corpus word error rate ≤ 10%.
 
-#### Run the live Azure evaluation
+**The review page** (`review.html`) covers ten sentences: five fixed
+representative ones plus the five with the highest mean word error rate.
 
-Each voice sends about 7,000 billed characters to your own Azure resource:
+- **Fixed sentences.** Once `review.json` exists, later `--review` runs
+  reuse its sentences; `--repick-review` chooses them afresh.
+- **Azure runs** are always added with all 50 clips.
+- **Scoring:** each clip gets a 1–5 score for Dutch pronunciation and for
+  naturalness, plus error flags.
+- **Ranking:** `--score` ranks gate-passing runs on the shared sentences and
+  reports each run's mean over all of its reviewed clips.
 
-- the 50 benchmark sentences (about 2,300 characters);
-- the live-check replies, including four copies of a 1,000-character reply
-  for the cancellation test (about 4,600 characters).
+Clips are sent only to a local HTTP origin.
 
-HD voices are billed at a higher rate per character than standard voices.
+#### Check the live Sodalis TTS path
 
-Put the key in the ignored `.env.azure-eval`. Never put it in a command
-line, in `.env.example`, or in chat:
+`scripts/tts-live-check.ts <origin> <label>` works with any configured TTS
+provider and writes `models/tts-live/<label>.json`. It checks two things:
+
+- **Latency:** it times the short, medium, and longest corpus replies (three
+  times each, after an excluded warm-up), from request to first PCM chunk
+  and to the end of the stream.
+- **Cancellation:** it times one uncancelled 1,007-character reply, then
+  cancels one more copy of that reply than the speech API admits at once.
+  - By default each cancel comes just after the first audio arrives;
+    `--cancel-after-ms <ms>` cancels after a fixed delay instead.
+  - A cancellation counts only if it came before half the uncancelled
+    reply's duration.
+  - Afterwards a new reply must start within 3 s, and a further reply must
+    succeed.
+
+Piper HTTP returns audio only after full synthesis, so measure Piper with a
+fixed delay:
+
+```sh
+COMPOSE_PROJECT_NAME=sodalis-tts-eval SODALIS_SERVICE_PREFIX=sodalis-tts-eval \
+  SODALIS_PORT=4186 STT_PROVIDER=mock TTS_PROVIDER=piper-http \
+  PIPER_HTTP_URL=http://piper:5000 LLM_PROVIDER=mock \
+  docker compose -f compose.yaml --profile piper up --build -d gateway speech piper
+pnpm exec tsx scripts/tts-live-check.ts http://127.0.0.1:4186 piper-ronnie --cancel-after-ms 500
+COMPOSE_PROJECT_NAME=sodalis-tts-eval LLM_PROVIDER=mock docker compose -f compose.yaml --profile "*" down
+```
+
+Against an Azure-backed stack, the live check sends about 4,600 billed
+characters.
+
+#### Probe an Azure voice
+
+The evaluation judged Azure voices on one probe sentence each. To check a
+voice yourself, put the key in the ignored `.env.azure-eval`. Never put it in
+a command line, in `.env.example`, or in chat:
 
 ```dotenv
 AZURE_TTS_URL=https://<resource>.cognitiveservices.azure.com/
 AZURE_TTS_KEY=<your resource key>
-AZURE_TTS_VOICE=en-US-Adam:DragonHDLatestNeural
+AZURE_TTS_VOICE=nl-NL-Sander:MAI-Voice-2.1-Flash
 ```
-
-Each voice gets its own run, `azure-<voice>` with `:` replaced by `-`, so
-several voices can be compared side by side:
 
 ```sh
 set -a; . ./.env.azure-eval; set +a
-for AZURE_TTS_VOICE in en-US-Adam:DragonHDLatestNeural nl-NL-FennaNeural; do
-  export AZURE_TTS_VOICE
-  run="azure-${AZURE_TTS_VOICE//:/-}"
-  # Unbilled: checks key, region, and voice, and prints the benchmark's characters.
-  python3 scripts/tts-compare.py --azure-preflight || break
-  # Azure TTS and Parakeet STT behind a separate gateway on port 4186 (recreated per voice).
-  COMPOSE_PROJECT_NAME=sodalis-tts-eval SODALIS_SERVICE_PREFIX=sodalis-tts-eval \
-    SODALIS_PORT=4186 STT_PROVIDER=parakeet-tdt PARAKEET_TDT_URL=http://parakeet-tdt:8080 \
-    TTS_PROVIDER=azure LLM_PROVIDER=mock \
-    docker compose -f compose.yaml --profile parakeet-tdt up --build -d gateway speech parakeet-tdt
-  # 50 clips direct from Azure: total time, time to first audio, and throttling retries.
-  python3 scripts/tts-compare.py --backend azure --out models/tts-comparison-wsl
-  pnpm exec tsx scripts/tts-intelligibility.ts models/tts-comparison-wsl http://127.0.0.1:4186 "$run"
-  # Through the Sodalis speech API: first audio, PCM framing, and cancellation.
-  pnpm exec tsx scripts/tts-live-check.ts http://127.0.0.1:4186 "$run"
-done
-python3 scripts/tts-compare.py --out models/tts-comparison-wsl --review
-COMPOSE_PROJECT_NAME=sodalis-tts-eval LLM_PROVIDER=mock docker compose -f compose.yaml --profile "*" down
+# Unbilled: checks key, region, and voice, and whether the voice speaks Dutch.
+python3 scripts/tts-compare.py --azure-preflight
+# Billed, about 80 characters: the warm-up phrase and sentence 01.
+python3 scripts/tts-compare.py --backend azure --limit 1 --out models/tts-comparison-wsl
 ```
 
-Handling of failures:
+- Each voice gets its own run, `azure-<voice>`, with `:` replaced by `-`.
+- On 401/403 the scripts stop with a hint about key and region, and never
+  print the key.
+- On throttling (429) or transient 5xx errors the benchmark waits for
+  `Retry-After` and retries, timing only the successful attempt.
+- A full 50-sentence run (omit `--limit`) sends about 2,300 characters per
+  voice.
 
-- **401/403.** The scripts stop immediately with a hint about the key and
-  region. They never print the key.
-- **Throttling (429) and transient 5xx.** The benchmark waits for
-  `Retry-After` and retries. The free F0 tier allows about 20 transactions per
-  minute. Only the successful attempt is timed.
+#### Fish Speech 1.5 (non-commercial evaluation only)
 
-`scripts/tts-live-check.ts <origin> <label>` works with any configured TTS
-provider and writes `models/tts-live/<label>.json`.
+Fish Speech 1.5 has a standalone evaluation service, **not** a Sodalis
+speech provider.
 
-- **Latency.** It times the short, medium, and longest corpus replies (three
-  times each, after an excluded warm-up) from request to first PCM chunk, and
-  to the end of the stream.
-- **Cancellation.** It first times one uncancelled 1,000-character reply. It
-  then cancels one more copy of that reply than the speech API admits at
-  once. By default each cancel comes just after the first audio arrives;
-  `--cancel-after-ms <ms>` cancels after a fixed delay instead.
-  - A cancellation only counts if it came before half the uncancelled
-    reply's duration. Otherwise synthesis had probably already finished.
-  - The check then requires a new reply to start within 3 s, and a further
-    reply to succeed.
+- Its weights are CC BY-NC-SA 4.0. Review the
+  [model card](https://huggingface.co/fishaudio/fish-speech-1.5) before
+  downloading.
+- Its source `LICENSE` says Apache-2.0, but its package metadata declares
+  CC BY-NC-SA 4.0, so treat redistribution terms as unresolved.
+- Do not treat the current Fish S2 repository licence as the 1.5 licence.
+- A non-commercial licence does not authorize organizational or commercial
+  deployment.
+- Fish's in-flight cancellation failed, so do not use it for normal
+  desktop use.
 
-For the Piper baseline, use `STT_PROVIDER=mock TTS_PROVIDER=piper-http
-PIPER_HTTP_URL=http://piper:5000` with `--profile piper` and the services
-`gateway speech piper`, and pass `--cancel-after-ms 500`. Piper HTTP returns
-audio only after it has synthesized the whole reply, so the default
-cancel-after-first-audio mode cannot interrupt synthesis and reports that
-honestly.
-
-| Candidate | Dutch voice / latency | Streaming / cancellation | License and platforms | Decision |
-| --- | --- | --- | --- | --- |
-| Piper | Bundled `nl_BE-nathalie-medium`; CPU baseline. Of nine Dutch v1.0.0 voices on Linux laptop CPU, five pass the speed and Parakeet WER gates (pim 3.9%, nathalie 5.3%, ronnie 5.6%); MLS voices 39–68% WER | HTTP WAV to Sodalis PCM; playback can be cancelled | Open local CPU service, macOS/Windows/Linux through Compose | Default; retained pending listener scores for the five passing voices |
-| MMS-TTS (`facebook/mms-tts-nld`) | Dutch VITS; Linux laptop CPU: 4.2 s median (RTF ~1), 15.7% Parakeet WER | Complete waveform per call; no streaming | [CC BY-NC 4.0 weights](https://huggingface.co/facebook/mms-tts-nld); PyTorch CPU | Rejected: fails speed and WER gates, non-commercial licence |
-| Parler-TTS Mini Multilingual v1.1 | [Model card](https://huggingface.co/parler-tts/parler-tts-mini-multilingual-v1.1) lists Dutch speakers; speaker Mark, 0/36 word errors on five clips but 152 s median (RTF ~50) on Linux laptop CPU, 4.5 GiB RSS | Library offers token streaming; not evaluated | Apache-2.0; PyTorch CPU/CUDA | Rejected on CPU; GPU latency unmeasured |
-| Chatterbox Multilingual V3 | [23-language model](https://github.com/resemble-ai/chatterbox) includes Dutch; Linux laptop CPU: 38.7 s median for 1.4–2.8 s of audio (RTF ~16), 6.1 GiB RSS; Dutch quality not listener-rated | `generate` returns complete audio; Sodalis-compatible incremental streaming and in-flight cancellation unverified | [MIT code](https://github.com/resemble-ai/chatterbox/blob/master/LICENSE) and [MIT model weights](https://huggingface.co/ResembleAI/chatterbox); CPU/MPS/CUDA documented, roughly 3.2 GB of model weights for V3; PyPI 0.1.7 lacks V3 | No profile: far too slow on laptop CPU; GPU/MPS latency still unmeasured |
-| Fish Speech **1.5** | [Model card](https://huggingface.co/fishaudio/fish-speech-1.5) includes Dutch (<10k training hours). CPU VM produced no audio in 160 s; native M4 Max MPS returned 1.30 s of audio in 3.89 s, intelligibility not listener-validated | Sends a WAV header before segments; pinned patch prevents duplicate final audio. Client disconnect did **not** stop native MPS inference promptly | [v1.5 source LICENSE Apache-2.0](https://github.com/fishaudio/fish-speech/blob/v1.5.0/LICENSE), but package metadata declares CC BY-NC-SA; **weights CC BY-NC-SA 4.0**. CPU Compose and native MPS tested on macOS ARM only | Standalone evaluation-only Compose profile; **not** selectable as Sodalis TTS because effective inference cancellation failed |
-| F5-TTS | [Official pretrained models](https://github.com/SWivid/F5-TTS/blob/main/src/f5_tts/infer/SHARED.md) are trained on Chinese and English; no verified Dutch checkpoint/quality | CLI chunks long text; socket streaming exists; no Sodalis adapter/cancellation measurement | [MIT code, CC BY-NC weights](https://github.com/SWivid/F5-TTS); PyTorch CPU/MPS/CUDA documented, Docker example targets NVIDIA GPU | No local profile until a Dutch-capable checkpoint, matching terms, and CPU/MPS latency are verified |
-| Azure AI Speech | [Dutch neural voices](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?tabs=tts); no local quality/latency measurement | [REST streaming raw PCM](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech), HTTP request cancellation | Hosted on Azure; account, key, network, billing and text transfer required; runs via Sodalis API from all three desktop platforms | Explicit opt-in `azure` adapter, not selected by default |
-| Voxtral MLX via local `voxtral-api` | [Voxtral 4B TTS MLX](https://huggingface.co/mlx-community/Voxtral-4B-TTS-2603-mlx-6bit) lists `nl_female` and `nl_male` at 24 kHz; Dutch output/latency unmeasured here | Model yields internal chunks, but the existing `/v1/audio/speech` route synthesizes a complete file before responding; no HTTP first-audio or inference cancellation verified | Converted weights CC BY-NC 4.0; Apple Silicon MLX; check each backend's own model terms | Likely out of scope: CC BY-NC 4.0 weights (original and MLX conversion) prohibit commercial use; also MLX-only, so not runnable on the Linux/Windows evaluation laptop |
-| VibeVoice MLX | [Original 1.5B model card](https://huggingface.co/microsoft/VibeVoice-1.5B) lists **English/Chinese**, not Dutch; local project's M4 Max throughput numbers are not Sodalis measurements | Internal VAE decoding streams; local CLI writes WAV and the `voxtral-api` HTTP route returns a file; no short-reply or cancellation measurement | [MIT original weights](https://huggingface.co/microsoft/VibeVoice-1.5B); verify converted checkpoint separately; MLX on Apple Silicon | Do not assume Dutch support from local examples |
-| KugelAudio-0-Open | [Model card](https://huggingface.co/kugelaudio/kugelaudio-0-open) lists Dutch, with quality varying by language; German preference tests do not measure Dutch | Local fork supports reusable voice embeddings; streaming HTTP and inference cancellation unverified | MIT source and model card; verify voice-reference rights/consent; native Mac example, other platforms unverified | Candidate for measured Dutch voice and latency trial, not yet an adapter |
-
-The local `language-course-compiler` is a **client**, not a fifth model: its
-lesson generator calls a configurable OpenAI-style speech endpoint and
-receives completed MP3 audio. `voxtral-api` wraps several distinct model
-backends; its shared HTTP route returns a `FileResponse` after `synthesize`
-completes, even where a backend internally yields chunks. These local
-projects were inspected read-only; no comparative Dutch listening test,
-first-audio measurement, or integration was performed. The Sodalis endpoint
-expects 22,050 Hz mono PCM16, so their 24 kHz WAV/MP3 outputs require
-server-side decoding and resampling. Closing an HTTP response alone must not
-be mistaken for interrupting model inference.
-
-Voice-cloning trials require a suitable licensed reference clip and speaker
-consent or an appropriate public-domain/CC-licensed recording. Do not treat
-the current Fish S2 repository license as the 1.5 license. Nor does a
-non-commercial model license authorize organizational/commercial deployment;
-this evaluation does not bundle Fish or F5 weights.
-
-For **non-commercial local evaluation only**, Fish Speech 1.5 has a
-standalone service, **not** a Sodalis speech provider. Obtain the weights
-after reviewing the [model card and its
-CC BY-NC-SA 4.0 terms](https://huggingface.co/fishaudio/fish-speech-1.5).
-The following pinned revision downloads into the ignored `models/` folder,
-not a distributable image:
+The pinned revision downloads into the ignored `models/` folder, not a
+distributable image:
 
 ```sh
 mkdir -p models/fish-speech-1.5
@@ -566,7 +465,7 @@ for file in config.json special_tokens.json tokenizer.tiktoken model.pth \
 done
 ```
 
-With your usual `.env` in place, start the isolated service manually:
+With your usual `.env` in place, start the isolated CPU container manually:
 
 ```sh
 docker-compose --env-file .env -f compose.yaml --profile fish-speech-eval up --build -d fish-speech
@@ -575,37 +474,22 @@ docker-compose --env-file .env -f compose.yaml --profile fish-speech-eval logs -
 docker-compose --env-file .env -f compose.yaml --profile fish-speech-eval stop fish-speech
 ```
 
-Use `docker compose` instead of `docker-compose` on Docker Desktop. The
-container is internal to Compose, capped at 2 CPUs and 4 GB RAM to limit
-impact on other services, not published to the host or connected to the
-Sodalis TTS endpoint. `pnpm stack:up` replaces the selected stack
-and stops the evaluation service. The CPU container builds from pinned
-upstream v1.5.0 source and mounts weights read-only. A narrowly scoped
-[`streaming.patch`](../services/fish-speech-1.5/streaming.patch) prevents
-the upstream streaming path from appending its complete final audio after
-already emitting the segments. No adapter is offered for its 44,100 Hz
-output, since it cannot currently meet Sodalis's 22,050 Hz streaming,
-latency, and cancellation requirements on the tested CPU. On an 8 GB
-Podman VM on macOS ARM, warmup took about 68 seconds; generating
-`Hoe oud bent u?` produced **no audio after 160 seconds** at roughly
-0.4 model tokens/second, ~2 GB resident memory and ~600% container CPU
-in a direct, uncapped trial.
-Even a health request timed out while inference ran. We aborted the test,
-so neither complete-audio latency nor Dutch voice quality was measured.
-Disconnecting the HTTP client did **not** stop inference. Do not use this
-profile for normal desktop use. The source `LICENSE` is Apache-2.0, while
-its `pyproject.toml` metadata
-declares CC BY-NC-SA 4.0; treat redistribution terms as unresolved rather
-than relying solely on the source license. No reference speaker is configured:
-do not assume MLS's recording license alone authorizes cloning an
-identifiable speaker.
+Use `docker compose` instead of `docker-compose` on Docker Desktop.
+
+- **Isolation.** The container is internal to Compose, capped at 2 CPUs and
+  4 GB RAM, not published to the host, and not connected to the Sodalis TTS
+  endpoint. `pnpm stack:up` replaces the selected stack and stops it.
+- **Source and weights.** It builds from pinned upstream v1.5.0 source and
+  mounts the weights read-only.
+- **Streaming patch.** [`streaming.patch`](../services/fish-speech-1.5/streaming.patch)
+  stops the upstream streaming path from appending the complete audio after
+  the segments it already sent.
 
 #### Native Apple Silicon Fish 1.5 trial
 
-Unlike a Linux container on macOS, a native Python process can use Metal/MPS.
-This is an isolated **evaluation**, not a Sodalis TTS selection. With the
-ignored weights downloaded above, an ARM Python 3.11 and `uv` installed,
-prepare the pinned source in this worktree (not another project's checkout):
+A native Python process can use Metal/MPS, unlike a Linux container on
+macOS. With the weights above, an ARM Python 3.11, and `uv` installed,
+prepare the pinned source in this worktree:
 
 ```sh
 mkdir -p models/fish-native/source
@@ -621,11 +505,13 @@ uv pip install --python models/fish-native/.venv/bin/python \
   -e 'models/fish-native/source[stable]'
 ```
 
-The native-only patch omits PyAudio (used by the optional playback client,
-which needs PortAudio headers) and matches token tensor dtypes for MPS
-`torch.isin`; the separately applied streaming patch prevents duplicate
-complete audio. Neither patch changes the vendored container image. Start
-the API in the foreground, bound to loopback, in another terminal:
+The native-only patch does two things:
+
+- it omits PyAudio, which the optional playback client needs and which
+  requires PortAudio headers;
+- it matches token tensor dtypes for MPS `torch.isin`.
+
+Start the API in another terminal, bound to loopback:
 
 ```sh
 cd models/fish-native/source
@@ -636,8 +522,8 @@ cd models/fish-native/source
 ```
 
 Wait for `mps is available, running on mps` **and** `Application startup
-complete`. From the worktree root, request a short Dutch phrase and measure
-the time until actual PCM, not just the streaming WAV header:
+complete`. Then request a short Dutch phrase and measure the time until
+actual PCM, not just the streaming WAV header:
 
 ```sh
 python3 - <<'PY'
@@ -669,27 +555,12 @@ print("playback_file:", out)
 PY
 ```
 
-Fish's streamed WAV header reports zero frames; the example rewraps the raw
-44.1 kHz PCM in a playable WAV. Listen to the file before judging Dutch
-quality. On the M4 Max trial, MPS warmup finished about 20 seconds after
-process startup; the phrase returned its first PCM at **3.89 seconds**, total
-**3.89 seconds**, 114,688 PCM bytes (about 1.30 seconds of mono 16-bit
-audio), and roughly **1.12 GiB process RSS** after the request (not peak or
-Metal allocation). This is much faster than the tested CPU container, but
-voice intelligibility was **not** listener-validated. A longer streaming
-request disconnected immediately after its header, yet the server remained
-busy generating, and a health request timed out two seconds later. The
-process did not respond promptly to SIGTERM while generating; it was stopped
-by its specific PID. In-flight cancellation therefore remains unsuitable
-for an always-open voice session. Do not infer production reliability from
-the short-phrase timing; test longer replies and repeated requests before
-considering an adapter. The trial never contacted Azure.
+The server may keep generating after a client disconnects, so stop its
+specific PID after the trial.
 
-Do not upload the MLS recordings or private microphone samples to a
-hosted provider without separate authorization. MLS recordings are
-licensed CC BY 4.0 for the dataset, but that alone is **not** a speaker's
-consent to voice cloning; keep any TTS voice-selection investigation
-separate from this ASR benchmark.
+Never upload MLS recordings or private microphone samples to a hosted
+provider without separate authorization. MLS's dataset licence, CC BY 4.0,
+is **not** a speaker's consent to voice cloning.
 
 ### Host Ollama (the example LLM)
 

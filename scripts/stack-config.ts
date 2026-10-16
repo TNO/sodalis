@@ -98,8 +98,8 @@ export function resolveStack(settings: Settings): StackSelection {
       : "http://piper:5000";
     if (!settings.PIPER_HTTP_URL) {
       profiles.push("piper");
-      models.push("models/piper/nl_BE-nathalie-medium.onnx");
-      models.push("models/piper/nl_BE-nathalie-medium.onnx.json");
+      models.push("models/piper/nl_NL-ronnie-medium.onnx");
+      models.push("models/piper/nl_NL-ronnie-medium.onnx.json");
     }
   } else if (tts === "piper-http") {
     environment.TTS_PROVIDER = tts;

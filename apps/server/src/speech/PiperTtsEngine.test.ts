@@ -8,7 +8,7 @@ const request: SpeechRequest = {
   speechId: "reply-1",
   text: "Goedemorgen.",
   language: "nl-NL",
-  voice: "nl_BE-nathalie-medium",
+  voice: "nl_NL-ronnie-medium",
 };
 
 class FakePiperProcess implements PiperProcess {
@@ -46,7 +46,7 @@ describe("PiperTtsEngine", () => {
     const createProcess = vi.fn(() => process);
     const engine = new PiperTtsEngine({
       executable: "/tools/piper",
-      modelPath: "/voices/nl_BE-nathalie-medium.onnx",
+      modelPath: "/voices/nl_NL-ronnie-medium.onnx",
       createProcess,
     });
 
@@ -60,7 +60,7 @@ describe("PiperTtsEngine", () => {
 
     expect(createProcess).toHaveBeenCalledWith("/tools/piper", [
       "--model",
-      "/voices/nl_BE-nathalie-medium.onnx",
+      "/voices/nl_NL-ronnie-medium.onnx",
       "--output-raw",
     ]);
     expect(process.stdin.end).toHaveBeenCalledWith("Goedemorgen.\n");
@@ -75,7 +75,7 @@ describe("PiperTtsEngine", () => {
   it("reports a failed Piper process with its diagnostic output", async () => {
     const process = new FakePiperProcess([], 1);
     const engine = new PiperTtsEngine({
-      modelPath: "/voices/nl_BE-nathalie-medium.onnx",
+      modelPath: "/voices/nl_NL-ronnie-medium.onnx",
       createProcess: () => process,
     });
 
@@ -102,7 +102,7 @@ describe("PiperTtsEngine", () => {
       terminate: vi.fn(),
     };
     const engine = new PiperTtsEngine({
-      modelPath: "/voices/nl_BE-nathalie-medium.onnx",
+      modelPath: "/voices/nl_NL-ronnie-medium.onnx",
       createProcess: () => process,
     });
 
@@ -122,7 +122,7 @@ describe("PiperTtsEngine", () => {
       new Uint8Array([3, 4]),
     ]);
     const engine = new PiperTtsEngine({
-      modelPath: "/voices/nl_BE-nathalie-medium.onnx",
+      modelPath: "/voices/nl_NL-ronnie-medium.onnx",
       createProcess: () => process,
     });
     const iterator = engine
@@ -141,7 +141,7 @@ describe("PiperTtsEngine", () => {
   it("rejects an unsupported voice before starting a process", async () => {
     const createProcess = vi.fn(() => new FakePiperProcess([]));
     const engine = new PiperTtsEngine({
-      modelPath: "/voices/nl_BE-nathalie-medium.onnx",
+      modelPath: "/voices/nl_NL-ronnie-medium.onnx",
       createProcess,
     });
 
