@@ -95,10 +95,11 @@ to test AI and TTS without STT. See the
 [development stack guide](docs/development-stack.md) for model downloads,
 Docker/Podman setup, individual-service development, and troubleshooting.
 To select a different STT service, set `STT_PROVIDER=whisper-cpp` (download
-its model as described in the guide) or `STT_PROVIDER=whistle` in `.env`,
+its model as described in the guide), `STT_PROVIDER=whistle`, or the
+explicit cloud opt-in `STT_PROVIDER=azure` in `.env`,
 then run `pnpm stack:up`. The default is original Parakeet TDT v3, **not**
 Parakeet Redux. See the
-[STT comparison and limitations](docs/development-stack.md#try-local-whistle-or-parakeet-tdt-in-compose).
+[STT provider evaluation](docs/evaluations/stt-providers.md).
 Piper with the `nl_NL-ronnie-medium` voice is the default TTS. An explicit
 Azure Speech opt-in (including Microsoft Foundry resources), and a
 standalone, non-commercial Fish Speech 1.5 evaluation profile that is not

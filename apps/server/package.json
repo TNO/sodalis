@@ -15,10 +15,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.9",
     "@sodalis/assistant": "workspace:*",
     "@sodalis/speech": "workspace:*",
-    "@hono/node-server": "^1.19.9",
-    "hono": "^4.11.7"
+    "hono": "^4.11.7",
+    "microsoft-cognitiveservices-speech-sdk": "1.52.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.4",

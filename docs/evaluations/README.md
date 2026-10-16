@@ -30,5 +30,5 @@ a single place to find conclusions.
 | Evaluation | Task | Status |
 | --- | --- | --- |
 | [Dutch TTS providers](tts-providers.md) | 0036 | Complete |
-| Alternate STT providers | 0035 | Not yet consolidated; interim results in [development-stack.md](../development-stack.md#try-local-whistle-or-parakeet-tdt-in-compose) |
+| [Alternate STT providers](stt-providers.md) | 0035 | Complete; Azure measured on private clips only, Redux not measured |
 | Alternate LLM providers | 0037 | Not started |

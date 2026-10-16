@@ -82,6 +82,41 @@ describe("positionAvatarConversationCard", () => {
   });
 
   describe("AvatarConversationCard transcript", () => {
+    it("discloses cloud speech recognition only while the microphone is listening", () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const speechInput = (status: "listening" | "idle") => ({
+        state: { status },
+        start: async () => undefined,
+        stop: async () => undefined,
+        dispose: async () => undefined,
+        setActiveOutput: () => undefined,
+      });
+      const notice = () =>
+        host.querySelector(".avatar-conversation-cloud-notice")?.textContent;
+
+      m.render(host, m(AvatarConversationCard, {
+        speechInput: speechInput("listening"),
+        cloudSpeechRecognizer: "Azure",
+        onClose: () => undefined,
+      }));
+      expect(notice()).toBe("Speech recognized by Azure (cloud)");
+
+      m.render(host, m(AvatarConversationCard, {
+        speechInput: speechInput("idle"),
+        cloudSpeechRecognizer: "Azure",
+        onClose: () => undefined,
+      }));
+      expect(notice()).toBeUndefined();
+
+      m.render(host, m(AvatarConversationCard, {
+        speechInput: speechInput("listening"),
+        onClose: () => undefined,
+      }));
+      expect(notice()).toBeUndefined();
+      m.render(host, null);
+    });
+
     it("renders live speech recognition text in the accessible transcript", () => {
       const host = document.createElement("div");
       document.body.append(host);

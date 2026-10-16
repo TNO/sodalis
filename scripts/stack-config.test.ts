@@ -154,6 +154,37 @@ describe("development stack selection", () => {
     })).toThrow("HOME_API_URL must be an origin");
   });
 
+  it("selects Azure real-time STT only with explicit credentials and no local STT profile", () => {
+    const azureSttEndpoint = "https://soladis-foundry.cognitiveservices.azure.com/";
+    const selected = resolveStack({
+      ...base,
+      STT_PROVIDER: "azure",
+      AZURE_STT_ENDPOINT: azureSttEndpoint,
+      AZURE_STT_KEY: "test-key",
+    });
+    expect(selected.profiles).toEqual(["piper", "home-simulator"]);
+    expect(selected.environment).toMatchObject({
+      STT_PROVIDER: "azure",
+      AZURE_STT_ENDPOINT: azureSttEndpoint,
+      AZURE_STT_KEY: "test-key",
+    });
+    expect(() => resolveStack({ ...base, STT_PROVIDER: "azure" })).toThrow("AZURE_STT_ENDPOINT");
+    expect(() => resolveStack({
+      ...base, STT_PROVIDER: "azure", AZURE_STT_ENDPOINT: azureSttEndpoint,
+    })).toThrow("AZURE_STT_KEY");
+    expect(() => resolveStack({
+      ...base, STT_PROVIDER: "azure", AZURE_STT_KEY: "test-key",
+      AZURE_STT_ENDPOINT: "https://example.com/",
+    })).toThrow("AZURE_STT_ENDPOINT must be");
+    expect(() => resolveStack({
+      ...base, STT_PROVIDER: "parakeet-tdt", AZURE_STT_KEY: "unused",
+    })).toThrow("AZURE_STT_KEY requires STT_PROVIDER=azure");
+    expect(() => resolveStack({
+      ...base, STT_PROVIDER: "azure", AZURE_STT_KEY: "test-key",
+      AZURE_STT_URL: "https://example.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15",
+    })).toThrow("AZURE_STT_URL was replaced by AZURE_STT_ENDPOINT");
+  });
+
   it("selects Azure TTS only with explicit credentials and no local Piper profile", () => {
     const selected = resolveStack({
       ...base,
@@ -197,7 +228,7 @@ describe("development stack selection", () => {
       .toThrow("LLM_PROVIDER");
     expect(() => resolveStack({ ...base, HOME_PROVIDER: "" })).toThrow("HOME_PROVIDER");
     expect(() => resolveStack({ ...base, LLM_PROVIDER: "azure" })).toThrow("LLM_PROVIDER");
-    expect(() => resolveStack({ ...base, STT_PROVIDER: "azure" })).toThrow("STT_PROVIDER");
+    expect(() => resolveStack({ ...base, STT_PROVIDER: "azure-speech" })).toThrow("STT_PROVIDER");
     expect(() => resolveStack({ ...base, TTS_PROVIDER: "piper-http" })).toThrow("PIPER_HTTP_URL");
     expect(() => resolveStack({ ...base, TTS_PROVIDER: "fish-speech-1.5" }))
       .toThrow("Unsupported TTS_PROVIDER");

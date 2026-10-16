@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSpeechApp } from "./app.js";
 import type { SpeechRecognitionEngine } from "./WhisperCppHttpEngine.js";
+import type { StreamingSpeechRecognitionEngine } from "./StreamingRecognition.js";
+import {
+  AzureRealtimeSttEngine,
+  type RecognizerEvents,
+} from "./AzureRealtimeSttEngine.js";
 
 function createEngine(
   transcribe: SpeechRecognitionEngine["transcribe"] = vi.fn(async () => ({
@@ -8,6 +13,49 @@ function createEngine(
   })),
 ): SpeechRecognitionEngine {
   return { transcribe };
+}
+
+function createStreamingEngine() {
+  const fake = {
+    started: [] as { language: string; mimeType: string }[],
+    written: [] as Uint8Array[],
+    hypothesis: "",
+    cancelled: 0,
+    failure: undefined as Error | undefined,
+    engine: undefined as unknown as StreamingSpeechRecognitionEngine,
+  };
+  const check = () => {
+    if (fake.failure) throw fake.failure;
+  };
+  fake.engine = {
+    provider: "azure",
+    cloud: true,
+    partialIntervalMs: 250,
+    startSession(config) {
+      fake.started.push({ language: config.language, mimeType: config.mimeType });
+      return {
+        write(chunk) {
+          check();
+          fake.written.push(chunk);
+        },
+        partialText() {
+          check();
+          return fake.hypothesis;
+        },
+        async finish() {
+          if (fake.failure) {
+            fake.cancelled += 1;
+            throw fake.failure;
+          }
+          return { text: "Hoe oud bent u?" };
+        },
+        cancel() {
+          fake.cancelled += 1;
+        },
+      };
+    },
+  };
+  return fake;
 }
 
 async function createSession(
@@ -104,6 +152,186 @@ describe("speech recognition API", () => {
     expect(engine.transcribe).toHaveBeenNthCalledWith(2, expect.objectContaining({
       audio: new Uint8Array([1, 2, 3]),
     }));
+  });
+
+  it("streams audio to a live recognizer and serves its latest hypothesis as the interim transcript", async () => {
+    const fake = createStreamingEngine();
+    const app = createSpeechApp(fake.engine);
+    await expect((await createSession(app)).json()).resolves.toEqual({
+      sessionId: "turn-1",
+      partialIntervalMs: 250,
+      provider: "azure",
+      cloud: true,
+    });
+    expect(fake.started).toEqual([]);
+
+    await app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: new Uint8Array([1, 2]),
+    });
+    await app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: new Uint8Array([3]),
+    });
+    expect(fake.started).toEqual([{ language: "nl-NL", mimeType: "audio/webm" }]);
+    expect(fake.written).toEqual([new Uint8Array([1, 2]), new Uint8Array([3])]);
+
+    fake.hypothesis = "Hoe oud";
+    const partial = await app.request(
+      "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+    );
+    await expect(partial.json()).resolves.toEqual({ text: "Hoe oud" });
+
+    const final = await app.request(
+      "/api/speech/stt/sessions/turn-1/finish", { method: "POST" },
+    );
+    await expect(final.json()).resolves.toEqual({ text: "Hoe oud bent u?" });
+    expect(fake.cancelled).toBe(0);
+    expect((await app.request(
+      "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+    )).status).toBe(404);
+  });
+
+  it("stops the live recognizer when a streaming session is cancelled or expires", async () => {
+    let clock = 0;
+    const fake = createStreamingEngine();
+    const app = createSpeechApp(fake.engine, { now: () => clock, sessionTtlMs: 1000 });
+    for (const id of ["cancelled", "expired"]) {
+      await createSession(app, id);
+      await app.request(`/api/speech/stt/sessions/${id}/audio`, {
+        method: "POST",
+        headers: { "content-type": "audio/webm" },
+        body: new Uint8Array([1]),
+      });
+    }
+
+    await app.request("/api/speech/stt/sessions/cancelled", { method: "DELETE" });
+    expect(fake.cancelled).toBe(1);
+    clock = 2000;
+    await createSession(app, "next");
+    expect(fake.cancelled).toBe(2);
+    expect((await app.request(
+      "/api/speech/stt/sessions/expired/finish", { method: "POST" },
+    )).status).toBe(404);
+  });
+
+  it("does not start a live recognizer for a session cancelled while its first chunk uploads", async () => {
+    const fake = createStreamingEngine();
+    const app = createSpeechApp(fake.engine);
+    await createSession(app);
+    let sendBody!: (bytes: Uint8Array) => void;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        sendBody = (bytes) => {
+          controller.enqueue(bytes);
+          controller.close();
+        };
+      },
+    });
+    const upload = app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body,
+      duplex: "half",
+    } as RequestInit);
+
+    await app.request("/api/speech/stt/sessions/turn-1", { method: "DELETE" });
+    sendBody(new Uint8Array([1]));
+    expect((await upload).status).toBe(404);
+    expect(fake.started).toEqual([]);
+  });
+
+  it("closes a live recognizer whose client stops sending audio for 30 seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = createStreamingEngine();
+      const app = createSpeechApp(fake.engine);
+      await createSession(app);
+      const sendAudio = () => app.request("/api/speech/stt/sessions/turn-1/audio", {
+        method: "POST",
+        headers: { "content-type": "audio/webm" },
+        body: new Uint8Array([1]),
+      });
+      await sendAudio();
+      await vi.advanceTimersByTimeAsync(20_000);
+      await sendAudio();
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(fake.cancelled).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(fake.cancelled).toBe(1);
+      expect((await app.request(
+        "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+      )).status).toBe(404);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns the transcript recognized before the 30 second cap through the public routes", async () => {
+    let events!: RecognizerEvents;
+    const sentPcm: number[] = [];
+    const engine = new AzureRealtimeSttEngine({
+      endpoint: "https://soladis-foundry.cognitiveservices.azure.com/",
+      key: "example-key",
+      createRecognizer: (_config, recognizerEvents) => {
+        events = recognizerEvents;
+        return {
+          write: (pcm) => sentPcm.push(pcm.byteLength),
+          endAudio: () => {
+            events.recognized("Een lang verhaal.");
+            events.stopped();
+          },
+          close: async () => undefined,
+        };
+      },
+      createTranscoder: ({ onPcm }) => ({
+        write: (chunk) => onPcm(new Uint8Array(chunk.byteLength * 1000)),
+        end: async () => undefined,
+        kill: () => undefined,
+      }),
+    });
+    const app = createSpeechApp(engine);
+    await createSession(app);
+    for (let chunk = 0; chunk < 40; chunk += 1) {
+      const uploaded = await app.request("/api/speech/stt/sessions/turn-1/audio", {
+        method: "POST",
+        headers: { "content-type": "audio/webm" },
+        body: new Uint8Array(32),
+      });
+      expect(uploaded.status).toBe(200);
+    }
+
+    expect(sentPcm.reduce((total, bytes) => total + bytes, 0)).toBe(30 * 16000 * 2);
+    const final = await app.request(
+      "/api/speech/stt/sessions/turn-1/finish", { method: "POST" },
+    );
+    await expect(final.json()).resolves.toEqual({ text: "Een lang verhaal." });
+  });
+
+  it("reports live recognizer failures as server errors", async () => {
+    const fake = createStreamingEngine();
+    const app = createSpeechApp(fake.engine);
+    await createSession(app);
+    await app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: new Uint8Array([1]),
+    });
+    fake.failure = new Error("Azure STT rejected the key.");
+
+    const partial = await app.request(
+      "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+    );
+    expect(partial.status).toBe(502);
+    await expect(partial.json()).resolves.toEqual({ error: "Azure STT rejected the key." });
+    const final = await app.request(
+      "/api/speech/stt/sessions/turn-1/finish", { method: "POST" },
+    );
+    expect(final.status).toBe(502);
+    expect(fake.cancelled).toBe(1);
   });
 
   it("aborts an in-progress interim transcription when the session is cancelled", async () => {

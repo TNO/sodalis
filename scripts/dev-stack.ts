@@ -7,12 +7,21 @@ import { ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix } from "./stack-con
 const root = resolve(import.meta.dirname, "..");
 const envPath = resolve(root, ".env");
 if (!existsSync(envPath)) throw new Error("Copy .env.example to .env and select LLM and Home providers.");
-const settings = parseEnv(readFileSync(envPath, "utf8"));
-const selection = resolveStack(settings);
-const operation = process.argv[2];
-if (!["up", "down", "config", "ps"].includes(operation ?? "")) {
-  throw new Error("Usage: pnpm stack:up | stack:down | stack:config (or dev-stack.ts ps).");
+const [operation, ...options] = process.argv.slice(2);
+if (!["up", "down", "config", "ps"].includes(operation ?? "") ||
+    (options.length && (options.length !== 2 || options[0] !== "--env"))) {
+  throw new Error(
+    "Usage: pnpm stack:up | stack:down | stack:config (or dev-stack.ts ps) [--env <overlay file>].",
+  );
 }
+// An explicit overlay (for example .env.azure) replaces matching .env settings.
+const overlayPath = options[1] ? resolve(root, options[1]) : undefined;
+if (overlayPath && !existsSync(overlayPath)) throw new Error(`Missing ${options[1]}.`);
+const settings = {
+  ...parseEnv(readFileSync(envPath, "utf8")),
+  ...(overlayPath ? parseEnv(readFileSync(overlayPath, "utf8")) : {}),
+};
+const selection = resolveStack(settings);
 if (operation === "up") {
   for (const model of selection.models) {
     if (!existsSync(resolve(root, model))) {

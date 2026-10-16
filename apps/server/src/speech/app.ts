@@ -2,6 +2,11 @@ import { Hono, type Context } from "hono";
 import type { SpeechRequest } from "@sodalis/speech";
 import type { SpeechRecognitionEngine } from "./WhisperCppHttpEngine.js";
 import {
+  isStreamingEngine,
+  type StreamingRecognitionSession,
+  type StreamingSpeechRecognitionEngine,
+} from "./StreamingRecognition.js";
+import {
   PIPER_PCM_MIME_TYPE,
   PIPER_VOICE_ID,
   type SpeechSynthesisEngine,
@@ -16,6 +21,8 @@ interface RecognitionSession {
   processing: boolean;
   partialProcessing: boolean;
   abortController?: AbortController;
+  stream?: StreamingRecognitionSession;
+  idleTimer?: ReturnType<typeof setTimeout>;
 }
 
 export interface SpeechAppOptions {
@@ -29,6 +36,8 @@ export interface SpeechAppOptions {
 const DEFAULT_MAX_AUDIO_BYTES = 16 * 1024 * 1024;
 const DEFAULT_MAX_SESSIONS = 8;
 const DEFAULT_SESSION_TTL_MS = 10 * 60 * 1000;
+/** Closes a live recognizer (and its cloud connection) after this much client silence. */
+const STREAM_IDLE_TIMEOUT_MS = 30 * 1000;
 const MAX_TTS_REQUESTS = 2;
 const MAX_TTS_TEXT_LENGTH = 5000;
 const MAX_TTS_REQUEST_BYTES = 16 * 1024;
@@ -95,10 +104,23 @@ async function readBoundedBody(
   return audio;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Speech recognition failed.";
+}
+
 export function createSpeechApp(
-  engine: SpeechRecognitionEngine,
+  engine: SpeechRecognitionEngine | StreamingSpeechRecognitionEngine,
   options: SpeechAppOptions = {},
 ) {
+  const streaming = isStreamingEngine(engine) ? engine : undefined;
+  const transcribeBuffered = (
+    request: Parameters<SpeechRecognitionEngine["transcribe"]>[0],
+  ) => {
+    if (isStreamingEngine(engine)) {
+      throw new Error("Streaming speech sessions are transcribed while audio arrives.");
+    }
+    return engine.transcribe(request);
+  };
   const maxAudioBytes = options.maxAudioBytes ?? DEFAULT_MAX_AUDIO_BYTES;
   const maxSessions = options.maxSessions ?? DEFAULT_MAX_SESSIONS;
   const sessionTtlMs = options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS;
@@ -113,11 +135,24 @@ export function createSpeechApp(
     context.json({ status: "ready", service: "speech" }),
   );
 
+  const closeSession = (id: string, session: RecognitionSession) => {
+    clearTimeout(session.idleTimer);
+    session.stream?.cancel();
+    if (sessions.get(id) === session) sessions.delete(id);
+  };
+  const touchStream = (id: string, session: RecognitionSession) => {
+    clearTimeout(session.idleTimer);
+    session.idleTimer = setTimeout(() => {
+      if (!session.processing) closeSession(id, session);
+    }, STREAM_IDLE_TIMEOUT_MS);
+    session.idleTimer.unref?.();
+  };
+
   const removeExpiredSessions = () => {
     const cutoff = now() - sessionTtlMs;
     for (const [id, session] of sessions) {
       if (session.createdAt < cutoff && !session.processing && !session.partialProcessing) {
-        sessions.delete(id);
+        closeSession(id, session);
       }
     }
   };
@@ -163,7 +198,17 @@ export function createSpeechApp(
       processing: false,
       partialProcessing: false,
     });
-    return context.json({ sessionId }, 201);
+    return context.json(
+      streaming
+        ? {
+            sessionId,
+            partialIntervalMs: streaming.partialIntervalMs,
+            provider: streaming.provider,
+            cloud: streaming.cloud,
+          }
+        : { sessionId },
+      201,
+    );
   });
 
   app.post("/api/speech/stt/sessions/:sessionId/audio", async (context) => {
@@ -204,7 +249,27 @@ export function createSpeechApp(
     if (audio.byteLength > maxAudioBytes - session.byteLength) {
       return jsonError(context, "Speech audio exceeds the size limit.", 413);
     }
-    session.chunks.push(audio);
+    const sessionId = context.req.param("sessionId");
+    if (sessions.get(sessionId) !== session) {
+      return jsonError(context, "Speech session not found.", 404);
+    }
+    if (session.processing) {
+      return jsonError(context, "Speech session is already processing.", 409);
+    }
+    if (streaming) {
+      touchStream(sessionId, session);
+      try {
+        session.stream ??= streaming.startSession({
+          language: session.language,
+          mimeType,
+        });
+        session.stream.write(audio);
+      } catch (error) {
+        return jsonError(context, errorMessage(error), 502);
+      }
+    } else {
+      session.chunks.push(audio);
+    }
     session.byteLength += audio.byteLength;
     session.mimeType = mimeType;
     return context.json({ acceptedBytes: session.byteLength });
@@ -213,6 +278,14 @@ export function createSpeechApp(
   app.post("/api/speech/stt/sessions/:sessionId/partial", async (context) => {
     const session = sessions.get(context.req.param("sessionId"));
     if (!session) return jsonError(context, "Speech session not found.", 404);
+    if (session.stream) {
+      touchStream(context.req.param("sessionId"), session);
+      try {
+        return context.json({ text: session.stream.partialText() });
+      } catch (error) {
+        return jsonError(context, errorMessage(error), 502);
+      }
+    }
     if (session.processing || session.partialProcessing) {
       return jsonError(context, "Speech session is already processing.", 409);
     }
@@ -227,7 +300,7 @@ export function createSpeechApp(
     requestSignal.addEventListener("abort", onRequestAbort, { once: true });
     if (requestSignal.aborted) onRequestAbort();
     try {
-      const result = await engine.transcribe({
+      const result = await transcribeBuffered({
         audio: collectAudio(session),
         mimeType: session.mimeType,
         language: session.language,
@@ -258,26 +331,31 @@ export function createSpeechApp(
     }
 
     session.processing = true;
+    clearTimeout(session.idleTimer);
     const abortController = new AbortController();
     session.abortController = abortController;
     const requestSignal = context.req.raw.signal;
     const onRequestAbort = () => abortController.abort(requestSignal.reason);
     requestSignal.addEventListener("abort", onRequestAbort, { once: true });
     if (requestSignal.aborted) onRequestAbort();
+    const stream = session.stream;
+    const cancelStream = () => stream?.cancel();
+    abortController.signal.addEventListener("abort", cancelStream, { once: true });
     try {
-      const result = await engine.transcribe({
-        audio: collectAudio(session),
-        mimeType: session.mimeType,
-        language: session.language,
-        signal: abortController.signal,
-      });
+      const result = stream
+        ? await stream.finish()
+        : await transcribeBuffered({
+            audio: collectAudio(session),
+            mimeType: session.mimeType,
+            language: session.language,
+            signal: abortController.signal,
+          });
       return context.json({ text: result.text });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Speech recognition failed.";
-      return jsonError(context, message, 502);
+      return jsonError(context, errorMessage(error), 502);
     } finally {
       requestSignal.removeEventListener("abort", onRequestAbort);
+      abortController.signal.removeEventListener("abort", cancelStream);
       sessions.delete(sessionId);
     }
   });
@@ -289,6 +367,8 @@ export function createSpeechApp(
       session.abortController?.abort(
         new DOMException("Speech recognition was cancelled.", "AbortError"),
       );
+    } else if (session) {
+      closeSession(sessionId, session);
     }
     sessions.delete(sessionId);
     return context.json({ cancelled: true });

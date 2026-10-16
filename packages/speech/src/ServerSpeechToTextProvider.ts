@@ -222,6 +222,15 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
       throw error;
     }
     if (!response.ok) throw errorFromResponse(response, details);
+    const created = (typeof details === "object" && details !== null
+      ? details : {}) as Record<string, unknown>;
+    // Streaming servers advertise how often to poll; poll them on a timer.
+    const streamingPollMs = typeof created.partialIntervalMs === "number" &&
+        created.partialIntervalMs > 0
+      ? created.partialIntervalMs : undefined;
+    const recognizer = typeof created.provider === "string" &&
+        typeof created.cloud === "boolean"
+      ? { provider: created.provider, cloud: created.cloud } : undefined;
     if (config.signal.aborted) {
       await cancelRemote();
       config.signal.throwIfAborted();
@@ -234,9 +243,46 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
     let lastPartialAt: number | undefined;
     let partialPromise: Promise<void> | undefined;
     let reportedFirstPartial = false;
+    let pollTimer: ReturnType<typeof setInterval> | undefined;
+    const stopPolling = () => {
+      if (pollTimer !== undefined) clearInterval(pollTimer);
+      pollTimer = undefined;
+    };
+    const requestPartial = () => {
+      if (partialPromise || finished || cancelled) return;
+      lastPartialAt = now();
+      partialPromise = (async () => {
+        const response = await fetcher(`${sessionEndpoint}/partial`, {
+          method: "POST", signal: config.signal,
+        });
+        const result = await readJson(response);
+        if (!response.ok) throw errorFromResponse(response, result);
+        const text = readTranscript(result);
+        if (!finished && !cancelled && text) {
+          queue.push({ type: "partial", text, sessionId: config.sessionId });
+          if (!reportedFirstPartial) {
+            reportedFirstPartial = true;
+            onLatency?.({
+              sessionId: config.sessionId,
+              type: "first-partial",
+              latencyMs: Math.max(0, now() - firstAudioAt!),
+            });
+          }
+        }
+      })().catch((error: unknown) => {
+        if (!cancelled) {
+          const normalized = error instanceof Error ? error : new Error(String(error));
+          if (onPartialError) onPartialError(normalized);
+          else console.error("Interim speech recognition failed:", normalized);
+        }
+      }).finally(() => {
+        partialPromise = undefined;
+      });
+    };
     const cancelOnAbort = () => {
       if (cancelled) return;
       cancelled = true;
+      stopPolling();
       queue.close(
         config.signal.reason ??
           new DOMException("Speech session was cancelled.", "AbortError"),
@@ -259,6 +305,7 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
 
     return {
       id: config.sessionId,
+      ...(recognizer ? { recognizer } : {}),
       events: queue.iterable,
       async writeAudio(chunk: SpeechAudioChunk) {
         ensureActive();
@@ -279,42 +326,16 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
         ensureActive();
         const uploadedAt = now();
         firstAudioAt ??= uploadedAt;
-        if (partialPromise ||
-            uploadedAt - (lastPartialAt ?? firstAudioAt) < PARTIAL_INTERVAL_MS) {
-          return;
+        if (streamingPollMs !== undefined) {
+          pollTimer ??= setInterval(requestPartial, streamingPollMs);
+        } else if (uploadedAt - (lastPartialAt ?? firstAudioAt) >= PARTIAL_INTERVAL_MS) {
+          requestPartial();
         }
-        lastPartialAt = uploadedAt;
-        partialPromise = (async () => {
-          const response = await fetcher(`${sessionEndpoint}/partial`, {
-            method: "POST", signal: config.signal,
-          });
-          const result = await readJson(response);
-          if (!response.ok) throw errorFromResponse(response, result);
-          const text = readTranscript(result);
-          if (!finished && !cancelled && text) {
-            queue.push({ type: "partial", text, sessionId: config.sessionId });
-            if (!reportedFirstPartial) {
-              reportedFirstPartial = true;
-              onLatency?.({
-                sessionId: config.sessionId,
-                type: "first-partial",
-                latencyMs: Math.max(0, now() - firstAudioAt!),
-              });
-            }
-          }
-        })().catch((error: unknown) => {
-          if (!cancelled) {
-            const normalized = error instanceof Error ? error : new Error(String(error));
-            if (onPartialError) onPartialError(normalized);
-            else console.error("Interim speech recognition failed:", normalized);
-          }
-        }).finally(() => {
-          partialPromise = undefined;
-        });
       },
       async finish(speechEndTimestampMs) {
         ensureActive();
         finished = true;
+        stopPolling();
         const speechEndedAtMs = speechEndTimestampMs ?? now();
         try {
           await partialPromise;

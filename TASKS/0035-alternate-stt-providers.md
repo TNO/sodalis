@@ -1,9 +1,12 @@
 # 0035 Evaluating alternate STT providers
 
-Status: in_progress
+Status: done
 Priority: medium
 Subsystem: speech
 Depends on: 0030, 0034
+
+Final analysis: [docs/evaluations/stt-providers.md](../docs/evaluations/stt-providers.md).
+Follow-up: [0042 Improving live STT captions](0042-live-stt-captions.md).
 
 ## Context
 
@@ -97,3 +100,28 @@ contract.
   was installed. Azure requires credentials and authorization to transfer
   test audio; local recordings were not sent there. Redux and Azure have no
   adapter or Compose profile, and their Dutch/streaming performance is open.
+- 2026-10-15 laptop-CPU benchmark (i7-1355U, WSL2; six private Dutch clips,
+  harness kept local and uncommitted):
+  - Parakeet v3 with sherpa-onnx 1.13.8 had 8.6% WER at RTF 0.12.
+  - Whisper Small had 11.1% at RTF 0.69 and exceeded real time on one clip.
+  - Nemotron 3.5 streaming had 13.6% WER, with no caption rewrites.
+- Added an opt-in, final-transcript-only Azure STT adapter (fast
+  transcription, `STT_PROVIDER=azure`).
+  - Speech engines can declare themselves final-only: session creation
+    returns `partialResults: false`, the browser skips interim requests, and
+    `/partial` answers 501.
+  - It is contract-tested only; no audio was sent to Azure.
+- Redux stays unintegrated because of its runtime license.
+- Consolidated analysis written; stale-partial cancellation and Nemotron
+  streaming moved to task 0042.
+- 2026-10-16: reopened after a design review.
+  - Replaced the fast-transcription adapter with Azure Speech real-time
+    recognition (live captions, 30 s cap, cloud notice).
+  - Decisions and findings are in the evaluation's Azure section.
+  - Remaining before done: run the live smoke test and
+    `scripts/stt-live-captions.ts` with the real key, and record the results
+    in the evaluation.
+- 2026-10-16: live Azure run done with the user's authorization (synthetic
+  tone, then the six private clips); results are in the evaluation. The MLS
+  dataset was not available on this machine, so Azure was not run on the
+  MLS subset; that is listed as an open item.

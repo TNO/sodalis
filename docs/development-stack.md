@@ -33,7 +33,7 @@ Parakeet needs more than a 2 GB Podman VM; see the
 
 | Role | Local selection | External selection |
 | --- | --- | --- |
-| STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL` |
+| STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL`; `azure` with `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` (real-time, max 30 s per utterance) |
 | TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
 | LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; the example targets host Ollama |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
@@ -51,8 +51,9 @@ External Piper TTS must speak Piper HTTP (`POST /synthesize` with a WAV
 response); Azure TTS uses its own HTTPS SSML endpoint and streams raw
 22,050 Hz PCM through the speech API. The LLM endpoint
 must stream OpenAI-compatible Chat Completions; and the Home endpoint must
-implement Sodalis's `/api/home/*` contract. Azure TTS has an explicit
-server-side SSML adapter; other hosted services are usable **only when their
+implement Sodalis's `/api/home/*` contract. Azure STT (real-time Speech SDK)
+and Azure TTS (SSML) have explicit server-side adapters; other hosted
+services are usable **only when their
 endpoint implements the selected protocol**, possibly through a separately
 managed adapter. No automatic provider discovery or remote fallback is
 included.
@@ -201,14 +202,102 @@ install that runtime. Cactus Whistle uses the separate Apache-2.0
 [`cactus-needle`](https://github.com/cactus-compute/needle) runtime,
 not the differently licensed `cactus` engine.
 
-| Candidate | Dutch / accuracy | Interim / cancellation | Deployment / license | Decision |
-| --- | --- | --- | --- | --- |
-| Whisper.cpp `base`, `small`, `medium` | Measured above; short questions still imperfect | Sodalis snapshot interim API; session cancellation | macOS native or cross-platform CPU Compose; model-specific memory | Available; `medium` preferred on a sufficiently provisioned native Mac |
-| Cactus Whistle/Needle | Six-speaker MLS test: 65/215 word errors (30.2% WER); fast CPU inference; short synthetic question still wrong | Sodalis snapshot interim; request cancellation, but in-flight inference continues | Apache-2.0 model and runtime; cross-platform CPU image | Opt-in Compose profile `whistle` |
-| NVIDIA Parakeet TDT v3 / sherpa-onnx | Six-speaker MLS test: 37/215 word errors (17.2% WER), 394–700 ms per clip; WAV short question correct, WebM question "Who oud bent u?"; 3 s silence empty | Sodalis snapshot interim; in-flight inference continues | Original weights CC BY 4.0, Apache-2.0 runtime; 2 GB VM OOM, 8 GB VM runs | Opt-in Compose profile `parakeet-tdt`; not Redux |
-| Cactus engine (other models) | Not benchmarked | Chunked `confirmed` / `pending` API; cancellation not verified | [Different license](https://github.com/cactus-compute/cactus/blob/main/LICENSE) restricts organizations above funding/revenue thresholds | Not bundled |
-| Moondream Parakeet Redux / Photon | Dutch claimed; MLS accuracy not measured | Photon documents live PCM snapshots; cancellation and Sodalis WebM conversion not verified | Local CPU/Apple silicon/CUDA; weights CC BY 4.0, `kestrel-kernels` requires a written agreement | No adapter/profile until runtime terms and live path are verified |
-| Azure AI Speech | Dutch supported by service; local sample not uploaded | Continuous recognition provides interim events; Sodalis cancellation not integrated | Hosted; credentials, billing, network and data transfer required | No adapter or cloud fallback without authorization and a local-only evaluation plan |
+The compatibility and configuration matrix for every STT candidate, with
+the consolidated measurements and recommendation, is in
+[evaluations/stt-providers.md](evaluations/stt-providers.md).
+
+### Optional Azure AI Speech STT
+
+`STT_PROVIDER=azure` streams microphone audio to Azure Speech
+[real-time speech to text](https://learn.microsoft.com/azure/ai-services/speech-service/how-to-recognize-speech)
+on your own Speech (Foundry Tools) resource. Select it only with consent to
+send recordings to Azure, and use a resource in an EU region.
+
+Keep the Azure values in a separate, git-ignored overlay file, `.env.azure`,
+next to your `.env`. Its values replace the matching `.env` settings only
+when you pass it explicitly:
+
+```dotenv
+STT_PROVIDER=azure
+AZURE_STT_ENDPOINT=https://<resource>.cognitiveservices.azure.com/
+AZURE_STT_KEY=<your Speech resource key>
+WHISPER_CPP_URL=
+WHISPER_MODEL=
+WHISTLE_URL=
+PARAKEET_TDT_URL=
+```
+
+```sh
+pnpm stack:config --env .env.azure   # lists profiles; no local STT container
+pnpm stack:up --env .env.azure
+```
+
+Without `--env .env.azure` the stack uses `.env` alone, normally local
+Parakeet. You can also put the same values directly in `.env`.
+
+To run the live smoke test (it sends a one-second synthetic tone):
+
+```sh
+set -a; . ./.env.azure; set +a
+pnpm --filter @sodalis/server exec vitest run src/speech/AzureRealtimeSttEngine.live.test.ts
+```
+
+The test needs `ffmpeg` on `PATH`.
+
+- **Streaming:** per utterance, the speech API opens one Azure recognizer
+  when the first audio chunk arrives, converts the browser's WebM/Opus to
+  16 kHz mono PCM with FFmpeg, and streams it with the official Speech SDK
+  (continuous recognition, fixed `nl-NL` or `en-US`, no language detection).
+- **Captions:** `/partial` returns Azure's latest hypothesis immediately,
+  and the browser polls it every 250 ms instead of 1.5 s. The final
+  transcript is Azure's recognized segments when the utterance ends.
+- **30-second cap:** at most **30 seconds of audio per utterance** is sent
+  to Azure. Later audio in the same utterance is dropped, and `finish`
+  returns the transcript recognized up to that point. This bounds cost if
+  voice detection never ends an utterance (for example in a noisy room).
+  The local Whistle and Parakeet services instead **fail** an utterance
+  over 30 seconds.
+- **Disclosure:** session creation reports `provider: "azure"` and
+  `cloud: true`; the conversation card then shows "Speech recognized by
+  Azure (cloud)" while the microphone is listening.
+- **Failures:** cancellation stops recognition and closes the connection.
+  The speech API also closes a live recognizer if its client sends nothing
+  for 30 seconds.
+  Endpoint and key are required at startup and use separate `AZURE_STT_*`
+  settings from Azure TTS. A missing or failing service never falls back to
+  a local engine, and the browser receives none of these settings.
+- **Cost:** Azure bills real-time recognition per audio hour (about $1 per
+  hour on standard S1 pricing in West Europe, October 2026).
+
+The API image contains a minimal LGPL FFmpeg build (about 2 MB; see
+`services/api/Dockerfile`). When you run `pnpm dev:speech` natively, install
+`ffmpeg` and keep it on `PATH`.
+
+Contract tests use fakes. `AzureRealtimeSttEngine.live.test.ts` is skipped
+unless `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` are set in the test
+environment.
+
+#### Measure live captions
+
+`scripts/stt-live-captions.ts` replays recordings through the public STT API
+the way the browser does:
+
+- each clip is converted to WebM/Opus and sent in 200 ms chunks at real-time
+  pace;
+- `/partial` is polled at the interval the server advertises.
+
+It reports time to first caption, final latency after the audio ends,
+caption updates and rewrites, and WER against the references. Put the clips
+and a `references.tsv` (clip ID, whitespace, reference text) in a folder
+outside the repository, start a local stack with the provider under test,
+and run (requires `ffmpeg` with libopus):
+
+```sh
+pnpm exec tsx scripts/stt-live-captions.ts /path/to/clips/references.tsv \
+  http://127.0.0.1:4176
+```
+
+Only run it against Azure with authorization to send those recordings.
 
 ### Evaluate alternative speech synthesis
 

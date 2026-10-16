@@ -52,6 +52,14 @@ export function resolveStack(settings: Settings): StackSelection {
   if (stt !== "parakeet-tdt" && settings.PARAKEET_TDT_URL) {
     throw new Error("PARAKEET_TDT_URL requires STT_PROVIDER=parakeet-tdt.");
   }
+  if (settings.AZURE_STT_URL) {
+    throw new Error("AZURE_STT_URL was replaced by AZURE_STT_ENDPOINT (the Speech resource endpoint).");
+  }
+  for (const name of ["AZURE_STT_ENDPOINT", "AZURE_STT_KEY"] as const) {
+    if (stt !== "azure" && settings[name]) {
+      throw new Error(`${name} requires STT_PROVIDER=azure.`);
+    }
+  }
   if (stt === "whisper-cpp") {
     environment.STT_PROVIDER = stt;
     if (settings.WHISPER_MODEL && settings.WHISPER_CPP_URL) {
@@ -81,6 +89,21 @@ export function resolveStack(settings: Settings): StackSelection {
       ? endpoint(settings.PARAKEET_TDT_URL, "PARAKEET_TDT_URL")
       : "http://parakeet-tdt:8080";
     if (!settings.PARAKEET_TDT_URL) profiles.push("parakeet-tdt");
+  } else if (stt === "azure") {
+    const url = endpoint(settings.AZURE_STT_ENDPOINT, "AZURE_STT_ENDPOINT", true);
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" || parsed.search ||
+        !/\.cognitiveservices\.azure\.com$/
+          .test(parsed.hostname)) {
+      throw new Error(
+        "AZURE_STT_ENDPOINT must be an HTTPS Azure Speech resource endpoint " +
+          "(https://<resource>.cognitiveservices.azure.com/) without credentials, query, or fragment.",
+      );
+    }
+    if (!settings.AZURE_STT_KEY?.trim()) throw new Error("Set AZURE_STT_KEY.");
+    environment.STT_PROVIDER = stt;
+    environment.AZURE_STT_ENDPOINT = url;
+    environment.AZURE_STT_KEY = settings.AZURE_STT_KEY;
   } else if (stt === "mock") {
     environment.STT_PROVIDER = stt;
   } else throw new Error(`Unsupported STT_PROVIDER "${stt}".`);
