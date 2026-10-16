@@ -211,16 +211,38 @@ the consolidated measurements and recommendation, is in
 `STT_PROVIDER=azure` streams microphone audio to Azure Speech
 [real-time speech to text](https://learn.microsoft.com/azure/ai-services/speech-service/how-to-recognize-speech)
 on your own Speech (Foundry Tools) resource. Select it only with consent to
-send recordings to Azure, use a resource in an EU region, and set these
-values in your ignored `.env` before `pnpm stack:config` and `pnpm stack:up`:
+send recordings to Azure, and use a resource in an EU region.
+
+Keep the Azure values in a separate, git-ignored overlay file, `.env.azure`,
+next to your `.env`. Its values replace the matching `.env` settings only
+when you pass it explicitly:
 
 ```dotenv
 STT_PROVIDER=azure
 AZURE_STT_ENDPOINT=https://<resource>.cognitiveservices.azure.com/
 AZURE_STT_KEY=<your Speech resource key>
+WHISPER_CPP_URL=
+WHISPER_MODEL=
+WHISTLE_URL=
+PARAKEET_TDT_URL=
 ```
 
-Leave the other STT URLs blank; no local STT container starts.
+```sh
+pnpm stack:config --env .env.azure   # lists profiles; no local STT container
+pnpm stack:up --env .env.azure
+```
+
+Without `--env .env.azure` the stack uses `.env` alone, normally local
+Parakeet. You can also put the same values directly in `.env`.
+
+To run the live smoke test (it sends a one-second synthetic tone):
+
+```sh
+set -a; . ./.env.azure; set +a
+pnpm --filter @sodalis/server exec vitest run src/speech/AzureRealtimeSttEngine.live.test.ts
+```
+
+The test needs `ffmpeg` on `PATH`.
 
 - **Streaming:** per utterance, the speech API opens one Azure recognizer
   when the first audio chunk arrives, converts the browser's WebM/Opus to
@@ -251,9 +273,9 @@ The API image contains a minimal LGPL FFmpeg build (about 2 MB; see
 `services/api/Dockerfile`). When you run `pnpm dev:speech` natively, install
 `ffmpeg` and keep it on `PATH`.
 
-Contract tests use fakes. `AzureRealtimeSttEngine.live.test.ts` connects to
-a real resource only when `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` are set
-in the test environment, and then sends only a synthetic tone.
+Contract tests use fakes. `AzureRealtimeSttEngine.live.test.ts` is skipped
+unless `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` are set in the test
+environment.
 
 #### Measure live captions
 
