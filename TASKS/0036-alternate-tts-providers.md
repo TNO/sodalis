@@ -146,3 +146,9 @@ without changing the Sodalis browser contract.
   skipped (no key). The listener scores for the five passing Piper voices are
   still pending; Piper remains the only validated local engine, and no
   provider other than Piper meets the latency contract on laptop CPU.
+- 2026-10-16 Copilot: Consolidated all measurements, the contract matrix,
+  and limitations in `docs/tts-evaluation.md`. It excludes the human
+  listening review. It recommends keeping Piper `nl_BE-nathalie-medium`.
+  Most WER on the passing Piper voices comes from number and spelling
+  sentences, largely because Parakeet writes digits where the reference
+  has words. Also noted that `piper-tts` (piper1-gpl) is GPL-3.0-or-later.

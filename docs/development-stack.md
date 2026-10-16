@@ -212,6 +212,10 @@ not the differently licensed `cactus` engine.
 
 ### Evaluate alternative speech synthesis
 
+The consolidated findings of the Dutch TTS comparison are in
+[tts-evaluation.md](tts-evaluation.md); this section covers configuration
+and reproduction.
+
 Piper remains the default. The optional `azure` TTS selection calls Azure
 Speech **only when explicitly selected**, sending assistant reply text (not
 microphone audio) to your configured Speech resource. Set these values in
