@@ -1,6 +1,6 @@
 # 0035 Evaluating alternate STT providers
 
-Status: in_progress
+Status: done
 Priority: medium
 Subsystem: speech
 Depends on: 0030, 0034
@@ -121,3 +121,7 @@ contract.
   - Remaining before done: run the live smoke test and
     `scripts/stt-live-captions.ts` with the real key, and record the results
     in the evaluation.
+- 2026-10-16: live Azure run done with the user's authorization (synthetic
+  tone, then the six private clips); results are in the evaluation. The MLS
+  dataset was not available on this machine, so Azure was not run on the
+  MLS subset; that is listed as an open item.

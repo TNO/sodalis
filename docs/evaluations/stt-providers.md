@@ -1,9 +1,9 @@
 # Alternate STT provider evaluation (task 0035)
 
-Status: in progress as of 2026-10-16. Covers every Sodalis STT measurement
-up to 2026-10-15. The Azure real-time adapter is implemented; its live Dutch
-measurement is pending. No Parakeet Redux measurement exists; see
-[Limitations](#limitations).
+Status: complete as of 2026-10-16. Covers every Sodalis STT measurement up
+to 2026-10-16, including a live Azure real-time run on the six private
+Dutch clips. Azure has not been run on the MLS subset, and no Parakeet
+Redux measurement exists; see [Limitations](#limitations).
 Setup and reproduction commands are in
 [development-stack.md](../development-stack.md#try-local-whistle-or-parakeet-tdt-in-compose).
 
@@ -34,8 +34,14 @@ Setup and reproduction commands are in
     Azure's running hypothesis as live captions.
   - At most 30 s of audio per utterance is sent; there is no fallback to or
     from it, and the conversation card discloses cloud processing.
-  - Contract tests and a connection probe pass. Dutch accuracy, caption
-    timing, and cost are unmeasured until the live run.
+  - **Live run, six private Dutch clips:**
+    - 11.1% WER, of which 2 errors are real misrecognitions. Shipping
+      Parakeet scored 7.4% with none.
+    - The final transcript arrived 0.13–0.27 s after the audio ended,
+      against 0.6–2.6 s for Parakeet.
+    - No caption update rewrote earlier words.
+  - Use it when steady, fast captions matter more than keeping audio local;
+    it costs about $1 per audio hour.
 - **No Parakeet Redux adapter.** Its weights are CC BY 4.0, but its Photon
   runtime depends on `kestrel-kernels`, which requires a separate written
   agreement. The broader Cactus engine is also not bundled, because of its
@@ -113,6 +119,17 @@ without new recognition.
   - *stream:* push chunks into a streaming Nemotron session.
 
   Browser capture, encoding, and upload are simulated.
+- **Live captions through the Sodalis API (2026-10-16).**
+  `scripts/stt-live-captions.ts` measures the shipping path end to end:
+  - each clip is converted to WebM/Opus, as Chromium's `MediaRecorder`
+    produces it;
+  - 200 ms chunks are uploaded at real-time pace to the public STT session
+    API;
+  - `/partial` is polled at the interval the server advertises (250 ms for
+    Azure, 1.5 s for local engines), and then `/finish` is called.
+
+  "Final latency" is measured from the end of the audio. It includes waiting
+  for the last caption poll.
 
 ### Hardware
 
@@ -137,6 +154,14 @@ without new recognition.
   - Whisper.cpp v1.9.4 used `--no-gpu` and `GGML_NATIVE=OFF`.
   - The harness and recordings are not committed, so these runs cannot be
     reproduced from the repository alone.
+
+- **Live captions through the Sodalis API (2026-10-16).**
+  - The same laptop, with no other Sodalis stack running.
+  - The speech API and shipping Parakeet service ran as containers from this
+    branch.
+  - Azure ran on the `soladis-foundry` Speech resource, reached over the
+    laptop's internet connection.
+  - Each provider was run once.
 
 The two corpora are not comparable with each other: they differ in speakers,
 length, recording conditions, and reference quality.
@@ -207,6 +232,32 @@ cover two repeat runs.
   excludes model lookahead.
 - **Final latency** is measured from the end of the clip.
 
+### Live captions through the Sodalis API (private clips, 2026-10-16)
+
+Each provider was run once. Times are means over six clips, with ranges in
+brackets.
+
+| Provider | WER | First caption | Final latency | Caption updates | Updates rewriting earlier words |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Azure real-time** (`soladis-foundry`) | 11.1% (9 / 81) | 1.97 s [1.51–2.27] | **0.21 s** [0.13–0.27] | 65 | **0** |
+| Parakeet TDT v3 (shipping service) | **7.4%** (6 / 81) | 2.38 s [1.75–3.73] | 1.40 s [0.59–2.60] | 16 | 3 |
+
+The errors break down as follows:
+
+| Provider | Reference typos | Numbers as words | Accepted variants | Remaining |
+| --- | ---: | ---: | ---: | ---: |
+| Azure real-time | 2 | 0 | 5 | 2 |
+| Parakeet TDT v3 | 2 | 2 | 2 | 0 |
+
+- **Azure writes digits** ("5 voor 12"), matching the reference.
+- **Azure's accepted variants** are "me" for "mij", "wegga", and
+  "hierbinnen" for "hier binnen".
+- **Azure's remaining errors** are one misrecognition: "achterneef" became
+  "18e neef".
+- **This run's Parakeet WER (7.4%) differs from the earlier 8.6%** because
+  the input differs: browser-like WebM/Opus instead of the original M4A,
+  through the shipping service.
+
 ### Contract compatibility and configuration matrix
 
 | Candidate | Dutch accuracy | Interim | Cancellation | Latency | License | Windows / Linux / macOS | Sodalis integration |
@@ -214,7 +265,7 @@ cover two repeat runs.
 | **Parakeet TDT v3**, sherpa-onnx, CPU | Most accurate within real time on CPU: MLS 17.2%, private clips 8.6% | Sodalis snapshot interim | Aborts the request; inference already running continues | RTF 0.12 on laptop CPU | Weights CC BY 4.0 (attribution); runtime Apache-2.0; conversion repo terms to check before publishing an image | Compose on all three; tested on Linux/WSL2 and in a macOS Podman VM; needs more than 2 GB of VM memory | **Default.** `STT_PROVIDER=parakeet-tdt`, profile `parakeet-tdt`, or `PARAKEET_TDT_URL` |
 | Whisper.cpp | Base 30.9–35.8%; Small 11.1–22.8%; Medium 6.2–11.6% | Sodalis snapshot interim; Small is too slow for live captions on CPU | Session cancellation | CPU: only Base is within real time; Metal makes Medium usable on a Mac | MIT runtime and models | Compose CPU on all three; native Metal on macOS | Opt-in. `whisper-cpp`, profile `whisper` (`WHISPER_MODEL`), or `WHISPER_CPP_URL` |
 | Cactus Whistle/Needle | MLS 30.2% | Sodalis snapshot interim | Aborts the request; inference continues | ~137–252 ms per clip | Apache-2.0 model and runtime | Compose CPU | Opt-in. `whistle`, profile `whistle`, or `WHISTLE_URL` |
-| Azure AI Speech real-time (Speech SDK) | Dutch (`nl-NL`) supported by the service; **not measured** | True incremental: Azure's running hypothesis, polled every 250 ms | Stops recognition and closes the connection | Not measured; at most 30 s of audio per utterance | Commercial cloud service (~$1 per audio hour, S1, West Europe); MIT-licensed SDK; LGPL FFmpeg | Any host with network access; FFmpeg in the API image, or on `PATH` natively | Opt-in. `STT_PROVIDER=azure`, `AZURE_STT_ENDPOINT`, `AZURE_STT_KEY`; no container |
+| Azure AI Speech real-time (Speech SDK) | Private clips 11.1% (2 real errors); MLS not measured | True incremental: Azure's running hypothesis, polled every 250 ms; no rewrites measured | Stops recognition and closes the connection | Final 0.13–0.27 s after speech; first caption ~2 s; at most 30 s of audio per utterance | Commercial cloud service (~$1 per audio hour, S1, West Europe); MIT-licensed SDK; LGPL FFmpeg | Any host with network access; FFmpeg in the API image, or on `PATH` natively | Opt-in. `STT_PROVIDER=azure`, `AZURE_STT_ENDPOINT`, `AZURE_STT_KEY`; no container |
 | Nemotron 3.5 ASR streaming | Private clips 13.6% (560 ms); one phrase came out German | True incremental; no rewrites | Not integrated | Lag ~0.2 s; final ~0.5 s | Not reviewed | Linux/WSL2 CPU in an experiment | Not integrated; follow-up |
 | Moondream Parakeet Redux / Photon | Dutch claimed; not measured | Photon documents live PCM snapshots; unverified | Unverified | Not measured | Weights CC BY 4.0; `kestrel-kernels` needs a written agreement | CPU, Apple silicon, CUDA per vendor | Not integrated; runtime not installed |
 | Cactus engine (other models) | Not measured | Chunked `confirmed` / `pending` API | Unverified | Not measured | Restricts organizations above funding or revenue thresholds | Vendor-dependent | Not bundled |
@@ -289,9 +340,19 @@ explicitly and is never replaced by another one.
   pushing captions.
 - **Cost bound.** Recognition starts with the first audio chunk, not when
   the microphone opens, and each utterance is capped at 30 s of audio.
-- **Not evaluated live.** Dutch accuracy, caption timing, and the endpoint
-  form still need the real key and authorization to send the test
-  recordings. A probe with an invalid key failed cleanly within 2 s.
+- **Live result (six private clips, one run).**
+  - **Latency:** Azure returned the final transcript about 1.2 s sooner than
+    shipping Parakeet (0.21 s vs 1.40 s after the audio ended). The gain is
+    larger on longer clips, where Parakeet re-transcribes the whole
+    snapshot.
+  - **Caption stability:** its captions updated four times as often and
+    never rewrote earlier words.
+  - **Accuracy:** it was less accurate on this corpus (2 real errors vs 0).
+  - **Endpoint:** the `https://<resource>.cognitiveservices.azure.com/` form
+    works with the Speech SDK; the smoke test completed in 1.1 s.
+- **Recommendation.** Keep Parakeet as the default: it is local, free, and
+  at least as accurate here. Offer Azure as the opt-in choice where steady,
+  near-instant captions matter more and cloud processing is acceptable.
 
 ### Licensing and deployment
 
@@ -323,8 +384,10 @@ explicitly and is never replaced by another one.
   and live-caption runs used an uncommitted local harness. They also used the
   benchmark's own sherpa-onnx server, not the shipping Parakeet service.
 - **No hardware acceleration** was tested beyond Whisper Metal on a Mac.
-- **Two candidates are not measured at all:** Azure (no live run) and
-  Parakeet Redux (no runtime installed).
+- **Azure has one run on six short clips,** over one network connection;
+  latency depends on the connection and the resource region. It has not been
+  run on the MLS subset.
+- **Parakeet Redux is not measured at all** (no runtime installed).
 
 ## Open items
 
@@ -335,11 +398,9 @@ explicitly and is never replaced by another one.
   before treating WER differences of a few points as meaningful.
 - Measure longer, noisier, and continuous-microphone speech, including
   pre-roll, sustained-speech rollover, and the 30 s request limit.
-- Run the Azure live smoke test and `scripts/stt-live-captions.ts` on the
-  six private clips and the MLS subset against the `soladis-foundry`
-  resource. Record WER, time to first caption, final latency, and rewrites
-  here, and confirm that the resource endpoint form works with the Speech
-  SDK.
+- Run Azure and Parakeet through `scripts/stt-live-captions.ts` on the MLS
+  subset and on longer, noisier recordings, with repeated runs, before
+  relying on the WER difference between them.
 - Check the redistribution terms of the Parakeet ONNX conversion before
   publishing an image, and review Nemotron's license before integrating it.
 - Re-evaluate Parakeet Redux only if a written `kestrel-kernels` agreement is
