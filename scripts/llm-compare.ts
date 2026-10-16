@@ -7,8 +7,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
-import type { LlmUsage } from "../apps/server/src/assistant/OpenAiCompatibleLlmProvider.js";
-import { createLlmProvider, type LlmProviderSettings } from "../apps/server/src/assistant/providers.js";
+import { LlmContentFilterError, type LlmUsage } from "../apps/server/src/assistant/OpenAiCompatibleLlmProvider.js";
+import {
+  AZURE_LLM_REASONING_EFFORTS,
+  createLlmProvider,
+  type LlmProviderSettings,
+} from "../apps/server/src/assistant/providers.js";
 import type { AvailableAppAction } from "../packages/assistant/src/AssistantActions.js";
 import {
   ASSISTANT_EXPRESSIONS,
@@ -17,8 +21,7 @@ import {
   parseAssistantUtterance,
 } from "../packages/assistant/src/AssistantUtterance.js";
 
-const REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
-const DEFAULT_CONFIGS = ["local", ...REASONING_EFFORTS.map((effort) => `azure-${effort}`)];
+const DEFAULT_CONFIGS = ["local", ...AZURE_LLM_REASONING_EFFORTS.map((effort) => `azure-${effort}`)];
 
 interface Message {
   readonly role: "user" | "assistant";
@@ -254,6 +257,7 @@ async function runSample(
   let raw = "";
   let usage: LlmUsage | null = null;
   let error: string | null = null;
+  let contentFilter = false;
   try {
     for await (const text of provider.generate({
       messages: prompt.messages,
@@ -270,6 +274,7 @@ async function runSample(
     }
   } catch (caught) {
     error = errorMessage(caught);
+    contentFilter = caught instanceof LlmContentFilterError;
   }
   const totalMs = performance.now() - started;
   return {
@@ -282,7 +287,7 @@ async function runSample(
     totalMs: Math.round(totalMs),
     usage,
     error,
-    contentFilter: error?.toLowerCase().includes("content filter") ?? false,
+    contentFilter,
     raw,
     ...scoreResponse(raw, prompt, actions),
   };
@@ -317,9 +322,10 @@ function configurations(
         },
       };
     }
-    const effort = /^azure-(minimal|low|medium|high)$/.exec(name)?.[1];
+    const effort = AZURE_LLM_REASONING_EFFORTS.find((candidate) => name === `azure-${candidate}`);
     if (!effort) {
-      throw new Error(`Unknown configuration "${name}"; use local, mock, or azure-<minimal|low|medium|high>.`);
+      throw new Error(`Unknown configuration "${name}"; use local, mock, or azure-<${
+        AZURE_LLM_REASONING_EFFORTS.join("|")}>.`);
     }
     return {
       label: `azure:${env.AZURE_LLM_DEPLOYMENT ?? "?"}:${effort}`,

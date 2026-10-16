@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OpenAiCompatibleLlmProvider } from "./OpenAiCompatibleLlmProvider.js";
+import { LlmContentFilterError, OpenAiCompatibleLlmProvider } from "./OpenAiCompatibleLlmProvider.js";
 
 function eventStream(...frames: readonly string[]): Response {
   return new Response(
@@ -101,6 +101,7 @@ describe("OpenAiCompatibleLlmProvider", () => {
           { status: 400 },
         ),
     });
+    await expect(collect(blockedPrompt)).rejects.toBeInstanceOf(LlmContentFilterError);
     await expect(collect(blockedPrompt)).rejects.toThrow("content filter");
 
     const blockedResponse = new OpenAiCompatibleLlmProvider({
@@ -114,7 +115,7 @@ describe("OpenAiCompatibleLlmProvider", () => {
           "[DONE]",
         ),
     });
-    await expect(collect(blockedResponse)).rejects.toThrow("content filter");
+    await expect(collect(blockedResponse)).rejects.toBeInstanceOf(LlmContentFilterError);
   });
 
   it("requests streamed completions with server credentials and trusted context", async () => {

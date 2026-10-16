@@ -105,6 +105,7 @@ Persistent memory is out of scope (task 0037 Implementation Notes).
 | `json_schema` | yes (docs) | yes (docs) | yes (docs) | yes, strict mode (not used) |
 | Usage in stream | yes, measured | not documented | yes (docs) | yes (docs) |
 | Reasoning control | `reasoning_effort` per model (docs); not sent | `--reasoning-effort` / `reasoning_effort` to the template (docs) | per reasoning parser (docs) | `reasoning_effort`, sent |
+| Cancellation | stops generating on disconnect, measured | not measured | not verified | Sodalis disconnects; upstream stop not observable |
 | Container | host install (example) | `ghcr.io/ggml-org/llama.cpp:server` | `vllm/vllm-openai` (GPU) or `vllm/vllm-openai-cpu` (x86 AVX2/AVX-512) | cloud |
 
 Sources: Ollama

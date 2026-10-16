@@ -23,7 +23,7 @@ const AZURE_LLM_RESOURCE_ENDPOINT = "https://<resource>.openai.azure.com/openai/
 export const AZURE_LLM_REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
 
 /** The Azure OpenAI v1 base URL for an Azure OpenAI or Foundry resource endpoint. */
-export function azureLlmEndpoint(value: string): string {
+function azureLlmEndpoint(value: string): string {
   const endpoint = new URL(value);
   if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.hash) {
     throw new Error("AZURE_LLM_URL must be an HTTPS URL without credentials.");
@@ -43,13 +43,44 @@ export function azureLlmEndpoint(value: string): string {
   return `https://${endpoint.host}/openai/v1`;
 }
 
+export type AzureLlmReasoningEffort = (typeof AZURE_LLM_REASONING_EFFORTS)[number];
+
 /** The validated Azure reasoning effort; `minimal` keeps spoken replies fast. */
-export function azureLlmReasoningEffort(value: string | undefined): string {
+function azureLlmReasoningEffort(value: string | undefined): AzureLlmReasoningEffort {
   const effort = value?.trim() || "minimal";
-  if (!(AZURE_LLM_REASONING_EFFORTS as readonly string[]).includes(effort)) {
+  const known = AZURE_LLM_REASONING_EFFORTS.find((candidate) => candidate === effort);
+  if (!known) {
     throw new Error(`AZURE_LLM_REASONING_EFFORT must be one of ${AZURE_LLM_REASONING_EFFORTS.join(", ")}.`);
   }
-  return effort;
+  return known;
+}
+
+export interface AzureLlmSettings {
+  /** Normalised `https://<host>/openai/v1` base URL. */
+  readonly url: string;
+  readonly key: string;
+  readonly deployment: string;
+  readonly reasoningEffort: AzureLlmReasoningEffort;
+}
+
+/** Validates the `AZURE_LLM_*` settings for both the AI service and the stack configuration. */
+export function azureLlmSettings(settings: LlmProviderSettings): AzureLlmSettings {
+  if (!settings.AZURE_LLM_URL?.trim()) {
+    throw new Error("Set AZURE_LLM_URL for LLM_PROVIDER=azure.");
+  }
+  const url = azureLlmEndpoint(settings.AZURE_LLM_URL);
+  if (!settings.AZURE_LLM_KEY?.trim()) {
+    throw new Error("Set AZURE_LLM_KEY for LLM_PROVIDER=azure.");
+  }
+  if (!settings.AZURE_LLM_DEPLOYMENT?.trim()) {
+    throw new Error("Set AZURE_LLM_DEPLOYMENT for LLM_PROVIDER=azure.");
+  }
+  return {
+    url,
+    key: settings.AZURE_LLM_KEY.trim(),
+    deployment: settings.AZURE_LLM_DEPLOYMENT.trim(),
+    reasoningEffort: azureLlmReasoningEffort(settings.AZURE_LLM_REASONING_EFFORT),
+  };
 }
 
 export function createLlmProvider(
@@ -84,23 +115,14 @@ export function createLlmProvider(
         ...fetchOption,
       });
     case "azure": {
-      if (!settings.AZURE_LLM_URL?.trim()) {
-        throw new Error("Set AZURE_LLM_URL for LLM_PROVIDER=azure.");
-      }
-      const baseUrl = azureLlmEndpoint(settings.AZURE_LLM_URL);
-      if (!settings.AZURE_LLM_KEY?.trim()) {
-        throw new Error("Set AZURE_LLM_KEY for LLM_PROVIDER=azure.");
-      }
-      if (!settings.AZURE_LLM_DEPLOYMENT?.trim()) {
-        throw new Error("Set AZURE_LLM_DEPLOYMENT for LLM_PROVIDER=azure.");
-      }
+      const azure = azureLlmSettings(settings);
       return new OpenAiCompatibleLlmProvider({
         id: "azure-openai-v1",
-        baseUrl,
-        model: settings.AZURE_LLM_DEPLOYMENT.trim(),
-        apiKey: settings.AZURE_LLM_KEY.trim(),
+        baseUrl: azure.url,
+        model: azure.deployment,
+        apiKey: azure.key,
         apiKeyHeader: "api-key",
-        extraBody: { reasoning_effort: azureLlmReasoningEffort(settings.AZURE_LLM_REASONING_EFFORT) },
+        extraBody: { reasoning_effort: azure.reasoningEffort },
         ...fetchOption,
       });
     }

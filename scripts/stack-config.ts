@@ -1,4 +1,4 @@
-import { azureLlmEndpoint, azureLlmReasoningEffort } from "../apps/server/src/assistant/providers.js";
+import { azureLlmSettings } from "../apps/server/src/assistant/providers.js";
 
 export interface StackSelection {
   readonly profiles: readonly string[];
@@ -186,18 +186,13 @@ export function resolveStack(settings: Settings): StackSelection {
       break;
     }
     case "azure": {
-      if (!settings.AZURE_LLM_URL?.trim()) throw new Error("Set AZURE_LLM_URL for LLM_PROVIDER=azure.");
-      const url = azureLlmEndpoint(settings.AZURE_LLM_URL);
-      if (!settings.AZURE_LLM_KEY?.trim()) throw new Error("Set AZURE_LLM_KEY for LLM_PROVIDER=azure.");
-      if (!settings.AZURE_LLM_DEPLOYMENT?.trim()) {
-        throw new Error("Set AZURE_LLM_DEPLOYMENT for LLM_PROVIDER=azure.");
-      }
+      const azure = azureLlmSettings(settings);
       Object.assign(environment, localLlm, {
         LLM_PROVIDER: "azure",
-        AZURE_LLM_URL: url,
-        AZURE_LLM_KEY: settings.AZURE_LLM_KEY.trim(),
-        AZURE_LLM_DEPLOYMENT: settings.AZURE_LLM_DEPLOYMENT.trim(),
-        AZURE_LLM_REASONING_EFFORT: azureLlmReasoningEffort(settings.AZURE_LLM_REASONING_EFFORT),
+        AZURE_LLM_URL: azure.url,
+        AZURE_LLM_KEY: azure.key,
+        AZURE_LLM_DEPLOYMENT: azure.deployment,
+        AZURE_LLM_REASONING_EFFORT: azure.reasoningEffort,
       });
       break;
     }

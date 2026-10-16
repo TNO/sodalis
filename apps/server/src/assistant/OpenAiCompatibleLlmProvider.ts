@@ -37,7 +37,13 @@ export interface OpenAiCompatibleLlmProviderOptions {
   readonly fetch?: typeof fetch;
 }
 
-const contentFilterMessage = "LLM provider blocked the response with its content filter.";
+/** The provider's content filter blocked the prompt or the response. */
+export class LlmContentFilterError extends Error {
+  constructor() {
+    super("LLM provider blocked the response with its content filter.");
+    this.name = "LlmContentFilterError";
+  }
+}
 
 function serverError(response: Response): Promise<Error> {
   return response
@@ -52,7 +58,7 @@ function serverError(response: Response): Promise<Error> {
         "code" in payload.error &&
         payload.error.code === "content_filter"
       ) {
-        return new Error(contentFilterMessage);
+        return new LlmContentFilterError();
       }
       if (
         typeof payload === "object" &&
@@ -95,7 +101,7 @@ function readTextDelta(payload: unknown): string | undefined {
       "finish_reason" in choice &&
       choice.finish_reason === "content_filter"
     ) {
-      throw new Error(contentFilterMessage);
+      throw new LlmContentFilterError();
     }
     if (
       typeof choice === "object" &&
