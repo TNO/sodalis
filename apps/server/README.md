@@ -47,6 +47,17 @@ recognizer's latest hypothesis without new recognition, and session creation
 returns `partialIntervalMs`, `provider`, and `cloud` so the browser polls more
 often and can disclose cloud processing.
 
+`WhisperCppHttpEngine` sends whisper.cpp's `no_speech_thold` form field
+(default `0.6`, overridable via `noSpeechThreshold`) on every request so the
+engine suppresses low-confidence output on silence or background noise. This
+guards against a known whisper.cpp failure mode where near-silent audio is
+transcribed as unrelated hallucinated text (e.g. stock phrases from its
+training data). It works together with the microphone VAD's energy threshold
+and end-of-speech hangover (see `packages/speech/src/voiceActivity.ts`) and the
+minimum speech-segment duration gate (see `SpeechInputControllerOptions.minSegmentDurationMs`
+in `packages/speech/src/SpeechInputController.ts`), which keep short noise
+blips from ever reaching Whisper.
+
 The requested Whistle comparison used two synthetic Dutch utterances. Whistle
 misheard “Anne” as “alle” once and changed “afspraak” to “afspraken” once.
 Whisper.cpp with `ggml-base.bin` also misheard “Anne” (“aan de”) and differed

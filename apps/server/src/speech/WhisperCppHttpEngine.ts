@@ -18,6 +18,8 @@ export interface SpeechRecognitionEngine {
 export interface WhisperCppHttpEngineOptions {
   readonly serverUrl: string;
   readonly fetch?: typeof fetch;
+  /** Forwarded as whisper.cpp's `no_speech_thold` form field (its default is 0.6). */
+  readonly noSpeechThreshold?: number;
 }
 
 const WHISPER_LANGUAGE_TAGS: Readonly<Record<string, string>> = {
@@ -55,6 +57,7 @@ function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 export class WhisperCppHttpEngine implements SpeechRecognitionEngine {
   private readonly endpoint: URL;
   private readonly fetcher: typeof fetch;
+  private readonly noSpeechThreshold: number;
 
   constructor(options: WhisperCppHttpEngineOptions) {
     this.endpoint = new URL(
@@ -64,6 +67,7 @@ export class WhisperCppHttpEngine implements SpeechRecognitionEngine {
         : `${options.serverUrl}/`,
     );
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.noSpeechThreshold = options.noSpeechThreshold ?? 0.6;
   }
 
   async transcribe(
@@ -83,6 +87,8 @@ export class WhisperCppHttpEngine implements SpeechRecognitionEngine {
     );
     form.append("language", language);
     form.append("response_format", "json");
+    // Suppresses low-confidence output on silence/noise, mitigating hallucinations.
+    form.append("no_speech_thold", String(this.noSpeechThreshold));
 
     const response = await this.fetcher(this.endpoint, {
       method: "POST",

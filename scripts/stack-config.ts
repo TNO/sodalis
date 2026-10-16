@@ -69,7 +69,7 @@ export function resolveStack(settings: Settings): StackSelection {
       ? endpoint(settings.WHISPER_CPP_URL, "WHISPER_CPP_URL")
       : "http://whisper:8080";
     if (!settings.WHISPER_CPP_URL) {
-      const model = settings.WHISPER_MODEL || "ggml-base.bin";
+      const model = settings.WHISPER_MODEL || "ggml-small.bin";
       if (!/^ggml-[A-Za-z0-9._-]+\.bin$/.test(model)) {
         throw new Error("WHISPER_MODEL must name a ggml-*.bin file in models/whisper.");
       }

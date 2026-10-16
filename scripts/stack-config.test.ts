@@ -44,7 +44,7 @@ describe("development stack selection", () => {
     expect(selected.environment).toMatchObject({
       STT_PROVIDER: "whisper-cpp",
       WHISPER_CPP_URL: "http://whisper:8080",
-      WHISPER_MODEL: "ggml-base.bin",
+      WHISPER_MODEL: "ggml-small.bin",
       TTS_PROVIDER: "piper-http",
       PIPER_HTTP_URL: "http://piper:5000",
       LLM_PROVIDER: "mock",

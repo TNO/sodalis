@@ -90,7 +90,6 @@ consolidated analysis belongs in [`docs/evaluations/`](../docs/evaluations/READM
 - [x] 0036 Evaluating alternate TTS providers *(needs 0030, 0034)*
 - [ ] 0037 Evaluating alternate LLM providers *(needs 0031, 0034)*
 - [ ] 0038 Connecting to a real Home Assistant instance *(needs 0032, 0033, 0034)*
-- [ ] 0042 Improving live STT captions *(needs 0035)*
 
 ## Long-term memory and future scale
 
@@ -101,3 +100,8 @@ is intentionally later than the single-instance Home Assistant adapter.
 
 - [ ] 0039 Building Sodalis long-term memory *(needs 0031, 0034)*
 - [ ] 0040 Designing multi-house Home Assistant connectivity *(needs 0038)*
+
+## Speech accuracy and live captions
+
+- [x] 0041 Fixing STT transcription accuracy and silence hallucination *(needs 0023, 0024)*
+- [ ] 0042 Improving live STT captions *(needs 0035)*

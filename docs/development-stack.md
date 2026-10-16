@@ -80,8 +80,8 @@ For the optional Whisper.cpp profile:
 
 ```sh
 mkdir -p models/whisper
-curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
-  -o models/whisper/ggml-base.bin
+curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin \
+  -o models/whisper/ggml-small.bin
 ```
 
 On Windows, download those URLs with a browser or `Invoke-WebRequest -Uri URL
@@ -97,15 +97,15 @@ CPU latency and RAM needs depend on the selected model, especially the LLM.
 
 ### Improve Dutch recognition on a Mac
 
-The optional Whisper `ggml-base.bin` keeps CPU inference lightweight, but it
-misrecognized a short Dutch question in testing. To choose a stronger local
-model, download it into `models/whisper/` and set its filename in your
-ignored `.env` (leave `WHISPER_CPP_URL` empty):
+The optional Whisper profile now defaults to `ggml-small.bin` for better Dutch
+recognition. The lighter `ggml-base.bin` misrecognized a short Dutch question
+in testing; to use it instead, download it into `models/whisper/` and set its
+filename in your ignored `.env` (leave `WHISPER_CPP_URL` empty):
 
 ```sh
-curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin \
-  -o models/whisper/ggml-small.bin
-# In .env: WHISPER_MODEL=ggml-small.bin
+curl -fL https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin \
+  -o models/whisper/ggml-base.bin
+# In .env: WHISPER_MODEL=ggml-base.bin
 pnpm stack:up
 ```
 
