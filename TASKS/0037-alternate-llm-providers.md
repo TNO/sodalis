@@ -32,6 +32,8 @@ service.
 
 - The existing OpenAI-compatible adapter is retained by task `0031`.
 - This task does not implement persistent memory.
+- Write the final, consolidated analysis in
+  `docs/evaluations/llm-providers.md` (see `docs/evaluations/README.md`).
 
 ## Agent Notes
 

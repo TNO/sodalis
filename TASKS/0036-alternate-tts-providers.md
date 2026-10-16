@@ -37,6 +37,8 @@ without changing the Sodalis browser contract.
   and weights; F5-TTS lists MIT for code but CC-BY-NC for pretrained models.
   Assess Dutch voice/model availability and practical CPU/Apple Silicon
   performance before proposing either for the local development stack.
+- The final, consolidated analysis is in
+  `docs/evaluations/tts-providers.md` (see `docs/evaluations/README.md`).
 
 ## Agent Notes
 
@@ -147,7 +149,7 @@ without changing the Sodalis browser contract.
   still pending; Piper remains the only validated local engine, and no
   provider other than Piper meets the latency contract on laptop CPU.
 - 2026-10-16 Copilot: Consolidated all measurements, the contract matrix,
-  and limitations in `docs/tts-evaluation.md`. It excludes the human
+  and limitations in `docs/evaluations/tts-providers.md`. It excludes the human
   listening review. It recommends keeping Piper `nl_BE-nathalie-medium`.
   Most WER on the passing Piper voices comes from number and spelling
   sentences, largely because Parakeet writes digits where the reference

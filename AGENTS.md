@@ -11,3 +11,6 @@
   `pnpm typecheck`, and `pnpm build` for changes to workspace code.
 - The initial slice intentionally has no LLM, speech, memory, or external
   account integration.
+- Put the final, consolidated analysis of each evaluation (for example
+  provider comparisons) in `docs/evaluations/`, following its README, and
+  link it from the task. Keep only progress notes in `TASKS/`.

@@ -39,6 +39,8 @@ contract.
   and model/runtime licensing before deciding whether to add an adapter or
   local Compose profile. The model card lists CC-BY-4.0 for the weights;
   verify attribution and runtime terms separately.
+- Write the final, consolidated analysis in
+  `docs/evaluations/stt-providers.md` (see `docs/evaluations/README.md`).
 
 ## Agent Notes
 

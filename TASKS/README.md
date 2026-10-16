@@ -83,6 +83,9 @@ service contract and Compose profile exist. Home Assistant Core is simulated
 first; linking to a real instance and designing access to many houses are
 separate, later steps.
 
+Evaluation tasks record progress in their Agent Notes; their final,
+consolidated analysis belongs in [`docs/evaluations/`](../docs/evaluations/README.md).
+
 - [ ] 0035 Evaluating alternate STT providers *(needs 0030, 0034)*
 - [ ] 0036 Evaluating alternate TTS providers *(needs 0030, 0034)*
 - [ ] 0037 Evaluating alternate LLM providers *(needs 0031, 0034)*

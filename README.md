@@ -100,6 +100,8 @@ Piper remains the default TTS. An explicit Azure Speech opt-in and a
 standalone, non-commercial Fish Speech 1.5 evaluation profile (not
 connected to Sodalis playback) are described in the
 [TTS compatibility guide](docs/development-stack.md#evaluate-alternative-speech-synthesis).
+Final analyses of these provider evaluations are collected in
+[`docs/evaluations/`](docs/evaluations/README.md).
 
 ## Frontend-only development
 

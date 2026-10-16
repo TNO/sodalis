@@ -4,7 +4,7 @@ Status: analysis of all measurements up to 2026-10-15. The human listening
 review is **not** part of this analysis; conclusions rest on measured speed,
 memory, automatic intelligibility, licensing, and contract checks only.
 Commands to reproduce every run are in
-[development-stack.md](development-stack.md#evaluate-alternative-speech-synthesis).
+[development-stack.md](../development-stack.md#evaluate-alternative-speech-synthesis).
 
 ## Summary
 
