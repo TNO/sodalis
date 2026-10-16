@@ -106,6 +106,36 @@ describe("speech recognition API", () => {
     }));
   });
 
+  it("advertises interim support and rejects interim requests for final-only engines", async () => {
+    const interimApp = createSpeechApp(createEngine());
+    await expect((await createSession(interimApp)).json()).resolves.toEqual({
+      sessionId: "turn-1",
+      partialResults: true,
+    });
+
+    const transcribe = vi.fn(async () => ({ text: "Hoe oud bent u?" }));
+    const app = createSpeechApp({ transcribe, partialResults: false });
+    await expect((await createSession(app)).json()).resolves.toEqual({
+      sessionId: "turn-1",
+      partialResults: false,
+    });
+    await app.request("/api/speech/stt/sessions/turn-1/audio", {
+      method: "POST",
+      headers: { "content-type": "audio/webm" },
+      body: new Uint8Array([1, 2]),
+    });
+    const partial = await app.request(
+      "/api/speech/stt/sessions/turn-1/partial", { method: "POST" },
+    );
+    expect(partial.status).toBe(501);
+    expect(transcribe).not.toHaveBeenCalled();
+
+    const final = await app.request(
+      "/api/speech/stt/sessions/turn-1/finish", { method: "POST" },
+    );
+    await expect(final.json()).resolves.toEqual({ text: "Hoe oud bent u?" });
+  });
+
   it("aborts an in-progress interim transcription when the session is cancelled", async () => {
     let started: (() => void) | undefined;
     let recognitionSignal: AbortSignal | undefined;

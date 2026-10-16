@@ -46,7 +46,7 @@ const ALLOWED_AUDIO_TYPES = new Set([
 function jsonError(
   context: Context,
   message: string,
-  status: 400 | 404 | 409 | 413 | 415 | 503 | 502,
+  status: 400 | 404 | 409 | 413 | 415 | 501 | 503 | 502,
 ) {
   return context.json({ error: message }, status);
 }
@@ -163,7 +163,10 @@ export function createSpeechApp(
       processing: false,
       partialProcessing: false,
     });
-    return context.json({ sessionId }, 201);
+    return context.json(
+      { sessionId, partialResults: engine.partialResults !== false },
+      201,
+    );
   });
 
   app.post("/api/speech/stt/sessions/:sessionId/audio", async (context) => {
@@ -213,6 +216,13 @@ export function createSpeechApp(
   app.post("/api/speech/stt/sessions/:sessionId/partial", async (context) => {
     const session = sessions.get(context.req.param("sessionId"));
     if (!session) return jsonError(context, "Speech session not found.", 404);
+    if (engine.partialResults === false) {
+      return jsonError(
+        context,
+        "The selected STT provider does not support interim transcripts.",
+        501,
+      );
+    }
     if (session.processing || session.partialProcessing) {
       return jsonError(context, "Speech session is already processing.", 409);
     }

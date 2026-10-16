@@ -11,6 +11,7 @@ import type {
 const SERVER_STT_CAPABILITIES: SpeechToTextCapabilities = {
   runtime: "server",
   languages: ["nl-NL", "en-US"],
+  // Upper bound: each session follows the server's `partialResults` flag.
   partialResults: true,
   inputAudioMimeTypes: [
     "audio/webm",
@@ -222,6 +223,10 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
       throw error;
     }
     if (!response.ok) throw errorFromResponse(response, details);
+    const partialResults = !(
+      typeof details === "object" && details !== null &&
+      "partialResults" in details && details.partialResults === false
+    );
     if (config.signal.aborted) {
       await cancelRemote();
       config.signal.throwIfAborted();
@@ -279,7 +284,7 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
         ensureActive();
         const uploadedAt = now();
         firstAudioAt ??= uploadedAt;
-        if (partialPromise ||
+        if (!partialResults || partialPromise ||
             uploadedAt - (lastPartialAt ?? firstAudioAt) < PARTIAL_INTERVAL_MS) {
           return;
         }

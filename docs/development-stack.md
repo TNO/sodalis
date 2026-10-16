@@ -33,7 +33,7 @@ Parakeet needs more than a 2 GB Podman VM; see the
 
 | Role | Local selection | External selection |
 | --- | --- | --- |
-| STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL` |
+| STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL`; `azure` with `AZURE_STT_URL` and `AZURE_STT_KEY` (final transcripts only) |
 | TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
 | LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL`; the example targets host Ollama |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
@@ -51,8 +51,9 @@ External Piper TTS must speak Piper HTTP (`POST /synthesize` with a WAV
 response); Azure TTS uses its own HTTPS SSML endpoint and streams raw
 22,050 Hz PCM through the speech API. The LLM endpoint
 must stream OpenAI-compatible Chat Completions; and the Home endpoint must
-implement Sodalis's `/api/home/*` contract. Azure TTS has an explicit
-server-side SSML adapter; other hosted services are usable **only when their
+implement Sodalis's `/api/home/*` contract. Azure STT (fast transcription)
+and Azure TTS (SSML) have explicit server-side adapters; other hosted
+services are usable **only when their
 endpoint implements the selected protocol**, possibly through a separately
 managed adapter. No automatic provider discovery or remote fallback is
 included.
@@ -201,14 +202,35 @@ install that runtime. Cactus Whistle uses the separate Apache-2.0
 [`cactus-needle`](https://github.com/cactus-compute/needle) runtime,
 not the differently licensed `cactus` engine.
 
-| Candidate | Dutch / accuracy | Interim / cancellation | Deployment / license | Decision |
-| --- | --- | --- | --- | --- |
-| Whisper.cpp `base`, `small`, `medium` | Measured above; short questions still imperfect | Sodalis snapshot interim API; session cancellation | macOS native or cross-platform CPU Compose; model-specific memory | Available; `medium` preferred on a sufficiently provisioned native Mac |
-| Cactus Whistle/Needle | Six-speaker MLS test: 65/215 word errors (30.2% WER); fast CPU inference; short synthetic question still wrong | Sodalis snapshot interim; request cancellation, but in-flight inference continues | Apache-2.0 model and runtime; cross-platform CPU image | Opt-in Compose profile `whistle` |
-| NVIDIA Parakeet TDT v3 / sherpa-onnx | Six-speaker MLS test: 37/215 word errors (17.2% WER), 394–700 ms per clip; WAV short question correct, WebM question "Who oud bent u?"; 3 s silence empty | Sodalis snapshot interim; in-flight inference continues | Original weights CC BY 4.0, Apache-2.0 runtime; 2 GB VM OOM, 8 GB VM runs | Opt-in Compose profile `parakeet-tdt`; not Redux |
-| Cactus engine (other models) | Not benchmarked | Chunked `confirmed` / `pending` API; cancellation not verified | [Different license](https://github.com/cactus-compute/cactus/blob/main/LICENSE) restricts organizations above funding/revenue thresholds | Not bundled |
-| Moondream Parakeet Redux / Photon | Dutch claimed; MLS accuracy not measured | Photon documents live PCM snapshots; cancellation and Sodalis WebM conversion not verified | Local CPU/Apple silicon/CUDA; weights CC BY 4.0, `kestrel-kernels` requires a written agreement | No adapter/profile until runtime terms and live path are verified |
-| Azure AI Speech | Dutch supported by service; local sample not uploaded | Continuous recognition provides interim events; Sodalis cancellation not integrated | Hosted; credentials, billing, network and data transfer required | No adapter or cloud fallback without authorization and a local-only evaluation plan |
+The compatibility and configuration matrix for every STT candidate, with
+the consolidated measurements and recommendation, is in
+[evaluations/stt-providers.md](evaluations/stt-providers.md).
+
+### Optional Azure AI Speech STT
+
+`STT_PROVIDER=azure` sends each **finished microphone utterance** to your
+own Azure Speech resource through the
+[fast transcription API](https://learn.microsoft.com/azure/ai-services/speech-service/fast-transcription-create).
+Select it only with consent to transfer recordings, and set these values in
+your ignored `.env` before `pnpm stack:config` and `pnpm stack:up`:
+
+```dotenv
+STT_PROVIDER=azure
+AZURE_STT_URL=https://<resource>.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15
+AZURE_STT_KEY=<your Speech resource key>
+```
+
+Leave the other STT URLs blank; no local STT container starts. The speech
+API uploads the buffered WebM/Ogg audio once, at `finish`, with the
+session's `nl-NL` or `en-US` locale, and returns Azure's combined
+transcript. The provider advertises `partialResults: false`, so the browser
+shows no interim captions and does not re-upload growing audio.
+Cancellation aborts the upstream HTTP request. Endpoint and key are
+required at startup, use separate `AZURE_STT_*` settings from Azure TTS,
+and a missing or failing service never falls back to a local engine. The
+browser receives none of these settings. Contract tests cover the adapter
+with isolated HTTP responses, **not a live Azure resource**: Dutch
+accuracy, latency, quota handling, and billing are unmeasured.
 
 ### Evaluate alternative speech synthesis
 

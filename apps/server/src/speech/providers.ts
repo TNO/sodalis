@@ -5,6 +5,7 @@ import type { SpeechSynthesisEngine } from "./PiperTtsEngine.js";
 import { PiperTtsEngine } from "./PiperTtsEngine.js";
 import { PiperHttpEngine } from "./PiperHttpEngine.js";
 import { AzureTtsEngine } from "./AzureTtsEngine.js";
+import { AzureSttEngine } from "./AzureSttEngine.js";
 
 export interface SpeechProviderSettings {
   readonly STT_PROVIDER?: string;
@@ -12,6 +13,8 @@ export interface SpeechProviderSettings {
   readonly WHISPER_CPP_URL?: string;
   readonly WHISTLE_URL?: string;
   readonly PARAKEET_TDT_URL?: string;
+  readonly AZURE_STT_URL?: string;
+  readonly AZURE_STT_KEY?: string;
   readonly PIPER_MODEL_PATH?: string;
   readonly PIPER_EXECUTABLE?: string;
   readonly PIPER_HTTP_URL?: string;
@@ -44,6 +47,11 @@ export function createSpeechProviders(settings: SpeechProviderSettings): {
         return new LocalSpeechHttpEngine({
           serverUrl: required(settings.PARAKEET_TDT_URL, "PARAKEET_TDT_URL"),
           name: "Parakeet TDT",
+        });
+      case "azure":
+        return new AzureSttEngine({
+          endpoint: required(settings.AZURE_STT_URL, "AZURE_STT_URL"),
+          key: required(settings.AZURE_STT_KEY, "AZURE_STT_KEY"),
         });
       case "mock":
         return {

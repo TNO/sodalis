@@ -30,7 +30,7 @@ describe("speech provider selection", () => {
     })).toThrow("PIPER_HTTP_URL");
     expect(() => createSpeechProviders({
       STT_PROVIDER: "azure", TTS_PROVIDER: "mock",
-    })).toThrow("STT_PROVIDER");
+    })).toThrow("AZURE_STT_URL");
     expect(() => createSpeechProviders({
       STT_PROVIDER: "whistle", TTS_PROVIDER: "mock",
     })).toThrow("WHISTLE_URL");
@@ -58,5 +58,29 @@ describe("speech provider selection", () => {
       AZURE_TTS_KEY: "test-key",
       AZURE_TTS_VOICE: "nl-NL-ColetteNeural",
     })).toThrow("HTTPS");
+  });
+
+  it("selects final-only Azure STT only with its own explicit endpoint and key", () => {
+    const azureSttUrl =
+      "https://example.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe?api-version=2025-10-15";
+    const { stt } = createSpeechProviders({
+      STT_PROVIDER: "azure",
+      TTS_PROVIDER: "mock",
+      AZURE_STT_URL: azureSttUrl,
+      AZURE_STT_KEY: "stt-key",
+    });
+    expect(stt.partialResults).toBe(false);
+    expect(() => createSpeechProviders({
+      STT_PROVIDER: "azure",
+      TTS_PROVIDER: "mock",
+      AZURE_STT_URL: azureSttUrl,
+      AZURE_TTS_KEY: "tts-key",
+    })).toThrow("AZURE_STT_KEY");
+    expect(createSpeechProviders({
+      PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
+      TTS_PROVIDER: "mock",
+      AZURE_STT_URL: azureSttUrl,
+      AZURE_STT_KEY: "stt-key",
+    }).stt.partialResults).not.toBe(false);
   });
 });

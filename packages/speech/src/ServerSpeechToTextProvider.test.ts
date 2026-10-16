@@ -125,6 +125,37 @@ describe("ServerSpeechToTextProvider", () => {
       .toEqual(["POST", "POST", "POST", "POST", "POST"]);
   });
 
+  it("skips interim requests when the server's provider only returns final transcripts", async () => {
+    let clock = 0;
+    const onPartialError = vi.fn();
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ sessionId: "final-only", partialResults: false }, 201))
+      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 1 }))
+      .mockResolvedValueOnce(jsonResponse({ acceptedBytes: 2 }))
+      .mockResolvedValueOnce(jsonResponse({ text: "Hoe oud bent u?" }));
+    const provider = new ServerSpeechToTextProvider({
+      fetch: fetcher, now: () => clock, onPartialError,
+    });
+    const session = await provider.createSession({
+      sessionId: "final-only", language: "nl-NL",
+      signal: new AbortController().signal,
+    });
+    await session.writeAudio({ data: new Uint8Array([1]), mimeType: "audio/webm" });
+    clock = 1600;
+    await session.writeAudio({ data: new Uint8Array([2]), mimeType: "audio/webm" });
+    await session.finish();
+
+    expect((await session.events[Symbol.asyncIterator]().next()).value)
+      .toEqual({ type: "final", text: "Hoe oud bent u?", sessionId: "final-only" });
+    expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual([
+      "/api/speech/stt/sessions",
+      "/api/speech/stt/sessions/final-only/audio",
+      "/api/speech/stt/sessions/final-only/audio",
+      "/api/speech/stt/sessions/final-only/finish",
+    ]);
+    expect(onPartialError).not.toHaveBeenCalled();
+  });
+
   it("cancels the remote session and rejects stale writes", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

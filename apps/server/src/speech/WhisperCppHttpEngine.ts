@@ -10,6 +10,8 @@ export interface SpeechRecognitionResult {
 }
 
 export interface SpeechRecognitionEngine {
+  /** Whether repeated interim transcription of growing audio is supported; defaults to true. */
+  readonly partialResults?: boolean;
   transcribe(
     request: SpeechRecognitionRequest,
   ): Promise<SpeechRecognitionResult>;
