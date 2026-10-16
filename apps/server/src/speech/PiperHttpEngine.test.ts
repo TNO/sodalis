@@ -17,6 +17,30 @@ function wav(pcm: Uint8Array): Uint8Array {
   return bytes;
 }
 
+/** Like real fetch: aborting the request signal errors the response body stream. */
+function abortableResponse(init: RequestInit | undefined, chunks: readonly Uint8Array[]): Response {
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      init?.signal?.addEventListener("abort", () => controller.error(init.signal!.reason), { once: true });
+    },
+  }));
+}
+
+/** Rejections nobody handled while `action` ran and settled; such rejections crash the speech service. */
+async function unhandledRejections(action: () => Promise<unknown>): Promise<unknown[]> {
+  const reasons: unknown[] = [];
+  const record = (reason: unknown) => { reasons.push(reason); };
+  process.on("unhandledRejection", record);
+  try {
+    await action().catch(() => undefined);
+    await new Promise((done) => setTimeout(done, 20));
+  } finally {
+    process.off("unhandledRejection", record);
+  }
+  return reasons;
+}
+
 describe("Piper HTTP engine", () => {
   const request = {
     sessionId: "s", speechId: "t", text: "Hallo", language: "nl-NL",
@@ -75,5 +99,30 @@ describe("Piper HTTP engine", () => {
         // Consume the stream.
       }
     }).rejects.toThrow();
+  });
+
+  it("survives a client hanging up while Piper audio is still streaming", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (_url, init) =>
+      abortableResponse(init, [wav(new Uint8Array([1, 0, 2, 0]))]));
+    const engine = new PiperHttpEngine({ serverUrl: "http://localhost:5000", fetch: fetcher });
+    const controller = new AbortController();
+    const iterator = engine.synthesize(request, controller.signal)[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({ done: false });
+    expect(await unhandledRejections(async () => {
+      controller.abort(new Error("Client connection prematurely closed."));
+      await iterator.next();
+    })).toEqual([]);
+  });
+
+  it("speaks the default Ronnie voice and refuses the former default voice", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(Uint8Array.from(wav(new Uint8Array([1, 0])))));
+    const engine = new PiperHttpEngine({ serverUrl: "http://localhost:5000", fetch: fetcher });
+    const speak = async (voice: string) => {
+      for await (const _chunk of engine.synthesize({ ...request, voice }, new AbortController().signal)) {
+        // Consume the stream.
+      }
+    };
+    await expect(speak("nl_NL-ronnie-medium")).resolves.toBeUndefined();
+    await expect(speak("nl_BE-nathalie-medium")).rejects.toThrow("voice");
   });
 });

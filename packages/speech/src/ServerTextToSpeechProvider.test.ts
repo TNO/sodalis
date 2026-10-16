@@ -10,7 +10,7 @@ const request: SpeechRequest = {
   speechId: "reply-1",
   text: "Goedemorgen.",
   language: "nl-NL",
-  voice: "nl_BE-nathalie-medium",
+  voice: "nl_NL-ronnie-medium",
 };
 
 function createResponse(
@@ -78,7 +78,7 @@ describe("ServerTextToSpeechProvider", () => {
       speechId: "reply-1",
       text: "Goedemorgen.",
       language: "nl-NL",
-      voice: "nl_BE-nathalie-medium",
+      voice: "nl_NL-ronnie-medium",
     });
   });
 

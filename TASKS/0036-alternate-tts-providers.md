@@ -1,6 +1,6 @@
 # 0036 Evaluating alternate TTS providers
 
-Status: in_progress
+Status: done
 Priority: medium
 Subsystem: speech
 Depends on: 0030, 0034
@@ -154,3 +154,79 @@ without changing the Sodalis browser contract.
   Most WER on the passing Piper voices comes from number and spelling
   sentences, largely because Parakeet writes digits where the reference
   has words. Also noted that `piper-tts` (piper1-gpl) is GPL-3.0-or-later.
+- 2026-10-16 Copilot: Made the live Azure run a key-only step.
+  `tts-compare.py --backend azure` now streams PCM. It records time to first
+  audio separately from total time and honours `Retry-After` on 429/5xx,
+  timing only the successful attempt (the F0 tier allows about 20
+  requests/min). On 401/403 it stops with a hint about key and region and
+  never prints the key. `--azure-preflight` checks the key, region, and voice
+  through the unbilled voices list. Review sentences are now pinned in
+  `review.json`. An Azure run is always reviewed on all 50 clips; Piper keeps
+  the shared ten. `--score` ranks on the shared ten and reports each run's
+  mean over all of its reviewed clips.
+
+  New `scripts/tts-live-check.ts` drives the public `/api/speech/tts` route.
+  It measures first-chunk and total latency, checks PCM framing, and cancels
+  three copies of a 1,007-character reply while still in flight.
+
+  Its first run found a **crash**: a client disconnect mid-stream became an
+  unhandled `reader.cancel` rejection in the Piper HTTP and Azure adapters,
+  which killed the speech service (gateway 502). The user approved fixing
+  both, test-first, at `engine.synthesize`. Piper live baseline after the fix:
+  - first audio 72 / 127 / 173 ms for 18 / 46 / 74 characters;
+  - in-flight cancellation at 500 ms passed, with new audio after 200 ms;
+  - Piper HTTP starts audio only after full synthesis, so cancelling after
+    first audio cannot interrupt it.
+
+  A rehearsal with a bogus key confirmed preflight, benchmark, and stack all
+  stop at Azure's 401, and the key appeared in no output or log. Results
+  added to `docs/evaluations/tts-providers.md`; runbook in
+  `docs/development-stack.md#run-the-live-azure-evaluation`. Remaining:
+  - the live Azure run (key in the ignored `.env.azure-eval`);
+  - the listening review (5 Piper voices × 10 sentences, Azure × 50);
+  - licence decisions;
+  - final consolidation.
+- 2026-10-16 Copilot: Checked the user's Microsoft Foundry setup.
+  "Azure Speech – Text to speech" in Foundry is the same Speech REST API. It
+  is reached through the resource endpoint plus `/tts/cognitiveservices/v1`,
+  not the project endpoint, using the resource key. The resource is in France
+  Central, not westeurope. The user approved:
+  - the unbilled voice list: 917 voices, including native Dutch MAI-Voice-2.1
+    (preview) and Adam HD with Dutch as a secondary language;
+  - 8 one-sentence probes (about 400 characters).
+
+  All probes accepted 22,050 Hz PCM and scored 0/8 Parakeet word errors.
+  Adam's HD synthesis took about 1.8 s in total for 3–4 s of audio. Details
+  are in `docs/evaluations/tts-providers.md`.
+
+  With approval and test-first, the adapter, stack config, and
+  `tts-compare.py` now:
+  - accept any Azure voice name, including `:` model suffixes;
+  - mark replies as Dutch with SSML `<lang>` for voices from other locales;
+  - accept a bare Foundry resource URL;
+  - reject project endpoints with an explanation.
+
+  Azure benchmark runs are now named per voice, and the preflight reports
+  whether a voice speaks Dutch. The user chose
+  `en-US-Adam:DragonHDLatestNeural` and `nl-NL-FennaNeural` for the
+  50-sentence benchmark. Per the user, **no Azure call may be made without
+  their explicit approval**.
+- 2026-10-16 Copilot: Closed the task.
+  - **Listening review:** the user reviewed the voices. Grades out of 10:
+    Azure Sander (MAI-Voice-2.1-Flash) 8.5, Adam (HD) 8, other Azure voices
+    6 or below; Piper Ronnie 5, other Piper voices 4; Chatterbox good but
+    too slow.
+  - **Azure:** the user decided against further Azure runs, so Azure
+    remains judged on its one-sentence probes.
+  - **Default voice:** switched to `nl_NL-ronnie-medium`, test-first, across
+    the voice constant, Compose, the stack's required model files, and the
+    docs. Verified live through Sodalis: in-flight cancellation passed.
+  - **Docs:** rewrote `docs/evaluations/tts-providers.md` as the final
+    analysis, and trimmed the TTS section of `docs/development-stack.md`
+    to configuration and reproduction.
+  - **Open follow-ups**, listed in the evaluation:
+    - legal review of the Piper GPL-3.0-or-later engine;
+    - a decision on non-commercial weights;
+    - sentence-by-sentence synthesis for long replies;
+    - Azure corpus, cost, and cancellation checks before any production use;
+    - optional GPU timing.

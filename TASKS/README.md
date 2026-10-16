@@ -87,7 +87,7 @@ Evaluation tasks record progress in their Agent Notes; their final,
 consolidated analysis belongs in [`docs/evaluations/`](../docs/evaluations/README.md).
 
 - [x] 0035 Evaluating alternate STT providers *(needs 0030, 0034)*
-- [ ] 0036 Evaluating alternate TTS providers *(needs 0030, 0034)*
+- [x] 0036 Evaluating alternate TTS providers *(needs 0030, 0034)*
 - [ ] 0037 Evaluating alternate LLM providers *(needs 0031, 0034)*
 - [ ] 0038 Connecting to a real Home Assistant instance *(needs 0032, 0033, 0034)*
 - [ ] 0042 Improving live STT captions *(needs 0035)*

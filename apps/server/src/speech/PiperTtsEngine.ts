@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { SpeechRequest } from "@sodalis/speech";
 
-export const PIPER_VOICE_ID = "nl_BE-nathalie-medium";
+export const PIPER_VOICE_ID = "nl_NL-ronnie-medium";
 export const PIPER_PCM_MIME_TYPE =
   "audio/pcm;rate=22050;bits=16;channels=1;endianness=little";
 

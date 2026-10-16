@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import wave
@@ -41,16 +42,22 @@ VOICES = {"piper": PIPER_VOICES[0], "fish": "unconditioned",
 DEVICES = {"piper": "CPU", "fish": "MPS (verify server log)", "voxtral": "Metal/MLX",
            "kugelaudio": "Metal/MLX", "chatterbox": "CPU", "mms": "CPU", "parler": "CPU",
            "azure": "Azure AI Speech (cloud)"}
+# Azure voice short name, optionally with a model suffix such as ":DragonHDLatestNeural".
+AZURE_VOICE = r"[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9]+(?::[A-Za-z0-9.-]+)?"
 MAX_MEDIAN_SECONDS = 1.5
 MAX_WER = 0.10
 # Greeting, apology, choice question, time/number, and long sentence; five more come from WER.
 FIXED_REVIEW_KEYS = ("01", "10", "24", "30", "42")
 REVIEW_SIZE = 10
+# Cloud voices are always reviewed on every clip, whatever their gate result.
+FULL_REVIEW_BACKENDS = ("azure",)
 FLAGS = ("missing/extra words", "mispronunciation", "truncation", "artifacts", "wrong language/accent")
 
 
 def run_name(backend, voice):
-    return backend if voice == VOICES[backend] or backend == "azure" else f"{backend}-{voice}"
+    if backend == "azure":
+        return f"azure-{voice.replace(':', '-')}"
+    return backend if voice == VOICES[backend] else f"{backend}-{voice}"
 
 
 def piper_voice_urls(voice):
@@ -82,17 +89,112 @@ def azure_config(environ):
     url = environ.get("AZURE_TTS_URL", "").strip()
     voice = environ.get("AZURE_TTS_VOICE", "").strip()
     parts = urllib.parse.urlsplit(url)
+    host = parts.hostname or ""
+    if host.endswith(".services.ai.azure.com"):
+        raise ValueError("AZURE_TTS_URL is a Foundry project endpoint, which has no speech route; use the "
+                         "resource endpoint https://<resource>.cognitiveservices.azure.com/ instead.")
+    if host.endswith(".cognitiveservices.azure.com") and parts.path in ("", "/"):
+        parts = parts._replace(path="/tts/cognitiveservices/v1")
     if (parts.scheme != "https" or parts.username or parts.password or parts.fragment
             or not parts.path.endswith("/cognitiveservices/v1")):
-        raise ValueError("AZURE_TTS_URL must be an HTTPS Azure TTS /cognitiveservices/v1 endpoint.")
-    if not re.fullmatch(r"nl-(?:NL|BE)-[A-Za-z0-9]+Neural", voice):
-        raise ValueError("AZURE_TTS_VOICE must name a Dutch Azure neural voice.")
-    return {"url": url, "key": key, "voice": voice}
+        raise ValueError("AZURE_TTS_URL must be an HTTPS Azure Speech resource or /cognitiveservices/v1 endpoint.")
+    if not re.fullmatch(AZURE_VOICE, voice):
+        raise ValueError("AZURE_TTS_VOICE must be an Azure voice name such as nl-NL-FennaNeural or "
+                         "en-US-Adam:DragonHDLatestNeural.")
+    return {"url": urllib.parse.urlunsplit(parts), "key": key, "voice": voice}
 
 
-def azure_ssml(text, voice):
-    return (f'<speak version="1.0" xml:lang="{voice[:5]}"><voice name="{voice}">'
-            f"{html.escape(text, quote=True)}</voice></speak>")
+def azure_ssml(text, voice, language="nl-NL"):
+    """SSML in the speech API's form; multilingual voices from other locales get the reply marked as Dutch."""
+    body = html.escape(text, quote=True)
+    if not voice.lower().startswith("nl-"):
+        body = f'<lang xml:lang="{language}">{body}</lang>'
+    return (f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{language}">'
+            f'<voice name="{voice}">{body}</voice></speak>')
+
+
+AZURE_RETRY_STATUSES = (429, 500, 502, 503, 504)
+WARMUP_TEXT = "Goedemorgen, dit is een opwarmzin."
+
+
+def azure_credential_error(status):
+    return RuntimeError(
+        f"Azure TTS rejected the request (HTTP {status}): check AZURE_TTS_KEY and that "
+        "the region in AZURE_TTS_URL matches your Speech resource.")
+
+
+def azure_headers(config, **extra):
+    return {"Ocp-Apim-Subscription-Key": config["key"], "User-Agent": "Sodalis", **extra}
+
+
+def azure_preflight(config, opener=urllib.request.urlopen, timeout=30):
+    """Check key, region, and voice through the unbilled voices list; estimate benchmark characters."""
+    url = config["url"].removesuffix("/v1") + "/voices/list"
+    request = urllib.request.Request(url, headers=azure_headers(config))
+    try:
+        with opener(request, timeout=timeout) as response:
+            voices = json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        if error.code in (401, 403):
+            raise azure_credential_error(error.code) from None
+        raise RuntimeError(f"Azure voices list returned HTTP {error.code}.") from None
+    configured = next((voice for voice in voices if voice["ShortName"] == config["voice"]), None)
+    locales = [configured["Locale"], *configured.get("SecondaryLocaleList", [])] if configured else []
+    return {
+        "voice": config["voice"],
+        "voice_found": configured is not None,
+        "voice_speaks_dutch": any(locale.startswith("nl-") for locale in locales),
+        "dutch_voices": sorted(voice["ShortName"] for voice in voices
+                               if voice.get("Locale") in ("nl-NL", "nl-BE")),
+        "benchmark_characters": sum(len(html.escape(text, quote=True)) for text in (WARMUP_TEXT, *SENTENCES)),
+    }
+
+
+def retry_delay(error, attempt):
+    """Seconds to wait before retrying: Azure's Retry-After when given, else exponential backoff."""
+    value = error.headers.get("Retry-After") if error.headers is not None else None
+    try:
+        return max(0.0, min(float(value), 120.0))
+    except (TypeError, ValueError):
+        return min(2.0 ** attempt, 30.0)
+
+
+def azure_synthesizer(config, timeout, opener=urllib.request.urlopen, clock=time.perf_counter, sleep=time.sleep,
+                      max_retries=6):
+    """Stream Azure PCM into a WAV; report time to first audio and total time of the successful request."""
+
+    def attempt(request):
+        start = clock()
+        first_audio = None
+        chunks = []
+        with opener(request, timeout=timeout) as response:
+            while chunk := response.read1(1 << 16):
+                if first_audio is None:
+                    first_audio = clock() - start
+                chunks.append(chunk)
+        return b"".join(chunks), first_audio, clock() - start
+
+    def synthesize(text, path):
+        request = urllib.request.Request(config["url"], azure_ssml(text, config["voice"]).encode(), azure_headers(
+            config, **{"Content-Type": "application/ssml+xml",
+                       "X-Microsoft-OutputFormat": "raw-22050hz-16bit-mono-pcm"}))
+        retries = 0
+        while True:
+            try:
+                pcm, first_audio, seconds = attempt(request)
+                break
+            except urllib.error.HTTPError as error:
+                if error.code in (401, 403):
+                    raise azure_credential_error(error.code) from None
+                if error.code not in AZURE_RETRY_STATUSES or retries >= max_retries:
+                    raise RuntimeError(f"Azure TTS returned HTTP {error.code} after {retries} retries.") from None
+                sleep(retry_delay(error, retries))
+                retries += 1
+        write_wav(path, pcm, 22050)
+        return {"first_audio_seconds": round(first_audio, 3) if first_audio is not None else None,
+                "seconds": round(seconds, 3), "retries": retries}
+
+    return synthesize
 
 
 def write_wav(path, pcm, rate):
@@ -167,19 +269,7 @@ def synthesizer(args):
         return synthesize
 
     if args.backend == "azure":
-        config = azure_config(os.environ)
-
-        def synthesize(text, path):
-            request = urllib.request.Request(config["url"], azure_ssml(text, config["voice"]).encode(), {
-                "Ocp-Apim-Subscription-Key": config["key"],
-                "Content-Type": "application/ssml+xml",
-                "X-Microsoft-OutputFormat": "raw-22050hz-16bit-mono-pcm",
-                "User-Agent": "Sodalis",
-            })
-            with urllib.request.urlopen(request, timeout=args.timeout) as response:
-                write_wav(path, response.read(), 22050)
-
-        return synthesize
+        return azure_synthesizer(azure_config(os.environ), args.timeout)
 
     if args.backend == "fish":
         def synthesize(text, path):
@@ -298,7 +388,7 @@ def run(args):
     build = synthesizer(args)
     warm = directory / "warmup.wav"
     start = time.perf_counter()
-    build("Goedemorgen, dit is een opwarmzin.", warm)
+    build(WARMUP_TEXT, warm)
     audio_info(warm)
     data["warmup_seconds"] = round(time.perf_counter() - start, 3)
     data["warmup_included_in_results"] = False
@@ -313,19 +403,25 @@ def run(args):
             continue
         start = time.perf_counter()
         cpu_start = time.process_time()
+        timing = {}
         rss_gib = process_peak(args.fish_pid if args.backend == "fish" else None,
-                               lambda: build(text, path))
+                               lambda: timing.update(build(text, path) or {}))
         duration, rate = audio_info(path)
-        seconds = round(time.perf_counter() - start, 3)
+        # Azure reports its own timing so throttling waits and retried attempts are excluded.
+        seconds = timing.get("seconds", round(time.perf_counter() - start, 3))
         data["results"][key] = {
             "text": text, "seconds": seconds,
             "cpu_seconds": None if args.backend == "fish" else round(time.process_time() - cpu_start, 3),
             "audio_seconds": duration, "rtf": round(seconds / duration, 3),
             "sample_rate": rate, "rss_gib": rss_gib,
             "metal_peak_gib": gpu_memory() if args.backend in ("voxtral", "kugelaudio") else None,
+            **{name: timing[name] for name in ("first_audio_seconds", "retries") if name in timing},
         }
         manifest.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        print(f"{directory.name} {key}/50: {seconds:.2f}s, {duration:.2f}s audio, RTF {seconds/duration:.2f}", flush=True)
+        first = (f", first audio {timing['first_audio_seconds']:.2f}s"
+                 if timing.get("first_audio_seconds") is not None else "")
+        print(f"{directory.name} {key}/50: {seconds:.2f}s{first}, {duration:.2f}s audio, "
+              f"RTF {seconds/duration:.2f}", flush=True)
 
 
 def load_runs(out):
@@ -383,7 +479,9 @@ def report(out):
                 cells.append(
                     f'<td><audio controls preload="none" src="{item["name"]}/{key}.wav"></audio>'
                     f'<small>{result["seconds"]:.2f}s compute / {result["audio_seconds"]:.2f}s audio'
-                    f' · RTF {result["rtf"]:.2f} · {result["rss_gib"]:.2f} GiB RSS peak'
+                    + (f' · first audio {result["first_audio_seconds"]:.2f}s'
+                       if result.get("first_audio_seconds") is not None else "")
+                    + f' · RTF {result["rtf"]:.2f} · {result["rss_gib"]:.2f} GiB RSS peak'
                     + (f' · {result["metal_peak_gib"]:.2f} GiB Metal peak' if result.get("metal_peak_gib") is not None else "")
                     + (f'<br>Parakeet ({score["errors"]}/{score["words"]} word errors): {html.escape(score["transcript"])}'
                        if score else "")
@@ -403,11 +501,14 @@ def report(out):
             "warmup_scope",
             "request only; server startup excluded" if backend == "fish" else "model load and request",
         )
+        first_audio = [r["first_audio_seconds"] for r in results if r.get("first_audio_seconds") is not None]
         summaries.append(
             f"<li><b>{html.escape(item['name'])}</b> ({html.escape(data['voice'])}, {html.escape(data['device'])}): "
             f"{len(results)}/50; warmup {data['warmup_seconds']:.2f}s ({html.escape(warmup_scope)}; excluded); "
             f"median {item['median_seconds']:.2f}s; "
-            f"total {sum(r['seconds'] for r in results):.1f}s; "
+            + (f"median first audio {statistics.median(first_audio):.2f}s; " if first_audio else "")
+            + (f"{sum(r.get('retries', 0) for r in results)} throttling retries; " if backend == "azure" else "")
+            + f"total {sum(r['seconds'] for r in results):.1f}s; "
             f"sample rate {results[0]['sample_rate']} Hz; "
             f"peak RSS {max(r['rss_gib'] for r in results):.2f} GiB"
             + (f"; peak Metal {max(r['metal_peak_gib'] for r in results):.2f} GiB" if backend in ("voxtral", "kugelaudio") else "")
@@ -446,20 +547,30 @@ def review_keys(runs):
     return sorted(FIXED_REVIEW_KEYS + tuple(hardest[:REVIEW_SIZE - len(FIXED_REVIEW_KEYS)]))
 
 
-def review(out, include_all=False):
+def reviews_every_clip(item):
+    return item["data"]["backend"] in FULL_REVIEW_BACKENDS
+
+
+def review(out, include_all=False, repick=False):
     runs = load_runs(out)
-    keys = review_keys(runs)
+    plan_path = out / "review.json"
+    keys = (json.loads(plan_path.read_text(encoding="utf-8"))["keys"]
+            if plan_path.exists() and not repick else review_keys(runs))
     selected = [item for item in runs if len(item["scores"]) == len(SENTENCES)
-                and (include_all or item["candidate"])]
+                and (include_all or item["candidate"] or reviews_every_clip(item))]
     if not selected:
         raise ValueError("No run passes both gates; use --review-all to listen anyway")
-    (out / "review.json").write_text(json.dumps(
-        {"keys": keys, "runs": [item["name"] for item in selected]}, indent=2) + "\n", encoding="utf-8")
+    all_keys = [f"{index:02d}" for index in range(1, len(SENTENCES) + 1)]
+    run_keys = {item["name"]: all_keys if reviews_every_clip(item) else keys
+                for item in selected}
+    plan_path.write_text(json.dumps(
+        {"keys": keys, "runs": [item["name"] for item in selected], "run_keys": run_keys},
+        indent=2) + "\n", encoding="utf-8")
     choices = "".join(f"<option>{score}</option>" for score in range(1, 6))
     sections = []
     for item in selected:
         rows = []
-        for key in keys:
+        for key in run_keys[item["name"]]:
             score = item["scores"][key]
             flags = "".join(f'<label><input type="checkbox" data-flag="{html.escape(flag)}"> {html.escape(flag)}</label>'
                             for flag in FLAGS)
@@ -530,13 +641,17 @@ document.getElementById("csv").onclick = () => download("review-scores.csv", "te
 update();
 </script></html>"""
     (out / "review.html").write_text(page, encoding="utf-8")
-    print(f"Open {out / 'review.html'} ({len(selected)} runs x {len(keys)} sentences)")
+    print(f"Open {out / 'review.html'} ({len(selected)} runs, {sum(map(len, run_keys.values()))} clips)")
 
 
 def score(out, scores_path):
-    """Rank runs that pass both gates by mean listener score; write scores.md and scores.json."""
+    """Rank runs that pass both gates by mean listener score on the shared review sentences.
+
+    Also report each run's mean over every clip it was reviewed on (Azure: all 50); writes scores.md/json.
+    """
     plan = json.loads((out / "review.json").read_text(encoding="utf-8"))
-    expected = {(name, key) for name in plan["runs"] for key in plan["keys"]}
+    run_keys = plan.get("run_keys") or {name: plan["keys"] for name in plan["runs"]}
+    expected = {(name, key) for name, keys in run_keys.items() for key in keys}
     human = {}
     for entry in json.loads(Path(scores_path).read_text(encoding="utf-8"))["scores"]:
         item = (entry.get("run"), entry.get("key"))
@@ -553,6 +668,8 @@ def score(out, scores_path):
     rows = []
     for item in load_runs(out):
         reviewed = [human[(item["name"], key)] for key in plan["keys"] if (item["name"], key) in human]
+        everything = [human[(item["name"], key)] for key in run_keys.get(item["name"], [])
+                      if (item["name"], key) in human]
         pronunciation = statistics.fmean(e["pronunciation"] for e in reviewed) if reviewed else None
         naturalness = statistics.fmean(e["naturalness"] for e in reviewed) if reviewed else None
         rows.append({
@@ -560,7 +677,10 @@ def score(out, scores_path):
             "wer": item["wer"], "gates": gate_text(item), "reviewed": len(reviewed),
             "pronunciation": pronunciation, "naturalness": naturalness,
             "listener_mean": (pronunciation + naturalness) / 2 if reviewed else None,
-            "flags": {flag: sum(flag in e.get("flags", []) for e in reviewed) for flag in FLAGS},
+            "all_reviewed": len(everything),
+            "all_clips_mean": (statistics.fmean((e["pronunciation"] + e["naturalness"]) / 2 for e in everything)
+                               if everything else None),
+            "flags": {flag: sum(flag in e.get("flags", []) for e in everything) for flag in FLAGS},
             "ranked": item["candidate"] and len(reviewed) == len(plan["keys"]),
         })
     ranked = sorted((row for row in rows if row["ranked"]),
@@ -568,13 +688,14 @@ def score(out, scores_path):
     for position, row in enumerate(ranked, 1):
         row["rank"] = position
     number = lambda value, suffix="": "n/a" if value is None else f"{value:.2f}{suffix}"
-    lines = ["| Rank | Run | Median synthesis | Parakeet WER | Pronunciation | Naturalness | Error flags | Gates |",
-             "| ---: | --- | ---: | ---: | ---: | ---: | --- | --- |"]
+    lines = ["| Rank | Run | Median synthesis | Parakeet WER | Pronunciation | Naturalness | "
+             "Mean, all reviewed clips | Error flags, all reviewed clips | Gates |",
+             "| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |"]
     for row in ranked + [row for row in rows if not row["ranked"]]:
         flags = ", ".join(f"{flag} ×{count}" for flag, count in row["flags"].items() if count) or "none"
         lines.append(f"| {row.get('rank', '–')} | {row['run']} | {number(row['median_seconds'], ' s')} | "
                      f"{percent(row['wer'])} | {number(row['pronunciation'])} | {number(row['naturalness'])} | "
-                     f"{flags} | {row['gates']} |")
+                     f"{number(row['all_clips_mean'])} ({row['all_reviewed']} clips) | {flags} | {row['gates']} |")
     (out / "scores.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (out / "scores.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
@@ -594,8 +715,24 @@ def main():
     parser.add_argument("--out", type=Path, default=ROOT / "models/tts-comparison")
     parser.add_argument("--review", action="store_true", help="write review.html for runs passing both gates")
     parser.add_argument("--review-all", action="store_true", help="also include runs that fail a gate")
+    parser.add_argument("--repick-review", action="store_true",
+                        help="choose review sentences afresh instead of reusing review.json")
     parser.add_argument("--score", type=Path, help="exported review-scores.json; writes scores.md")
+    parser.add_argument("--azure-preflight", action="store_true",
+                        help="check Azure key, region, and voice via the unbilled voices list, then exit")
     args = parser.parse_args()
+    if args.azure_preflight:
+        config = azure_config(os.environ)
+        if not config:
+            parser.error("set AZURE_TTS_KEY, AZURE_TTS_URL, and AZURE_TTS_VOICE first")
+        report_data = azure_preflight(config)
+        print(f"Dutch voices in this region: {', '.join(report_data['dutch_voices']) or 'none'}")
+        print(f"Configured voice {report_data['voice']}: "
+              + ("NOT FOUND" if not report_data["voice_found"] else
+                 "available, speaks Dutch" if report_data["voice_speaks_dutch"] else
+                 "available, but Dutch is NOT among its languages"))
+        print(f"A full 50-sentence benchmark sends about {report_data['benchmark_characters']} billed characters.")
+        sys.exit(0 if report_data["voice_speaks_dutch"] else 1)
     if args.backend:
         if not 1 <= args.limit <= 50:
             parser.error("--limit must be between 1 and 50")
@@ -603,11 +740,14 @@ def main():
             parser.error("--fish-pid must identify the Fish server process")
         run(args)
     report(args.out)
-    if args.review or args.review_all:
-        review(args.out, args.review_all)
+    if args.review or args.review_all or args.repick_review:
+        review(args.out, args.review_all, args.repick_review)
     if args.score:
         score(args.out, args.score)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError as error:
+        sys.exit(f"error: {error}")

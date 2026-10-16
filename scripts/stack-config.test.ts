@@ -19,6 +19,10 @@ describe("development stack selection", () => {
     );
     const selected = resolveStack(example);
     expect(selected.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
+    expect(selected.models).toEqual(expect.arrayContaining([
+      "models/piper/nl_NL-ronnie-medium.onnx",
+      "models/piper/nl_NL-ronnie-medium.onnx.json",
+    ]));
     expect(selected.environment).toMatchObject({
       STT_PROVIDER: "parakeet-tdt",
       PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
@@ -200,6 +204,23 @@ describe("development stack selection", () => {
     expect(() => resolveStack({
       ...base, AZURE_TTS_KEY: "unused",
     })).toThrow("AZURE_TTS_KEY");
+  });
+
+  it("selects an Azure voice from a Foundry resource, but not from a Foundry project endpoint", () => {
+    const foundry = {
+      ...base,
+      TTS_PROVIDER: "azure",
+      AZURE_TTS_URL: "https://soladis-foundry.cognitiveservices.azure.com/",
+      AZURE_TTS_KEY: "test-key",
+      AZURE_TTS_VOICE: "en-US-Adam:DragonHDLatestNeural",
+    };
+    expect(resolveStack(foundry).environment).toMatchObject({
+      AZURE_TTS_URL: "https://soladis-foundry.cognitiveservices.azure.com",
+      AZURE_TTS_VOICE: "en-US-Adam:DragonHDLatestNeural",
+    });
+    expect(() => resolveStack({
+      ...foundry, AZURE_TTS_URL: "https://soladis-foundry.services.ai.azure.com/api/projects/sodalis",
+    })).toThrow(/project endpoint/);
   });
 
   it("requires explicit LLM and Home providers and rejects incomplete or invalid selections", () => {

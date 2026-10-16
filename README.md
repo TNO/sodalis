@@ -19,13 +19,16 @@ image downloads its own weights at build time:
 
 ```sh
 mkdir -p models/piper
-curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx \
-  -o models/piper/nl_BE-nathalie-medium.onnx
-curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_BE/nathalie/medium/nl_BE-nathalie-medium.onnx.json \
-  -o models/piper/nl_BE-nathalie-medium.onnx.json
+curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/ronnie/medium/nl_NL-ronnie-medium.onnx \
+  -o models/piper/nl_NL-ronnie-medium.onnx
+curl -fL https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/ronnie/medium/nl_NL-ronnie-medium.onnx.json \
+  -o models/piper/nl_NL-ronnie-medium.onnx.json
 ```
 
-If both Piper files already exist in this checkout, skip the downloads.
+If both Piper files already exist in this checkout, skip the downloads. The
+default voice changed from `nl_BE-nathalie-medium` to `nl_NL-ronnie-medium`
+after the [Dutch TTS evaluation](docs/evaluations/tts-providers.md); existing
+checkouts need the Ronnie files before `pnpm stack:up`.
 Parakeet needs more than a 2 GB Podman machine; 8 GB worked alongside the
 development containers. Changing the Podman VM memory requires stopping
 it, which briefly stops all its containers:
@@ -97,10 +100,11 @@ explicit cloud opt-in `STT_PROVIDER=azure` in `.env`,
 then run `pnpm stack:up`. The default is original Parakeet TDT v3, **not**
 Parakeet Redux. See the
 [STT provider evaluation](docs/evaluations/stt-providers.md).
-Piper remains the default TTS. An explicit Azure Speech opt-in and a
-standalone, non-commercial Fish Speech 1.5 evaluation profile (not
-connected to Sodalis playback) are described in the
-[TTS compatibility guide](docs/development-stack.md#evaluate-alternative-speech-synthesis).
+Piper with the `nl_NL-ronnie-medium` voice is the default TTS. An explicit
+Azure Speech opt-in (including Microsoft Foundry resources), and a
+standalone, non-commercial Fish Speech 1.5 evaluation profile that is not
+connected to Sodalis playback, are described in the
+[TTS guide](docs/development-stack.md#evaluate-alternative-speech-synthesis).
 Final analyses of these provider evaluations are collected in
 [`docs/evaluations/`](docs/evaluations/README.md).
 

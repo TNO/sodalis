@@ -18,6 +18,28 @@ function xmlText(value: string): string {
   })[character] ?? character);
 }
 
+/** An Azure voice short name, optionally with a model suffix such as `:DragonHDLatestNeural`. */
+const AZURE_VOICE = /^[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9]+(?::[A-Za-z0-9.-]+)?$/;
+
+/** The text-to-speech URL for a regional Speech endpoint or a Foundry resource endpoint. */
+export function azureTtsEndpoint(value: string): string {
+  const endpoint = new URL(value);
+  if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.hash) {
+    throw new Error("AZURE_TTS_URL must be an HTTPS URL without credentials.");
+  }
+  if (endpoint.hostname.endsWith(".services.ai.azure.com")) {
+    throw new Error("AZURE_TTS_URL is a Foundry project endpoint, which has no speech route; use the " +
+      "resource endpoint https://<resource>.cognitiveservices.azure.com/ instead.");
+  }
+  if (endpoint.hostname.endsWith(".cognitiveservices.azure.com") && ["", "/"].includes(endpoint.pathname)) {
+    endpoint.pathname = "/tts/cognitiveservices/v1";
+  }
+  if (!endpoint.pathname.endsWith("/cognitiveservices/v1")) {
+    throw new Error("AZURE_TTS_URL must be an Azure Speech resource or /cognitiveservices/v1 endpoint.");
+  }
+  return endpoint.toString();
+}
+
 export class AzureTtsEngine implements SpeechSynthesisEngine {
   readonly voiceId: string;
   private readonly endpoint: string;
@@ -25,16 +47,12 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
   private readonly fetcher: typeof fetch;
 
   constructor(options: AzureTtsEngineOptions) {
-    const endpoint = new URL(options.endpoint);
-    if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password ||
-        endpoint.hash || !endpoint.pathname.endsWith("/cognitiveservices/v1")) {
-      throw new Error("AZURE_TTS_URL must be an HTTPS Azure TTS /cognitiveservices/v1 endpoint.");
-    }
+    this.endpoint = azureTtsEndpoint(options.endpoint);
     if (!options.key.trim()) throw new Error("AZURE_TTS_KEY is required.");
-    if (!/^nl-(?:NL|BE)-[A-Za-z0-9]+Neural$/.test(options.voice)) {
-      throw new Error("AZURE_TTS_VOICE must name a Dutch Azure neural voice.");
+    if (!AZURE_VOICE.test(options.voice)) {
+      throw new Error("AZURE_TTS_VOICE must be an Azure voice name such as nl-NL-FennaNeural or " +
+        "en-US-Adam:DragonHDLatestNeural.");
     }
-    this.endpoint = endpoint.toString();
     this.key = options.key;
     this.voiceId = options.voice;
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
@@ -42,10 +60,14 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
 
   async *synthesize(request: SpeechRequest, signal: AbortSignal): AsyncIterable<Uint8Array> {
     signal.throwIfAborted();
-    if (!request.text.trim() || request.language !== this.voiceId.slice(0, 5) ||
+    if (!request.text.trim() || !/^nl-(?:NL|BE)$/.test(request.language) ||
         (request.voice && request.voice !== this.voiceId)) {
       throw new Error("Azure TTS does not support the requested language or voice.");
     }
+    // Multilingual voices from other locales speak Dutch only when the text is marked as Dutch.
+    const text = this.voiceId.toLowerCase().startsWith("nl-")
+      ? xmlText(request.text)
+      : `<lang xml:lang="${request.language}">${xmlText(request.text)}</lang>`;
     const response = await this.fetcher(this.endpoint, {
       method: "POST",
       headers: {
@@ -54,14 +76,17 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
         "X-Microsoft-OutputFormat": "raw-22050hz-16bit-mono-pcm",
         "User-Agent": "Sodalis",
       },
-      body: `<speak version="1.0" xml:lang="${request.language}"><voice name="${this.voiceId}">${xmlText(request.text)}</voice></speak>`,
+      body: `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${request.language}">` +
+        `<voice name="${this.voiceId}">${text}</voice></speak>`,
       signal,
     });
     signal.throwIfAborted();
     if (!response.ok) throw new Error(`Azure TTS returned HTTP ${response.status}.`);
     if (!response.body) throw new Error("Azure TTS returned no audio stream.");
     const reader = response.body.getReader();
-    const onAbort = () => { void reader.cancel(signal.reason); };
+    // fetch errors the body when its signal aborts, so cancelling then rejects; an unhandled
+    // rejection would crash the speech service on every barge-in.
+    const onAbort = () => { reader.cancel(signal.reason).catch(() => undefined); };
     signal.addEventListener("abort", onAbort, { once: true });
     let trailingByte: number | undefined;
     let bytesReceived = 0;
@@ -87,7 +112,7 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
       if (trailingByte !== undefined) throw new Error("Azure TTS returned incomplete PCM audio.");
     } finally {
       signal.removeEventListener("abort", onAbort);
-      await reader.cancel();
+      await reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }
   }

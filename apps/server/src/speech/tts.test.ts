@@ -8,7 +8,7 @@ const request = {
   speechId: "reply-1",
   text: "Goedemorgen.",
   language: "nl-NL",
-  voice: "nl_BE-nathalie-medium",
+  voice: "nl_NL-ronnie-medium",
 };
 
 const sttEngine: SpeechRecognitionEngine = {
@@ -111,7 +111,7 @@ describe("speech synthesis API", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...request, voice }),
       });
-    expect((await post("nl_BE-nathalie-medium")).status).toBe(400);
+    expect((await post("nl_NL-ronnie-medium")).status).toBe(400);
     const accepted = await post("nl-NL-ColetteNeural");
     expect(accepted.status).toBe(200);
     await accepted.arrayBuffer();

@@ -8,6 +8,30 @@ const request = {
   text: "Tom & <Anne> zeggen: \"hallo\".",
 } as const;
 
+/** Like real fetch: aborting the request signal errors the response body stream. */
+function abortableResponse(init: RequestInit | undefined, chunks: readonly Uint8Array[]): Response {
+  return new Response(new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(chunk);
+      init?.signal?.addEventListener("abort", () => controller.error(init.signal!.reason), { once: true });
+    },
+  }));
+}
+
+/** Rejections nobody handled while `action` ran and settled; such rejections crash the speech service. */
+async function unhandledRejections(action: () => Promise<unknown>): Promise<unknown[]> {
+  const reasons: unknown[] = [];
+  const record = (reason: unknown) => { reasons.push(reason); };
+  process.on("unhandledRejection", record);
+  try {
+    await action().catch(() => undefined);
+    await new Promise((done) => setTimeout(done, 20));
+  } finally {
+    process.off("unhandledRejection", record);
+  }
+  return reasons;
+}
+
 describe("Azure TTS engine", () => {
   it("streams Dutch PCM through the selected Azure endpoint", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(
@@ -138,5 +162,90 @@ describe("Azure TTS engine", () => {
     controller.abort();
     await expect(iterator.next()).rejects.toThrow();
     expect(cancelled).toBe(true);
+  });
+
+  it("survives a client hanging up while Azure audio is still streaming", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (_url, init) =>
+      abortableResponse(init, [new Uint8Array([1, 0])]));
+    const engine = new AzureTtsEngine({
+      endpoint: "https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1",
+      key: "example-key",
+      voice: "nl-NL-ColetteNeural",
+      fetch: fetcher,
+    });
+    const controller = new AbortController();
+    const iterator = engine.synthesize(request, controller.signal)[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({ done: false });
+    expect(await unhandledRejections(async () => {
+      controller.abort(new Error("Client connection prematurely closed."));
+      await iterator.next();
+    })).toEqual([]);
+  });
+
+  describe("Foundry resources and multilingual voices", () => {
+    const pcm = () => vi.fn<typeof fetch>().mockResolvedValue(new Response(new Uint8Array([1, 0])));
+    const speak = async (engine: AzureTtsEngine) => {
+      for await (const _chunk of engine.synthesize(request, new AbortController().signal)) {
+        // Consume the audio stream.
+      }
+    };
+
+    it("speaks Dutch with a multilingual HD voice by marking the reply as Dutch", async () => {
+      const fetcher = pcm();
+      const engine = new AzureTtsEngine({
+        endpoint: "https://soladis-foundry.cognitiveservices.azure.com/tts/cognitiveservices/v1",
+        key: "example-key",
+        voice: "en-US-Adam:DragonHDLatestNeural",
+        fetch: fetcher,
+      });
+      await speak(engine);
+      const body = String(fetcher.mock.calls[0]![1]!.body);
+      expect(body).toContain('xml:lang="nl-NL"><voice name="en-US-Adam:DragonHDLatestNeural">' +
+        '<lang xml:lang="nl-NL">Tom &amp; &lt;Anne&gt;');
+      expect(body).toContain('xmlns="http://www.w3.org/2001/10/synthesis"');
+    });
+
+    it("leaves a native Dutch voice's own language untouched", async () => {
+      const fetcher = pcm();
+      await speak(new AzureTtsEngine({
+        endpoint: "https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1",
+        key: "example-key",
+        voice: "nl-NL-FennaNeural",
+        fetch: fetcher,
+      }));
+      const body = String(fetcher.mock.calls[0]![1]!.body);
+      expect(body).toContain('<voice name="nl-NL-FennaNeural">Tom &amp;');
+      expect(body).not.toContain("<lang");
+    });
+
+    it("reaches speech synthesis from a bare Foundry resource endpoint", async () => {
+      const fetcher = pcm();
+      await speak(new AzureTtsEngine({
+        endpoint: "https://soladis-foundry.cognitiveservices.azure.com/",
+        key: "example-key",
+        voice: "nl-NL-FennaNeural",
+        fetch: fetcher,
+      }));
+      expect(fetcher.mock.calls[0]![0]).toBe(
+        "https://soladis-foundry.cognitiveservices.azure.com/tts/cognitiveservices/v1");
+    });
+
+    it("explains that a Foundry project endpoint cannot synthesize speech", () => {
+      expect(() => new AzureTtsEngine({
+        endpoint: "https://soladis-foundry.services.ai.azure.com/api/projects/sodalis",
+        key: "example-key",
+        voice: "nl-NL-FennaNeural",
+      })).toThrow(/project endpoint.*cognitiveservices\.azure\.com/);
+    });
+
+    it("rejects voice names that are not Azure voices", () => {
+      for (const voice of ["nl_BE-nathalie-medium", 'nl-NL-Fenna"Neural', "Adam", "en-US-Adam:Dragon HD"]) {
+        expect(() => new AzureTtsEngine({
+          endpoint: "https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1",
+          key: "example-key",
+          voice,
+        }), voice).toThrow("AZURE_TTS_VOICE");
+      }
+    });
   });
 });
