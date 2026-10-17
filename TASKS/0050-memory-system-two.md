@@ -1,6 +1,6 @@
 # 0050 Adding System 2 memory consolidation (L5–L7)
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: assistant
 Depends on: 0048
@@ -41,3 +41,12 @@ preference inference, measured by PersonaMem-v2
   three walk episodes; with/without comparison: 16/18 against 15/18. Remaining:
   PersonaMem-v2 and longer generated routine and intention cases. Analysis:
   [Long-term memory evaluation](../docs/evaluations/memory.md).
+- 2026-10-17 Copilot: Evaluated on the LLM-rendered set (six sampled personas,
+  12 routine and 6 intention questions) and PersonaMem-v2, with and without
+  System 2. On the synthetic set it induced 10–13 items per run and changed
+  QA by at most ±1 question; on PersonaMem-v2 it stayed near chance (44 against
+  42 of 159, 43 without any memory), which reflects the answer model rather
+  than consolidation. `minClusterSize` now defaults to 2, because 3 induced
+  only 3 items on six personas. Measuring System 2 on longer histories is an
+  open item in the [evaluation](../docs/evaluations/memory.md). The optional
+  cross-domain sweep is not implemented. Closed: all required criteria are met.

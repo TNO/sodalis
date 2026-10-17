@@ -22,6 +22,8 @@ export interface QaMetrics {
   readonly byType: Readonly<Record<string, Ratio>>;
   readonly memoryTokens: number;
   readonly retrieveMs: number;
+  /** Accuracy on questions where the answer model requested a recall. */
+  readonly recall: Ratio;
 }
 
 function ratio(correct: number, total: number): Ratio {
@@ -118,14 +120,19 @@ export function componentMetrics(
   };
 }
 
-export function qaMetrics(results: readonly CaseResult[]): QaMetrics {
+export function qaMetrics(results: readonly CaseResult[], answers: "base" | "system2" = "base"): QaMetrics {
   const byType: Record<string, { correct: number; total: number }> = {};
   let correct = 0;
   let total = 0;
   let memoryTokens = 0;
   let retrieveMs = 0;
-  for (const question of results.flatMap((result) => result.questions)) {
+  const recall = { correct: 0, total: 0 };
+  for (const question of results.flatMap((result) => (answers === "system2" ? (result.questionsSystem2 ?? []) : result.questions))) {
     total += 1;
+    if (question.recall) {
+      recall.total += 1;
+      if (question.correct) recall.correct += 1;
+    }
     memoryTokens += question.memoryTokens;
     retrieveMs += question.retrieveMs;
     const bucket = (byType[question.question.type] ??= { correct: 0, total: 0 });
@@ -140,6 +147,7 @@ export function qaMetrics(results: readonly CaseResult[]): QaMetrics {
     byType: Object.fromEntries(Object.entries(byType).map(([key, bucket]) => [key, ratio(bucket.correct, bucket.total)])),
     memoryTokens: total ? memoryTokens / total : 0,
     retrieveMs: total ? retrieveMs / total : 0,
+    recall: ratio(recall.correct, recall.total),
   };
 }
 

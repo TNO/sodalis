@@ -41,7 +41,7 @@ export interface WritePipelineOptions {
   readonly isActive?: () => boolean;
 }
 
-const RECONCILED_LAYERS: readonly ItemLayer[] = ["L0", "L2", "L4"];
+const RECONCILED_LAYERS: readonly ItemLayer[] = ["L0", "L2", "L4", "L7"];
 
 /** The asynchronous write path for one stored L1 turn. */
 export class WritePipeline {
@@ -72,7 +72,7 @@ export class WritePipeline {
         signal,
       );
       gateMs = performance.now() - started;
-      gate = memoryGateVerdict(response, this.options.gateThreshold ?? 0.3);
+      gate = memoryGateVerdict(response, this.options.gateThreshold ?? 0.1);
       if (gate.kind === "health") store.markTurnHealth(turn.id);
       if (!gate.worthy) {
         this.trace({ turnId: turn.id, role: turn.role, gate, extracted: [], droppedHealth: 0, droppedObservationHealth: 0, decisions: [], gateMs });

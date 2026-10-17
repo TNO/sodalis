@@ -44,10 +44,11 @@ describe("memory retrieval", () => {
     expect(result.block).not.toContain("Italiaans");
   });
 
-  it("pins profile, identity, and upcoming dates regardless of the query", async () => {
+  it("pins profile, identity, intentions, and upcoming dates regardless of the query", async () => {
     const { memory } = await openMemory();
     await memory.addItem(item("De gebruiker heet Erik.", { layer: "L0" }));
     await memory.addItem(item("Anna is de dochter van de gebruiker.", { layer: "L4", subject: "Anna" }));
+    await memory.addItem(item("De gebruiker wil voor de zomer afvallen.", { layer: "L7", provenance: "inferred" }));
     await memory.addItem(item("Tandartsafspraak", { eventAt: "2026-03-10" }));
     await memory.addItem(item("Verjaardag Piet", { eventAt: "2026-05-01" }));
     await memory.addItem(item("Oude afspraak", { eventAt: "2026-02-01" }));
@@ -56,9 +57,25 @@ describe("memory retrieval", () => {
       ["profile", "De gebruiker heet Erik."],
       ["upcoming", "Tandartsafspraak"],
       ["identity", "Anna is de dochter van de gebruiker."],
+      ["intention", "De gebruiker wil voor de zomer afvallen."],
     ]);
     expect(result.block).toContain("Tandartsafspraak (date: 2026-03-10)");
     expect(result.block).toContain("Anna: Anna is de dochter");
+  });
+
+  it("does not prefix subjects that mean the user", async () => {
+    const { memory } = await openMemory();
+    await memory.addItem(item("De gebruiker wil Spaans leren.", { layer: "L7", subject: "De gebruiker" }));
+    const result = await retrieveMemories(memory, { userTurn: "Hallo!", now: new Date(NOW) });
+    expect(result.block).toContain("] De gebruiker wil Spaans leren.");
+  });
+
+  it("marks intentions as goals so they are not confused with appointments", async () => {
+    const { memory } = await openMemory();
+    await memory.addItem(item("De gebruiker wil Spaans leren.", { layer: "L7" }));
+    const result = await retrieveMemories(memory, { userTurn: "Wat ben ik van plan?", now: new Date(NOW) });
+    expect(result.block).toMatch(/\[\d{4}-\d{2}-\d{2}, stated, goal\] De gebruiker wil Spaans leren\./);
+    expect(result.block).toContain("'goal' items are the user's ongoing goals");
   });
 
   it("shows superseded history as a dated chain", async () => {

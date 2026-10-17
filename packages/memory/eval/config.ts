@@ -9,7 +9,10 @@ import { LlmDecisionGate, PassThroughGate, type DecisionGate } from "../src/Deci
 import { MockEmbedder, OpenAiCompatibleEmbedder, type Embedder } from "../src/Embedder.js";
 import { LlmExtractor } from "../src/Extractor.js";
 import { LlmReconciler } from "../src/Reconciler.js";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { EvalRoles } from "./harness.js";
+import { TransformersEmbedder } from "./transformersEmbedder.js";
 
 export type Env = Readonly<Record<string, string | undefined>>;
 export const CHAT_ROLES = ["GATE", "EXTRACT", "RECONCILE", "ANSWER", "JUDGE", "RENDER", "INDUCE", "TRANSLATE"] as const;
@@ -89,6 +92,14 @@ export function chatClient(env: Env, role: ChatRole): ChatClient {
 export function embedderFromEnv(env: Env): Embedder {
   const dimensions = Number(env.EVAL_EMBED_DIMS ?? 512);
   if ((env.EVAL_EMBED_PROVIDER ?? "openai-compatible") === "mock") return new MockEmbedder(dimensions);
+  if (env.EVAL_EMBED_PROVIDER === "transformers") {
+    return new TransformersEmbedder({
+      model: env.EVAL_EMBED_MODEL ?? "ibm-granite/granite-embedding-311m-multilingual-r2",
+      dimensions,
+      localModelPath: env.EVAL_EMBED_MODEL_PATH ?? join(dirname(fileURLToPath(import.meta.url)), ".data", "models") + "/",
+      ...(env.EVAL_EMBED_POOLING === "mean" ? { pooling: "mean" as const } : {}),
+    });
+  }
   if (!env.EVAL_EMBED_BASE_URL || !env.EVAL_EMBED_MODEL) {
     throw new Error("Set EVAL_EMBED_BASE_URL and EVAL_EMBED_MODEL, or EVAL_EMBED_PROVIDER=mock.");
   }

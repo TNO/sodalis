@@ -7,7 +7,7 @@ import type {
   AssistantAppContext,
   ConversationMessage,
 } from "@sodalis/assistant";
-import { formatRecallResult, type MemoryService } from "@sodalis/memory";
+import { formatRecallResult, isRecallReply, mayBeRecallReply, parseRecallCall, type MemoryService } from "@sodalis/memory";
 import { registerMemoryRoutes } from "./memoryRoutes.js";
 import type {
   LlmGenerationRequest,
@@ -41,31 +41,6 @@ const ACTION_RISKS = [
 
 class BodyLimitError extends Error {}
 
-const RECALL_PREFIX = '{"recall_memory"';
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-interface RecallCall {
-  readonly query: string;
-  readonly from?: string;
-  readonly to?: string;
-}
-
-function readRecallCall(text: string): RecallCall | undefined {
-  try {
-    const payload: unknown = JSON.parse(text);
-    if (!isRecord(payload) || !isRecord(payload.recall_memory)) return undefined;
-    const call = payload.recall_memory;
-    if (typeof call.query !== "string" || call.query.length > 500) return undefined;
-    return {
-      query: call.query,
-      ...(typeof call.from === "string" && DATE_PATTERN.test(call.from) ? { from: call.from } : {}),
-      ...(typeof call.to === "string" && DATE_PATTERN.test(call.to) ? { to: call.to } : {}),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Generates one reply. With memory, the model may first answer with a
  * `recall_memory` request; the start of the stream is held back until that is
@@ -88,17 +63,16 @@ async function* generateReply(
       continue;
     }
     buffer += delta;
-    const compact = buffer.replace(/\s+/g, "");
-    if (RECALL_PREFIX.startsWith(compact) || compact.startsWith(RECALL_PREFIX)) continue;
+    if (mayBeRecallReply(buffer)) continue;
     streaming = true;
     yield buffer;
   }
   if (streaming) return;
-  if (!buffer.replace(/\s+/g, "").startsWith(RECALL_PREFIX)) {
+  if (!isRecallReply(buffer)) {
     if (buffer) yield buffer;
     return;
   }
-  const call = readRecallCall(buffer);
+  const call = parseRecallCall(buffer);
   const result = call?.query.trim()
     ? await memory.recall({ ...call, signal: request.signal })
     : { excerpts: [] };

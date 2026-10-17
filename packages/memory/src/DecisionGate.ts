@@ -41,7 +41,8 @@ export const MEMORY_GATE_QUESTIONS: readonly SystemOneQuestion[] = [
     type: "noul",
     question:
       "Does the user's latest message contain personal information worth remembering in future conversations " +
-      "(a fact, preference, person, date, plan, health detail, or a correction of something said before)?",
+      "(a fact, preference, person, date, plan or goal or progress on one, a habit or something they did again, " +
+      "health detail, or a correction of something said before)?",
   },
   {
     key: "kind",

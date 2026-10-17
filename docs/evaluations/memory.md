@@ -1,139 +1,273 @@
 # Long-term memory
 
-Status: **In progress**: harness complete and first local measurements taken;
-model comparison and public-benchmark runs open.
-Date: 2026-10-16. Tasks: 0048 (harness and quality), 0050 (System 2),
-0051 (vector index). Design: [ADR 0005](../adr/0005-long-term-memory.md).
+Status: **Complete for version 1** (tasks 0048–0050); follow-ups listed under
+open items.
+Date: 2026-10-17. Tasks: 0048 (harness and quality), 0049 (`recall_memory`),
+0050 (System 2), 0051 (vector index). Design:
+[ADR 0005](../adr/0005-long-term-memory.md).
 
 ## Summary and recommendation
 
-The all-local configuration works end to end on a laptop. Here, a gemma4 e4b
-gate, qwen3:14b extraction and reconciliation, and a qwen3-embedding 0.6B
-embedder with SQLite and sqlite-vec answered **16 of 18** Dutch recall
-questions over two four-session synthetic personas. Gate, extraction,
-health/transient labelling, and reconciliation were all correct on this set.
-The two remaining misses are a judge false negative and one routine
-question.
+The all-local pipeline answers 68 of 72 Dutch recall questions on
+LLM-rendered conversations with six sampled elderly Flemish personas. It
+uses:
 
-- Keep the local default from `.env.example`. Treat this as a pipeline check,
-  not a model ranking: the set is small and template-rendered.
-- **Keep SQLite with sqlite-vec; do not adopt Zvec for now (0051).** At
-  10,000 items a filtered search takes 1.3 ms (p50), a full vector search
-  4.1 ms, and hybrid search 6.4 ms. That is far below the 50–100 ms budget
-  for one turn. A personal assistant is unlikely to reach 10,000 active
-  items within years.
-- The measurements led to three pipeline fixes, all now covered by tests:
-  1. Extracted facts state how a person relates to the user.
-  2. A correction flagged by the gate may supersede an item stored under a
-     mistaken name.
-  3. An L2 episode on a different day is a new occurrence rather than a
-     NOOP. This lets System 2 see routines.
+- a gemma4 e4b gate;
+- qwen3:14b for extraction, reconciliation, and answers;
+- qwen3-embedding 0.6B;
+- SQLite with sqlite-vec.
+
+On a matched LongMemEval-S sample it scores TBD in English and TBD in
+machine-translated Dutch.
+
+- **Keep qwen3:14b as the local extraction model.** It was the most accurate
+  and the fastest of the five candidates. The newer Qwen3.8-27B was the
+  weakest. It is conservative: it skips episodes, repeated activities, and
+  moods, and so loses routines and intentions (54/72 with p3).
+- **Keep the gemma4 e4b gate and lower its threshold to 0.1 (now the
+  default).** At 0.1 it keeps 98% precision, but recall rises from 0.88 to
+  0.97, for 9% more extraction calls. QA rose to 68/72 (69 after System 2), the best
+  result. It still filters about half of all turns in about 0.4 s. A pass-all
+  gate (llama3.2:3b in effect) scored 67/72 at 2.2 times the extraction calls.
+- **Keep qwen3-embedding 0.6B at 512 dimensions.** granite-embedding-311m
+  scored the same within noise (65 against 63–66) and offers no reason to
+  switch.
+- **`minClusterSize` is now 2 by default.** With 3, induction produced 3
+  items over 6 personas; with 2, 12. QA after System 2 did not change on this
+  set (routine questions are answered from the episodes themselves), so System
+  2 stays on but is not yet shown to help QA.
+- **Keep SQLite with sqlite-vec; defer Zvec (0051).** At 10,000 items a
+  filtered search takes 1.3 ms (p50), hybrid search 6.4 ms, far below the
+  per-turn budget.
+- The evaluation led to these fixes, all covered by tests:
+  1. The extractor keeps the user's language. A deterministic language hint
+     replaced the prompt rule alone, which qwen3:14b ignored (it stored English
+     PersonaMem conversations in Dutch).
+  2. The extractor stores episodes, repeated activities, and the user's own
+     moods; it never invents profile facts or stores forget requests.
+  3. L7 goals are tagged `goal` in the memory block, so the answer model does
+     not confuse them with appointments.
+  4. The `recall_memory` instruction says the JSON must be the entire reply.
+  5. The judge receives a JSON payload, and "I do not know" answers are graded
+     deterministically (see analysis).
 
 ## Scope
 
 In scope:
 
-- the write path (gate, extraction, reconciliation)
-- retrieval into the answer prompt
-- System 2 consolidation
-- vector-index latency
+- the write path (gate, extraction, reconciliation) and retrieval
+- the `recall_memory` tool path (task 0049), as the answer model sees it
+- System 2 consolidation (task 0050)
+- public benchmarks: LongMemEval-S, LoCoMo, PersonaMem-v2, and a Dutch
+  translation of a LongMemEval-S sample
+- model candidates for extraction, gate, and embeddings, all local
 
-The questions are recall questions in Dutch: single-session facts, knowledge
-updates, dates, health, routines, and abstention. Not yet measured:
+Not measured:
 
-- LLM-rendered (natural) conversations
-- the public LongMemEval and LoCoMo sets, and the Dutch translation of
-  LongMemEval
-- other model sizes and Azure models
-- gate-threshold sweeps
-- the live `recall_memory` tool path in the AI service
+- Azure models, as a ceiling (needs consent for each run)
+- Hy-Memory as a Python baseline (optional in 0048)
+- real speech-to-text input and the live server stream
+- conversational forgetting, which does not exist yet (task 0053)
 
 ## Method and hardware
 
-The harness, `packages/memory/eval` ([commands](../development-stack.md#evaluate-long-term-memory)),
-generates scenarios from a persona and a seed. A scenario is a graph of
-planted events, and every event is labelled:
+The harness, `packages/memory/eval`
+([commands](../development-stack.md#evaluate-long-term-memory)), replays each
+case through the real `MemoryService`. The clock is set to each turn's time
+and the queue drained after every user turn. It then asks each question with
+only the retrieved memory block and, unless disabled, the `recall_memory`
+instruction. A recall request triggers a second answer with the excerpts.
+Component metrics compare each write trace with labels derived from the
+scenario graph.
 
-- whether it is worth storing
-- its expected layer, subject, and keywords
-- whether it is health-related or transient
-- the reconciliation actions that are acceptable for it
+**Synthetic Dutch set.** Six personas aged 70 and older, sampled from
+`nvidia/Nemotron-Personas-Belgium` (`nl_BE`, CC-BY-4.0), seed 1:
 
-The planted events include:
+- six sessions each, and 241 user turns in total;
+- rendered by gemma4:12b (not the extraction model);
+- every planted fact verified by the judge, with no template fallbacks.
 
-- family members
-- a grandchild's name corrected two sessions later
-- a pet that is mentioned again later
-- a hobby
-- a music preference that changes
-- an upcoming appointment
-- a friend's birthday
-- medication
-- transient moods
-- a walk repeated three times
-- small-talk distractors
+There are 72 questions:
 
-The questions are derived from the same graph. The harness then:
-
-1. Replays the scenario through the real `MemoryService`, with the clock set
-   to each session date and the queue drained after every turn.
-2. Optionally runs consolidation.
-3. Asks each question with only the retrieved memory block, at the
-   question's date.
-
-Component metrics compare each turn's write trace with its labels. Answers
-are graded by an LLM judge (gemma4:12b) or by keywords. Every trace, answer,
-and memory block is stored with the results.
-
-| Role | Model (Ollama 0.40.5, OpenAI-compatible API) |
+| Type | Questions |
 | --- | --- |
-| Gate | `gemma4:e4b-mlx`: 3 one-token questions per turn, with logprobs |
-| Extraction, reconciliation, answer, induction | `qwen3:14b`, `reasoning_effort: none` |
-| Judge | `gemma4:12b-mlx` |
+| Single-session | 12 |
+| Knowledge-update | 12 |
+| Temporal | 12 |
+| Routine | 12 |
+| Health | 6 |
+| Explicit recall | 6 |
+| Intention | 6 |
+| Abstention | 6 |
+
+**Public benchmarks:**
+
+| Benchmark | Sample |
+| --- | --- |
+| LongMemEval-S (cleaned, MIT) | 10 per question type, evidence sessions plus 4 distractor sessions, 60 questions |
+| LongMemEval-S matched with Dutch | 10 per type for 5 types, 2 distractor sessions, 50 questions |
+| Dutch LongMemEval-S | The same 50 questions, translated by qwen3:14b. Assistant turns are cut to 400 characters. |
+| LoCoMo (CC BY-NC, local only) | First 2 conversations, adversarial questions skipped, 233 questions. Both speakers are treated as the user. |
+| PersonaMem-v2 (CC-BY-4.0) | 4 personas, 159 four-option questions on implicit preferences |
+
+**Grading.**
+
+- Multiple-choice answers are graded by the chosen letter.
+- An answer that says "I do not know" is correct only for abstention
+  questions. This is decided by a pattern, not by the judge, unless the hedge
+  is followed by an answer ("but …").
+- Other answers go to gemma4:12b (non-thinking), which compares a JSON
+  payload of question, reference, and answer.
+- `rejudge` re-graded all stored results with these final rules.
+
+**Roles.**
+
+| Role | Model (Ollama, OpenAI-compatible API) |
+| --- | --- |
+| Gate | `gemma4:e4b-mlx`: 3 one-token questions per turn, with logprobs; threshold 0.3, except the sweep and the matched LongMemEval-S runs (0.1, the new default) |
+| Extraction, reconciliation, induction | `qwen3:14b` unless stated, `reasoning_effort: none` |
+| Answer | `qwen3:14b`, `reasoning_effort: none`, in every run |
+| Judge | `gemma4:12b-mlx`, `reasoning_effort: none` |
 | Embeddings | `qwen3-embedding:0.6b`, 512 dimensions |
 
-- **Data:** the two built-in personas (Maria, 78, Lier; Jozef, 82, Tienen),
-  seed 1, four sessions each, rendered from templates. That gives 43 user
-  turns (11 of them distractors) and 18 questions.
-- **Hardware:** Apple M4 Max, 128 GB, macOS 27.0.1; Node 24.13 with
-  `node:sqlite` and sqlite-vec.
+**Prompt versions.** The extractor prompt changed during the evaluation.
+Runs are labelled:
+
+- p1: the original prompt;
+- p2: adds the language rule, episodes and moods, no invented L0 facts, and
+  ignores forget requests;
+- p3: p2 plus the deterministic language hint, the repeated-activity rule,
+  the `goal` tag, and the stricter recall instruction.
+
+**Hardware.** Apple M4 Max, 128 GB, macOS 27.0.1; Node 24.13 with
+`node:sqlite` and sqlite-vec. Runs used concurrency 2. Latencies of the p1
+model comparison are inflated by GPU sharing with other runs, so the latency
+table uses only runs that had the GPU to themselves.
 
 ## Results
 
-QA accuracy (18 questions) in successive runs:
+### Synthetic Dutch set: extraction models
 
-| Run | Change | QA | Reconciliation |
+QA out of 72, before and after System 2. Gate and extraction are precision /
+recall; reconciliation is action accuracy.
+
+| Extraction model | Prompt | QA | After System 2 | Extraction P / R | Reconciliation | Induced |
+| --- | --- | --- | --- | --- | --- | --- |
+| qwen3:14b | p1 | 63 | 63 | 0.97 / 0.86 | 0.96 | 7 |
+| qwen3:14b | p2 | 66 | 66 | 0.97 / 0.88 | 0.96 | 12 |
+| qwen3:14b | p3 | 66 | 66 | 0.98 / 0.88 | 0.97 | 10 |
+| Qwen3.8-27B (MLX) | p1 | 48 | 48 | 0.87 / 0.65 | 0.89 | 1 |
+| Qwen3.8-27B (MLX) | p2 | 49 | 49 | 0.93 / 0.72 | 0.89 | 0 |
+| Qwen3.8-27B (MLX) | p3 | 54 | 54 | 0.88 / 0.77 | 0.89 | 0 |
+| Qwen3.6-35B-A3B | p1 | 58 | 57 | 0.91 / 0.89 | 0.93 | 10 |
+| Gemma-4-26B-A4B | p1 | 62 | 63 | 0.86 / 0.80 | 0.92 | 11 |
+| Gemma-4-26B-A4B | p3 | 63 | 63 | 0.80 / 0.78 | 0.90 | 13 |
+| gpt-oss-20b (reasoning low) | p1 | 60 | 60 | 0.96 / 0.88 | 0.93 | 10 |
+
+QA by type for qwen3:14b:
+
+| Type | p1 | p2 | p3 |
 | --- | --- | --- | --- |
-| A | Baseline, keyword grading, no System 2 | 14/18 (78%) | 20/22 |
-| B | Extraction keeps relationships; LLM judge | 15/18 (83%) | 18/22 |
-| C | B with System 2 | 16/18 (89%) | 18/22 |
-| D | C with correction and repeated-episode fixes | **16/18 (89%)** | **22/22** |
+| Single-session | 12/12 | 12/12 | 12/12 |
+| Knowledge-update | 10/12 | 11/12 | 12/12 |
+| Temporal | 12/12 | 12/12 | 12/12 |
+| Health | 6/6 | 6/6 | 6/6 |
+| Routine | 8/12 | 9/12 | 8/12 |
+| Explicit recall | 5/6 | 5/6 | 5/6 |
+| Intention | 4/6 | 5/6 | 5/6 |
+| Abstention | 6/6 | 6/6 | 6/6 |
 
-Run D components:
+Qwen3.8-27B scored 2/12 on routine and 0/6 on intention with p2, and 4/12 and 4/6 with p3. Gemma-4-26B-A4B extracted fastest (1.8 s per call), but at the lowest recall, and scored 5/12 on routine.
 
-| Metric | Result |
+### Synthetic Dutch set: other components
+
+All variants use qwen3:14b with prompt p1 unless stated.
+
+| Variant | QA | After System 2 | Gate P / R | Extraction calls | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Baseline (gemma4 e4b gate, threshold 0.3) | 63 | 63 | 0.98 / 0.88 | 109 | p3 at 0.3: 66, 108 calls |
+| Gate llama3.2:3b | 67 | 67 | 0.50 / 1.00 | 243 | Passes nearly every turn; extraction recall 0.96 |
+| Gate threshold 0.1 (p3; new default) | 68 | 69 | 0.98 / 0.97 | 118 | Extraction recall 0.96; knowledge-update 12/12, recall 6/6 |
+| Gate threshold 0.5 (p3) | 65 | 65 | 0.98 / 0.84 | 103 | |
+| granite-embedding-311m-multilingual-r2 | 65 | 65 | 1.00 / 0.88 | 110 | Memory block 500 tokens against 375 |
+| `minClusterSize` 3 (former default) | 65 | 64 | 0.98 / 0.88 | 110 | 3 items induced against 7–12 |
+| Without `recall_memory` | 66 | | 0.98 / 0.88 | 110 | Explicit recall still 5/6 |
+| Without memory (p3) | 6 | | | 0 | Only the 6 abstention questions |
+
+The baseline and the `minClusterSize` 3 run use the same configuration before
+System 2 (63 against 65). That gap is the run-to-run noise: local inference
+is not deterministic under concurrent requests, even at temperature 0.
+
+### Public benchmarks (qwen3:14b)
+
+| Benchmark | Prompt | QA | Without memory |
+| --- | --- | --- | --- |
+| LongMemEval-S, 6 types (60) | p2 | 37/60 (62%) | TBD |
+| LongMemEval-S matched, English (50) | p3 | TBD | |
+| LongMemEval-S matched, Dutch (50) | p3 | TBD | |
+| LoCoMo, 2 conversations (233) | p2 | 65/233 (28%) | |
+| PersonaMem-v2 (159, chance 25%) | p1 | 44/159 (28%); 42 after System 2 | |
+| PersonaMem-v2 (159) | p2 | 44/159 (28%); 42 after System 2 | 43/159 (27%) |
+
+LongMemEval-S (p2) by type:
+
+| Type | Correct |
 | --- | --- |
-| Gate precision / recall | 1.00 / 1.00 (32 worth storing, 11 distractors) |
-| Extraction precision / recall | 1.00 / 1.00 (end to end, keyword match) |
-| Health and transient labels | 2/2, 4/4 |
-| Reconciliation | 22/22: ADD 16, correction 2, preference change 2, restatement 2 |
-| QA by type | single-session 4/4, knowledge-update 3/4, temporal 4/4, health 2/2, routine 1/2, abstention 2/2 |
-| Memory block | 334 tokens mean (budget 800); retrieval 12–22 ms including the embedding call |
+| Knowledge-update | 10/10 |
+| Single-session (user) | 7/7 |
+| Abstention | 5/5 |
+| Multi-session | 6/9 |
+| Temporal reasoning | 4/9 |
+| Single-session preference | 4/10 |
+| Single-session (assistant) | 1/10 |
 
-Latency per call (run D means; first calls include model loading):
+LoCoMo by category:
 
-| Role | Calls | Mean |
-| --- | --- | --- |
-| Gate | 129 (3 per user turn, in parallel) | 0.1 s |
-| Extraction | 32 | 2.9 s |
-| Reconciliation | 22 | 2.1 s |
-| Answer | 18 | 0.9 s |
-| Induction | 2 | 6.2 s |
+| Category | Correct |
+| --- | --- |
+| Single-hop | 33/114 |
+| Multi-hop | 12/43 |
+| Temporal | 17/63 |
+| Open-domain | 3/13 |
 
-Ingesting 86 turns (43 from the user) took 159 s in total. That is about
-3.7 s of background work per user turn, off the reply path.
+PersonaMem-v2 (p2) by type:
 
-Vector index (`bench-index`, 512 dimensions, 200 queries):
+| Type | Correct |
+| --- | --- |
+| Therapy background | 10/22 |
+| Stereotypical preferences | 9/21 |
+| Ask to forget | 8/29 |
+| Sensitive information | 7/23 |
+| Anti-stereotypical preferences | 4/20 |
+| Neutral preferences | 4/22 |
+| Health and medical conditions | 2/22 |
+
+Matched English against Dutch, by type: TBD.
+
+### Latency and tokens
+
+Measured on the synthetic set with qwen3:14b (p2), alone on the GPU. The
+answer and judge share the GPU with the background write path.
+
+| Role | Calls | Mean per call | Tokens per call |
+| --- | --- | --- | --- |
+| Gate | 723 (3 per user turn, in parallel) | 0.4 s | 128 |
+| Extraction | 109 | 4.2 s | 1,033 |
+| Reconciliation | 79 | 3.2 s | 627 |
+| Answer | 148 | 1.3 s | 652 |
+| Induction | 10 | 6.0 s | 604 |
+
+- **Ingest.** Ingest took 13.8 minutes for 241 user turns and their replies
+  (summed per case). That is about 3.4 s of background work per user turn,
+  off the reply path.
+- **Retrieval.** 23 ms mean, including the embedding call. The memory block
+  was 375 tokens on average (budget 800).
+- **Larger models.** Qwen3.8-27B (MLX) extracted in 3.9 s per call. The p1
+  numbers for the other models (8.8–15.2 s) were measured under contention
+  and only rank them roughly. gpt-oss-20b was the slowest.
+
+The vector-index measurements (`bench-index`, 512 dimensions, 200 queries)
+are unchanged from the first run:
 
 | Items | Insert per item | Vector p50 / p95 | Hybrid (FTS) p50 / p95 | Filtered p50 / p95 |
 | --- | --- | --- | --- | --- |
@@ -142,60 +276,102 @@ Vector index (`bench-index`, 512 dimensions, 200 queries):
 
 ## Analysis
 
-- **The gate is cheap and accurate.** Parallel one-token questions with
-  logprobs took about 100 ms in total and separated distractors cleanly.
-  Corrections were flagged with probability ≥ 0.999. The gate saves 11 of 43
-  extraction calls here, and the proportion should be higher in real small
-  talk.
-- **Extraction loses relationships unless asked.** In run A the fact "Lucas
-  woont in Aalst" lost "zoon", so "Waar woont mijn zoon?" failed. One prompt
-  rule fixed this.
-- **Subject keys block name corrections.** "Not Elke but Ruben" was stored
-  under the subject "Ruben", while candidate search only looked at the same
-  subject. As a result, Elke stayed active next to Ruben. Correction turns now
-  search across subjects.
-- **NOOP hides routines.** The extraction model dated each "this morning"
-  walk, but the reconciler still marked repeats as NOOP. System 2 therefore
-  never saw three walks. This is now deterministic: an L2 NOOP becomes an ADD
-  when no neighbour has the same occurrence day.
-- **Remaining misses.**
-  - The judge (gemma4:12b) rejected the correct answer "nu vooral naar Bart
-    Peeters", and keyword grading accepted it in run A. Use a stronger judge,
-    or spot-check judge rejections.
-  - One routine question failed because the walk episode scored 0.35 cosine
-    similarity to "Wat doe ik vaak 's ochtends?", exactly at
-    `MEMORY_MIN_SIMILARITY`. Full-text search missed it ("ochtends" against
-    "vanochtend"). The Qwen3 embedding instruction prefix raised the score to
-    0.39 in a spot check. Query instructions or a slightly lower threshold
-    are candidates, but should be measured on a larger set first.
-- **System 2 works when evidence exists.** After the repeated-episode fix,
-  induction produced a routine for one persona. Induction is slow (6 s), but
-  it runs at most once a day and only when idle.
+- **The local judge needed guard rails.** gemma4:12b in non-thinking mode
+  graded correct answers as wrong when the question, reference, and answer
+  came as labelled plain text. With a JSON payload it graded correctly, but
+  then accepted "Ik weet het niet" as correct for ordinary questions. Grading
+  non-answers by pattern removed both errors. A hedge followed by an answer
+  ("I am not sure, but …") still goes to the judge. `rejudge` changed 0–10 grades
+  per run; the most were for Qwen3.8-27B, which abstains more. Thinking mode
+  was more reliable but took 56 s instead of 4 s per call.
+- **Prompt conflicts cost more than model size.** The original extractor
+  prompt asked for "durable, high-value" memories and excluded "generic
+  emotions". Larger models obeyed this literally and dropped episodes ("I went
+  for a walk this morning") and the user's moods. That conflicts with L2
+  episodes and L3 states. Qwen3.8-27B lost most routines and every explicit
+  recall question. Prompt p2 raised its extraction recall from 0.65 to 0.72
+  and explicit recall from 0/6 to 5/6, but it still skipped repeated
+  activities ("weer gaan wandelen"). Prompt p3 adds a rule for those, which
+  raised it to 0.77 recall and 54/72, still well below qwen3:14b.
+- **Extraction must keep the conversation's language.** PersonaMem-v2 showed
+  qwen3:14b translating English conversations into Dutch memories. It also
+  invented an L0 profile ("woont in Nederland, spreekt Nederlands"),
+  apparently from the Dutch examples in the prompt. The p2 prompt rule
+  alone did not fix the language; a deterministic stopword-based hint in the
+  user prompt did.
+- **Forget requests were stored as memories.** PersonaMem's "ask to forget"
+  turns became items such as "De gebruiker wil dat de assistent vergeet dat
+  …", which repeat the fact the user wanted gone. The extractor now ignores
+  such requests. Acting on them is task 0053.
+- **The gate threshold was set too high.** At 0.3 gemma4 e4b passed 88% of
+  the worthy turns at 98% precision; the turns it missed were mostly short
+  updates and episodes, which cost knowledge-update and recall questions. Its
+  probabilities are well separated: lowering the threshold to 0.1 recovered
+  almost all of them (recall 0.97) without losing precision, while 0.5 lost
+  more (0.84). A pass-all gate adds no recall over 0.1 and doubles the cost.
+- **System 2 does not move QA yet.** It induced 7–12 items on six personas
+  with `minClusterSize` 2. QA after System 2 changed by at most ±2. The
+  routine questions ("Waar ga ik vaak wandelen?") can also be answered from
+  the episodes it clusters. PersonaMem-v2, which measures implicit
+  preferences, also showed no gain (44 to 42). The benefit claimed by DCPM may
+  need longer histories than six sessions, or questions that only the
+  induced item can answer.
+- **`recall_memory` is rarely used.** The answer model called it 0–2 times
+  per run. The explicit-recall questions are mostly answered from the derived
+  memories, and disabling the tool did not lower QA (66). In English it often
+  announced a search ("Let me search for it") instead of calling the tool.
+  Partly, the harness answer prompt told it to say "I do not know" first; p3
+  fixes that. qwen3:14b still sometimes writes prose before the JSON. The
+  server accepts a recall request only at the start of the reply, so such
+  replies are not recalls. This explains LongMemEval's 1/10 on
+  assistant-content questions: Sodalis deliberately does not extract what the
+  assistant said, and only recall can find it.
+- **LongMemEval-S:** knowledge updates, single-session facts, and abstention
+  are solved. Temporal reasoning (4/9) needs date arithmetic over episodes
+  that were often stored without the exact date. Preferences (4/10) need the
+  answer model to apply a stored preference to an open request.
+- **LoCoMo fits poorly.** It is a chat between two friends about each other.
+  The gate and extractor are built around the user's own life, so most
+  third-person small talk was filtered: 296 of 788 turns passed. Neither
+  speaker is the user, so subjects and relationships are ambiguous. The score
+  (28%) is not a target for Sodalis.
+- **PersonaMem-v2 does not measure this pipeline.** It asks the answer model
+  to pick the most personalised of four similar replies. With qwen3:14b this
+  stayed at 28% (25% is chance), and without any memory it scored 27%. The
+  stored preferences are present in the memory block but do not change which
+  option qwen3:14b picks. A larger answer model, or a prompt that asks it to
+  apply the memories, is needed before PersonaMem says anything about System 2.
+- **Dutch against English:** TBD.
 
 ## Limitations
 
-- The set is two personas and 18 questions, so one question is 5.6
-  percentage points. Differences between runs are mostly explained by
-  specific fixes, not by sampling noise, but the results do not rank models.
-- The template-rendered turns are clean single statements, which is easier
-  than real speech-to-text conversation. The LLM renderer exists but was not
-  used.
-- The judge is local and imperfect (one known false negative).
-- The scenario generator, the labels, and the fixes were developed together.
-  The final numbers are therefore optimistic until the run is repeated on
-  new seeds and LLM-rendered conversations.
+- The synthetic set has six personas and 72 questions, so one question is 1.4
+  percentage points. Run-to-run noise is about ±2 questions. Differences
+  below 3–4 questions do not rank configurations.
+- The scenario generator, the labels, and the fixes were developed together,
+  so synthetic scores are optimistic. Use the public sets for absolute levels.
+- The public benchmarks were sampled down to keep local runs within hours
+  (LongMemEval-S: 2 or 4 distractor sessions instead of about 50). Their
+  scores are not comparable with published full-set results.
+- The judge is a local 12B model. The deterministic rules remove its known
+  errors, but free-form grading was spot-checked only.
+- The Dutch subset is machine-translated by qwen3:14b. A spot check of about
+  ten cases found the meaning, names, and numbers intact, but there were
+  calques ("Wat zijn er enkele…"), a mixed u/je register, and an occasional
+  wrong term (kanimeshi became "kreeftsbloemkoolbowl"). Dutch scores include
+  translation noise.
+- The prompt changed between runs. Compare only rows with the same prompt
+  label.
 
 ## Open items
 
-1. Run LLM-rendered scenarios for at least 10 sampled personas (seeds 1–3)
-   and compare gate thresholds 0.2, 0.3, and 0.5.
-2. Run LongMemEval-S (knowledge-update and temporal-reasoning, with
-   distractors) and LoCoMo locally. Translate a LongMemEval subset to Dutch
-   and compare English with Dutch.
-3. Compare extraction models (for example qwen3:14b with a Qwen3.8 27B on
-   oMLX), and Azure only with consent for that run.
-4. Measure the query-instruction prefix and `MEMORY_MIN_SIMILARITY` on the
-   larger set.
-5. Measure System 2 on longer histories (20+ sessions), including induced-item
-   precision.
-6. Repeat `bench-index` only if the item count grows by orders of magnitude.
+1. Conversational forgetting (task 0053), with forget cases in this
+   evaluation.
+2. Tolerate prose before a `recall_memory` request, or use native tool calls,
+   and measure the tool on assistant-content questions.
+3. Measure System 2 on longer histories (20+ sessions), with questions that
+   only an induced item answers, and induced-item precision.
+4. Store exact dates for episodes and measure temporal reasoning again.
+5. Run Azure extraction as a ceiling, with consent for that run.
+6. Hy-Memory as a Python baseline, if a direct comparison is still wanted.
+7. Repeat `bench-index` only if the item count grows by orders of magnitude.

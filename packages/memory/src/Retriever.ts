@@ -12,11 +12,13 @@ export interface RetrievalOptions {
   readonly pinnedDays?: number;
   readonly chainDepth?: number;
   readonly pinnedIdentityLimit?: number;
+  /** Ongoing L7 intentions shown every turn so the assistant can follow up. */
+  readonly pinnedIntentionLimit?: number;
   /** Include health items (requires health consent). */
   readonly includeHealth?: boolean;
 }
 
-export type RetrievalReason = "profile" | "upcoming" | "identity" | "relevant";
+export type RetrievalReason = "profile" | "upcoming" | "identity" | "intention" | "relevant";
 
 export interface RetrievedMemory {
   readonly item: MemoryItem;
@@ -55,12 +57,16 @@ export function estimateTokens(text: string): number {
 
 const day = (iso: string) => iso.slice(0, 10);
 
+/** Subjects that mean the user; induced items sometimes use the phrase. */
+const USER_SUBJECTS = new Set(["user", "the user", "de gebruiker", "gebruiker"]);
+
 /** One block line: date, provenance, and a "was ..., now ..." chain. */
 export function formatMemoryLine(entry: RetrievedMemory): string {
   const { item } = entry;
-  const subject = item.subject.toLowerCase() === "user" ? "" : `${item.subject}: `;
+  const subject = USER_SUBJECTS.has(item.subject.trim().toLowerCase()) ? "" : `${item.subject}: `;
   const event = item.eventAt ? ` (date: ${day(item.eventAt)})` : "";
-  const meta = `[${day(item.validFrom)}, ${item.provenance}${item.layer === "L3" ? ", temporary" : ""}]`;
+  const tag = item.layer === "L3" ? ", temporary" : item.layer === "L7" ? ", goal" : "";
+  const meta = `[${day(item.validFrom)}, ${item.provenance}${tag}]`;
   if (entry.chain.length === 0) return `- ${meta} ${subject}${item.text}${event}`;
   const history = entry.chain
     .map((old) => `was "${old.text}" until ${day(old.validTo ?? item.validFrom)}`)
@@ -71,7 +77,7 @@ export function formatMemoryLine(entry: RetrievedMemory): string {
 export const MEMORY_BLOCK_HEADER =
   "Memory: what you know about the user from earlier conversations. Use it naturally when relevant; " +
   "do not recite it. Dates are YYYY-MM-DD when it was recorded; 'inferred' items were not stated explicitly, " +
-  "'observed' items come from app or home events.";
+  "'observed' items come from app or home events; 'goal' items are the user's ongoing goals and plans.";
 
 /** LLM-free retrieval for one turn (ADR 0005, decision 8). */
 export async function retrieveMemories(
@@ -117,6 +123,9 @@ export async function retrieveMemories(
   for (const item of upcoming) add(item, "upcoming");
   for (const item of store.listItems({ layers: ["L4"], statuses: ["active"], limit: options.pinnedIdentityLimit ?? 8 })) {
     add(item, "identity");
+  }
+  for (const item of store.listItems({ layers: ["L7"], statuses: ["active"], limit: options.pinnedIntentionLimit ?? 3 })) {
+    add(item, "intention");
   }
 
   const used: Partial<Record<ItemLayer, number>> = {};

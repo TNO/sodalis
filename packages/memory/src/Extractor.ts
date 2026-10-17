@@ -2,7 +2,7 @@ import { parseJsonObject, type ChatClient } from "./ChatClient.js";
 import type { MemoryKind } from "./DecisionGate.js";
 import type { Sensitivity } from "./types.js";
 
-export const EXTRACTED_LAYERS = ["L0", "L2", "L3", "L4"] as const;
+export const EXTRACTED_LAYERS = ["L0", "L2", "L3", "L4", "L7"] as const;
 export type ExtractedLayer = (typeof EXTRACTED_LAYERS)[number];
 
 export interface ExtractedItem {
@@ -76,25 +76,35 @@ them as self-contained statements.
 # WHAT TO EXTRACT
 Good memories: personal facts, preferences and dislikes, people and
 relationships (names, roles, birthdays), appointments and important dates,
-plans, routines, health facts, and corrections of earlier information.
+plans, routines, health facts, and corrections of earlier information. Also
+extract what the user did or experienced (an outing, a visit, an activity)
+as an L2 event, and the user's own current state (mood, pain, tiredness) as an
+L3 transient state.
 Do NOT extract: small talk, greetings, thanks, questions to the assistant,
-generic emotions, requests to operate apps, or anything the assistant said
-that the user did not confirm.
+general remarks about emotions that are not the user's own state, requests to
+operate apps, or anything the assistant said that the user did not confirm.
+Do NOT extract requests to forget, delete, or stop remembering something, and
+never store the content of such a request.
 NEVER extract passwords, PIN codes, access codes, or other credentials.
 
 # LAYERS
-- L0: basic profile of the user (name, birth date, place of residence, language).
+- L0: basic profile of the user (name, birth date, place of residence) as the
+  user states it. Never guess a residence, nationality, or language.
 - L4: identity: durable preferences, traits, values, and people in the user's
   life and their relationship to the user ("Anna is de dochter van de gebruiker").
 - L2: atomic facts and events, including appointments and dates.
 - L3: temporary states that will not matter in a few days
   ("de gebruiker is vandaag moe"); set "transient": true for these.
+- L7: an ongoing goal or plan the user explicitly states they are working
+  towards ("de gebruiker wil voor de zomer vijf kilo afvallen"); a one-off
+  appointment or errand is L2.
 
 # FIELDS
 - subject: who the memory is about: "user" for the user, otherwise the person's
   name (e.g. "Anna"). Never merge facts about different people.
 - text: one self-contained third-person statement in the SAME language as the
-  user's message. Keep names, places, numbers, and time precision exactly.
+  user's message: English for an English message, Dutch for a Dutch one. The
+  Dutch examples in this prompt illustrate form only; never translate. Keep names, places, numbers, and time precision exactly.
   Always state how another person relates to the user, e.g. "Brecht, de zoon
   van de gebruiker, woont in Ninove." rather than "Brecht woont in Ninove."
 - event_at: ISO 8601 date or date-time of the event or appointment, resolved
@@ -110,6 +120,8 @@ NEVER extract passwords, PIN codes, access codes, or other credentials.
 - Use as few items as possible, but every distinct durable fact appears once.
 - Split only when subjects differ or events are independent.
 - When the user corrects something, state only the new, correct information.
+- A repeated activity ("weer", "again", "zoals elke week") is a new event each
+  time: extract it with its own date, even when it happened before.
 - Return {"items": []} when there is nothing worth remembering.
 - Field names are English; values keep the user's language.
 - Output exactly one JSON object: {"items": [...]}.`;
@@ -150,9 +162,31 @@ export function parseExtractedItems(payload: unknown): ExtractedItem[] {
   return items;
 }
 
+const STOPWORDS = {
+  en: new Set("the and is are was i my me you it to of in that have with for this not but on at".split(" ")),
+  nl: new Set("de het en is een ik mijn me je dat van in niet met voor op zijn maar ook er wat naar".split(" ")),
+} as const;
+
+/** Cheap stopword vote between English and Dutch; undefined when unclear. */
+export function detectLanguage(text: string): "en" | "nl" | undefined {
+  const words = text.toLowerCase().match(/[a-zà-ÿ']+/g) ?? [];
+  let en = 0;
+  let nl = 0;
+  for (const word of words) {
+    if (STOPWORDS.en.has(word)) en += 1;
+    if (STOPWORDS.nl.has(word)) nl += 1;
+  }
+  if (en + nl < 2 || en === nl) return undefined;
+  return en > nl ? "en" : "nl";
+}
+
+const LANGUAGE_NAMES = { en: "English", nl: "Dutch" } as const;
+
 export function extractionUserPrompt(request: ExtractionRequest): string {
+  const language = detectLanguage(request.userTurn);
   return [
     `Message time: ${request.turnTime}`,
+    language ? `Write every text in ${LANGUAGE_NAMES[language]}, the language of the user's message.` : undefined,
     request.kindHint && request.kindHint !== "none" ? `Gate hint: likely ${request.kindHint}` : undefined,
     request.isCorrection ? "Gate hint: the user is probably correcting earlier information." : undefined,
     request.previousAssistantTurn ? `Assistant (context only): ${request.previousAssistantTurn}` : undefined,

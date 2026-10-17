@@ -3,6 +3,7 @@ import type {
   AssistantAppContext,
   ConversationMessage,
 } from "@sodalis/assistant";
+import { RECALL_MEMORY_INSTRUCTION, recalledContextPrompt } from "@sodalis/memory";
 
 export interface LlmUsage {
   readonly promptTokens: number;
@@ -167,8 +168,7 @@ function parseEventData(frame: string): string | undefined {
     .join("\n") || undefined;
 }
 
-export const RECALL_MEMORY_INSTRUCTION =
-  'If answering needs details from an earlier conversation that the Memory section does not contain, respond with only {"recall_memory":{"query":string,"from"?:"YYYY-MM-DD","to"?:"YYYY-MM-DD"}} to search your memory first; use the query in the language of the conversation.';
+export { RECALL_MEMORY_INSTRUCTION };
 
 /** The memory part of the system prompt (task 0047 and 0049). */
 export function memoryPrompt(request: Pick<LlmGenerationRequest, "memoryContext" | "recallAvailable" | "recalledContext">): string {
@@ -176,7 +176,7 @@ export function memoryPrompt(request: Pick<LlmGenerationRequest, "memoryContext"
   if (request.memoryContext) parts.push(request.memoryContext);
   if (request.recalledContext) {
     parts.push(
-      `Recalled from earlier conversations for "${request.recalledContext.query}" (dated excerpts; answer from these and do not request another recall):\n${request.recalledContext.excerpts}`,
+      recalledContextPrompt(request.recalledContext.query, request.recalledContext.excerpts),
     );
   } else if (request.recallAvailable) {
     parts.push(RECALL_MEMORY_INSTRUCTION);

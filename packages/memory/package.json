@@ -17,6 +17,7 @@
     "sqlite-vec": "^0.1.9"
   },
   "devDependencies": {
+    "@huggingface/transformers": "^4.3.1",
     "@types/node": "^24.10.4"
   }
 }

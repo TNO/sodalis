@@ -1,11 +1,19 @@
 import type { ChatClient } from "../src/ChatClient.js";
-import { Consolidator, type Inducer } from "../src/Consolidator.js";
+import { Consolidator, type ConsolidationReport, type Inducer } from "../src/Consolidator.js";
 import type { DecisionGate } from "../src/DecisionGate.js";
 import type { Embedder, EmbedderDescriptor } from "../src/Embedder.js";
 import type { Extractor } from "../src/Extractor.js";
 import { Memory } from "../src/Memory.js";
 import { MemoryService } from "../src/MemoryService.js";
 import type { Reconciler } from "../src/Reconciler.js";
+import {
+  formatRecallResult,
+  isRecallReply,
+  parseRecallCall,
+  RECALL_MEMORY_INSTRUCTION,
+  recalledContextPrompt,
+  type RecallCall,
+} from "../src/Recall.js";
 import type { WriteTrace } from "../src/WritePipeline.js";
 import { containsKeywords, type EvalCase, type EvalQuestion, type EvalTurn } from "./cases.js";
 
@@ -22,8 +30,17 @@ export interface EvalRoles {
 
 export interface RunOptions {
   readonly gateThreshold?: number;
-  /** Run System 2 consolidation after ingest (task 0050). */
-  readonly system2?: boolean;
+  /**
+   * Run System 2 consolidation after ingest (task 0050). `compare` answers
+   * every question before and after consolidation from the same ingest.
+   */
+  readonly system2?: boolean | "compare";
+  /** System 2 cluster size (default 3, as in production). */
+  readonly minClusterSize?: number;
+  /** Offer the `recall_memory` tool to the answer model (default true, task 0049). */
+  readonly recall?: boolean;
+  /** Replay the sessions into memory (default true); false gives a no-memory baseline. */
+  readonly ingest?: boolean;
   readonly tokenBudget?: number;
   readonly signal?: AbortSignal;
 }
@@ -42,12 +59,19 @@ export interface QuestionResult {
   readonly memory: string;
   readonly memoryTokens: number;
   readonly retrieveMs: number;
+  /** The recall the answer model requested, with the number of excerpts found. */
+  readonly recall?: RecallCall & { readonly excerpts: number };
+  /** Set when re-grading (`rejudge`) changed the original grade. */
+  readonly regraded?: boolean;
 }
 
 export interface CaseResult {
   readonly caseId: string;
   readonly turns: readonly LabelledTrace[];
   readonly questions: readonly QuestionResult[];
+  /** Answers after System 2 consolidation, when comparing. */
+  readonly questionsSystem2?: readonly QuestionResult[];
+  readonly consolidation?: ConsolidationReport;
   readonly items: number;
   readonly ingestMs: number;
   readonly embedMs: number;
@@ -77,9 +101,33 @@ export class TimedEmbedder implements Embedder {
 }
 
 const ANSWER_PROMPT = {
-  nl: "Je bent een persoonlijke assistent. Beantwoord de vraag kort, alleen op basis van het geheugen hieronder. Staat het antwoord er niet in, zeg dan dat je het niet weet.",
-  en: "You are a personal assistant. Answer the question briefly, using only the memory below. If the answer is not in it, say that you do not know.",
+  nl: "Je bent een persoonlijke assistent. Beantwoord de vraag kort, alleen op basis van het geheugen hieronder.",
+  en: "You are a personal assistant. Answer the question briefly, using only the memory below.",
 };
+
+/** Placed after the memory block; with recall, giving up comes after searching. */
+const NOT_KNOWN_PROMPT = {
+  nl: { plain: "Staat het antwoord er niet in, zeg dan dat je het niet weet.", recall: "Staat het antwoord niet in het geheugen en ook niet in een recall_memory-zoekopdracht, zeg dan dat je het niet weet." },
+  en: { plain: "If the answer is not in it, say that you do not know.", recall: "If neither the memory nor a recall_memory search contains the answer, say that you do not know." },
+};
+
+const CHOICE_PROMPT = {
+  nl: "Kies het antwoord dat het best bij deze gebruiker past. Antwoord alleen met de letter.",
+  en: "Choose the response that best fits this user. Reply with the letter only.",
+};
+
+const LETTERS = "ABCDEFGH";
+
+function choiceText(question: EvalQuestion, language: EvalCase["language"]): string {
+  const options = question.choices!.map((choice, index) => `${LETTERS[index]}. ${choice}`).join("\n");
+  return `${question.question}\n\n${options}\n\n${CHOICE_PROMPT[language]}`;
+}
+
+/** The first standalone option letter in an answer. */
+export function chosenLetter(answer: string, count: number): string | undefined {
+  const match = new RegExp(`(?:^|[^\\p{L}])([${LETTERS.slice(0, count)}])(?![\\p{L}])`, "u").exec(answer.trim());
+  return match?.[1];
+}
 
 const JUDGE_PROMPT = `You grade answers of a personal assistant. Given a question, a reference
 answer, and the assistant's answer, decide whether the assistant's answer is
@@ -90,14 +138,21 @@ Reply with exactly one JSON object: {"correct": boolean}`;
 
 const ABSTAIN = /\b(weet (ik )?(het )?niet|niet (bekend|verteld|gezegd)|geen (informatie|idee|gegevens)|don't know|do not know|not sure|no information|not mentioned)\b/i;
 
+const HEDGED = /\b(but|however|though|maar|echter)\b/i;
+
 async function grade(question: EvalQuestion, answer: string, judge: ChatClient | undefined, signal?: AbortSignal) {
+  if (question.choices) return chosenLetter(answer, question.choices.length) === question.answer;
+  // Non-answers are graded without the judge: small judges accept "I don't know" too often.
+  // A hedge followed by an answer ("not sure, but it is Ghent") still goes to the judge.
+  if (ABSTAIN.test(answer) && !HEDGED.test(answer)) return question.abstain === true;
   if (judge) {
     const completion = await judge.complete({
       messages: [
         { role: "system", content: JUDGE_PROMPT },
         {
           role: "user",
-          content: `Question: ${question.question}\nReference: ${question.answer}\nAssistant: ${answer}`,
+          // A JSON payload: gemma4 judged plain "Question/Reference/Assistant" text as incorrect far too often.
+          content: JSON.stringify({ question: question.question, reference: question.answer, answer }),
         },
       ],
       responseFormat: { type: "json_object" },
@@ -106,7 +161,7 @@ async function grade(question: EvalQuestion, answer: string, judge: ChatClient |
     });
     return /"correct"\s*:\s*true/.test(completion.content);
   }
-  if (question.abstain) return ABSTAIN.test(answer);
+  if (question.abstain) return false;
   const keywords = question.keywords?.length ? question.keywords : [question.answer];
   return containsKeywords(answer, keywords);
 }
@@ -116,6 +171,37 @@ async function grade(question: EvalQuestion, answer: string, judge: ChatClient |
  * assistant turns, then `drain`), optionally consolidates, and answers each
  * question with the retrieved memory block only.
  */
+/**
+ * Re-grades every free-form answer with the current grading rules and judge
+ * (multiple-choice grades are deterministic and kept), so results graded at
+ * different times use one rule. Returns the number of changed grades.
+ */
+export async function rejudge(
+  results: readonly CaseResult[],
+  judge: ChatClient,
+  signal?: AbortSignal,
+): Promise<{ results: CaseResult[]; changed: number }> {
+  let changed = 0;
+  const regrade = async (questions: readonly QuestionResult[]) => {
+    const output: QuestionResult[] = [];
+    for (const entry of questions) {
+      const correct = entry.question.choices ? entry.correct : await grade(entry.question, entry.answer, judge, signal);
+      if (correct !== entry.correct) changed += 1;
+      output.push(correct === entry.correct ? entry : { ...entry, correct, regraded: true });
+    }
+    return output;
+  };
+  const output: CaseResult[] = [];
+  for (const result of results) {
+    output.push({
+      ...result,
+      questions: await regrade(result.questions),
+      ...(result.questionsSystem2 ? { questionsSystem2: await regrade(result.questionsSystem2) } : {}),
+    });
+  }
+  return { results: output, changed };
+}
+
 export async function runCase(evalCase: EvalCase, roles: EvalRoles, options: RunOptions = {}): Promise<CaseResult> {
   let now = new Date(evalCase.sessions[0]?.date ?? Date.now());
   const embedder = new TimedEmbedder(roles.embedder);
@@ -136,7 +222,7 @@ export async function runCase(evalCase: EvalCase, roles: EvalRoles, options: Run
   const ingested: { sessionId: string; turn: EvalTurn; storeId?: number }[] = [];
   const started = performance.now();
   try {
-    for (const session of evalCase.sessions) {
+    for (const session of options.ingest === false ? [] : evalCase.sessions) {
       for (const [index, turn] of session.turns.entries()) {
         now = new Date(Date.parse(session.date) + index * 60_000);
         const input = { sessionId: session.id, turnId: `${session.id}:${index}`, text: turn.text, createdAt: now.toISOString() };
@@ -145,35 +231,69 @@ export async function runCase(evalCase: EvalCase, roles: EvalRoles, options: Run
         if (turn.role === "user") await service.drain();
       }
     }
-    if (options.system2 && roles.inducer) {
-      await new Consolidator({ memory, inducer: roles.inducer, minNewItems: 1 }).run(options.signal);
-    }
+    let consolidation: ConsolidationReport | undefined;
+    const consolidate = async () => {
+      consolidation = await new Consolidator({
+        memory,
+        inducer: roles.inducer!,
+        minNewItems: 1,
+        ...(options.minClusterSize ? { minClusterSize: options.minClusterSize } : {}),
+      }).run(options.signal);
+    };
+    if (options.system2 === true && roles.inducer) await consolidate();
     const ingestMs = performance.now() - started;
-    const questions: QuestionResult[] = [];
-    for (const question of evalCase.questions) {
-      options.signal?.throwIfAborted();
-      now = new Date(question.askedAt);
-      const retrieveStarted = performance.now();
-      const retrieved = await service.retrieve(question.question, undefined, options.signal);
-      const retrieveMs = performance.now() - retrieveStarted;
-      const completion = await roles.answer.complete({
-        messages: [
-          { role: "system", content: `${ANSWER_PROMPT[evalCase.language]}\n\n${retrieved.block}` },
-          { role: "user", content: question.question },
-        ],
-        temperature: 0,
-        maxTokens: 200,
-        ...(options.signal ? { signal: options.signal } : {}),
-      });
-      const answer = completion.content.trim();
-      questions.push({
-        question,
-        answer,
-        correct: await grade(question, answer, roles.judge, options.signal),
-        memory: retrieved.block,
-        memoryTokens: retrieved.estimatedTokens,
-        retrieveMs,
-      });
+
+    const answerAll = async (): Promise<QuestionResult[]> => {
+      const results: QuestionResult[] = [];
+      for (const question of evalCase.questions) {
+        options.signal?.throwIfAborted();
+        now = new Date(question.askedAt);
+        const retrieveStarted = performance.now();
+        // A no-memory baseline has nothing to retrieve, so it never calls the embedder.
+        const retrieved =
+          options.ingest === false ? { block: "", estimatedTokens: 0 } : await service.retrieve(question.question, undefined, options.signal);
+        const retrieveMs = performance.now() - retrieveStarted;
+        const system = `${ANSWER_PROMPT[evalCase.language]}\n\n${retrieved.block}`;
+        const notKnown = NOT_KNOWN_PROMPT[evalCase.language];
+        const user = question.choices ? choiceText(question, evalCase.language) : question.question;
+        const ask = async (extra: string) =>
+          (
+            await roles.answer.complete({
+              messages: [
+                { role: "system", content: `${system}\n\n${extra ? `${extra}\n\n` : ""}${extra === RECALL_MEMORY_INSTRUCTION ? notKnown.recall : notKnown.plain}` },
+                { role: "user", content: user },
+              ],
+              temperature: 0,
+              maxTokens: 200,
+              ...(options.signal ? { signal: options.signal } : {}),
+            })
+          ).content.trim();
+        const offerRecall = options.recall !== false && options.ingest !== false;
+        let answer = await ask(offerRecall ? RECALL_MEMORY_INSTRUCTION : "");
+        let recall: QuestionResult["recall"];
+        if (offerRecall && isRecallReply(answer)) {
+          const call = parseRecallCall(answer);
+          const found = call?.query.trim() ? await service.recall({ ...call, ...(options.signal ? { signal: options.signal } : {}) }) : { excerpts: [] };
+          recall = { ...(call ?? { query: "" }), excerpts: found.excerpts.length };
+          answer = await ask(recalledContextPrompt(call?.query ?? "", formatRecallResult(found)));
+        }
+        results.push({
+          question,
+          answer,
+          correct: await grade(question, answer, roles.judge, options.signal),
+          memory: retrieved.block,
+          memoryTokens: retrieved.estimatedTokens,
+          retrieveMs,
+          ...(recall ? { recall } : {}),
+        });
+      }
+      return results;
+    };
+    const questions = await answerAll();
+    let questionsSystem2: QuestionResult[] | undefined;
+    if (options.system2 === "compare" && roles.inducer) {
+      await consolidate();
+      questionsSystem2 = await answerAll();
     }
     return {
       caseId: evalCase.id,
@@ -182,6 +302,8 @@ export async function runCase(evalCase: EvalCase, roles: EvalRoles, options: Run
         return { sessionId, turn, ...(trace ? { trace } : {}) };
       }),
       questions,
+      ...(questionsSystem2 ? { questionsSystem2 } : {}),
+      ...(consolidation ? { consolidation } : {}),
       items: memory.store.listItems({ statuses: ["active"], limit: 100_000 }).length,
       ingestMs,
       embedMs: embedder.totalMs,

@@ -39,6 +39,7 @@ export type EventKind =
   | "health"
   | "transient"
   | "routine"
+  | "intention"
   | "distractor";
 
 export interface EvalTurn {
@@ -63,6 +64,8 @@ export type QuestionType =
   | "health"
   | "routine"
   | "abstention"
+  | "intention"
+  | "recall"
   | (string & {});
 
 export interface EvalQuestion {
@@ -74,6 +77,8 @@ export interface EvalQuestion {
   readonly keywords?: readonly string[];
   readonly askedAt: string;
   readonly abstain?: boolean;
+  /** Multiple-choice options; `answer` is then the correct letter (A, B, …). */
+  readonly choices?: readonly string[];
 }
 
 export interface EvalCase {

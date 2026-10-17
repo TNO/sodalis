@@ -825,15 +825,27 @@ export EVAL_EMBED_PROVIDER=openai-compatible \
 # Synthetic Dutch scenarios: two built-in personas, or sample elderly Flemish
 # personas (CC BY 4.0, attribution kept in each case's source field).
 pnpm eval generate --fixtures --sessions 4          # or: pnpm eval personas --count 10 && pnpm eval generate
-pnpm eval generate --renderer llm                   # natural turns; needs EVAL_RENDER_* (not the EXTRACT model) and EVAL_JUDGE_*
-pnpm eval run --set synthetic --label local-qwen3-14b [--system2] [--threshold 0.3]
+pnpm eval generate --renderer llm [--concurrency 1] # natural turns; needs EVAL_RENDER_* (not the EXTRACT model) and EVAL_JUDGE_*; resumable
+pnpm eval run --set synthetic --label local-qwen3-14b [--system2 | --system2-compare] [--min-cluster 2] \
+  [--threshold 0.1] [--no-recall] [--no-memory] [--concurrency 2]
 # Public benchmarks (downloaded on first use):
-pnpm eval run --set longmemeval --limit 20 --distractors 4 --types knowledge-update,temporal-reasoning
-pnpm eval translate --limit 50 && pnpm eval run --set longmemeval-nl
+pnpm eval run --set longmemeval --per-type 10 --distractors 4   # or --limit 20 --types knowledge-update,temporal-reasoning
+pnpm eval run --set personamem --personas 4 --system2-compare
+pnpm eval translate --per-type 20 --distractors 2 && pnpm eval run --set longmemeval-nl   # resumable
 pnpm eval run --set locomo --limit 2                # CC BY-NC 4.0: local use only, never commit
+# Re-grade stored results with the current judge and grading rules:
+pnpm eval rejudge --file eval/.data/results/a.json,eval/.data/results/b.json
 # Vector index latency (task 0051):
 pnpm eval bench-index --items 10000
 ```
+
+Thinking models (gemma4, qwen3) think by default; pass
+`EVAL_<ROLE>_EXTRA_BODY='{"reasoning_effort":"none"}'` for the gate, judge, and
+renderer, or a run takes hours. Multiple-choice and "I do not know" answers are
+graded without the judge. `--no-memory` answers without ingesting anything, as
+a baseline. Ollama's MLX runner can stall under concurrent requests; keep
+`--concurrency` at 1 or 2 and do not share the GPU with other runs when
+latency matters.
 
 Data and results stay in the ignored `packages/memory/eval/.data/`
 (`results/<label>-<time>.json` holds every trace, answer, and the memory

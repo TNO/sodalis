@@ -80,6 +80,18 @@ describe("System 2 consolidation", () => {
     expect(memory.store.evidenceItemIds(routine!.id).sort((a, b) => a - b)).toEqual(facts.slice(1, 4).map((item) => item.id));
   });
 
+  it("by default induces from a cluster of two facts", async () => {
+    const { memory, add } = await setup();
+    const walks = [
+      await add({ subject: "Bello", text: "The user walks Bello in the park on Monday morning." }),
+      await add({ subject: "Bello", text: "The user walks Bello in the park on Friday morning." }),
+    ];
+    await add({ text: "The user likes tea with honey." });
+    const inducer = new ScriptedInducer(() => []);
+    await new Consolidator({ memory, inducer, minNewItems: 3 }).run();
+    expect(inducer.calls.map((call) => call.cluster.map((item) => item.id).sort((a, b) => a - b))).toEqual([walks.map((item) => item.id)]);
+  });
+
   it("commits induced items and the watermark together", async () => {
     const { memory, add } = await setup();
     const facts = await walkingFacts(add);

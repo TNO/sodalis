@@ -54,6 +54,27 @@ const TRANSIENT = [
   "Ik heb vandaag last van mijn rug.",
   "Ik voel me vandaag wat somber.",
 ];
+const MOOD_ANSWERS: Readonly<Record<string, string>> = { moe: "moe", rug: "last van de rug", somber: "somber" };
+const INTENTIONS = [
+  {
+    say: "Ik wil voor de zomer vijf kilo afvallen.",
+    again: "Ik let nog steeds op wat ik eet, want ik wil echt afvallen voor de zomer.",
+    answer: "afvallen voor de zomer",
+    keyword: "afvallen",
+  },
+  {
+    say: "Ik ben van plan om dit jaar Spaans te leren.",
+    again: "Ik heb weer een uurtje Spaans geoefend, ik zet door.",
+    answer: "Spaans leren",
+    keyword: "Spaans",
+  },
+  {
+    say: "Ik wil de fotoalbums van vroeger eindelijk eens gaan opruimen.",
+    again: "Vandaag weer een stapel fotoalbums uitgezocht, het schiet op.",
+    answer: "de oude fotoalbums opruimen",
+    keyword: "fotoalbums",
+  },
+];
 const DISTRACTORS = [
   "Wat een weer vandaag, hè.",
   "Ik heb net de krant gelezen.",
@@ -75,7 +96,8 @@ function addDays(iso: string, days: number): string {
 /**
  * Builds a seeded event graph for a persona: family, a pet, a hobby,
  * preferences that change, a correction, a restatement, appointments and a
- * birthday, a health fact, transient states, a routine, and distractors.
+ * birthday, a health fact, transient states, routines, an intention, and
+ * distractors.
  * Every label and question answer comes from this graph.
  */
 export function generateScenario(persona: Persona, seed: number, options: ScenarioOptions = {}): Scenario {
@@ -219,8 +241,10 @@ export function generateScenario(persona: Persona, seed: number, options: Scenar
   });
   ask("health", medication.question, medication.name, [medication.name]);
 
-  for (const session of random.sample([...dates.keys()], 2)) {
-    const text = random.pick(TRANSIENT);
+  const moods = random.sample(TRANSIENT, 2);
+  const moodSessions = random.sample([...dates.keys()], 2);
+  for (const [index, session] of moodSessions.entries()) {
+    const text = moods[index]!;
     plant(session, {
       kind: "transient",
       say: text,
@@ -237,13 +261,43 @@ export function generateScenario(persona: Persona, seed: number, options: Scenar
       expected: fact("user", ["wandelen", "park"], { layer: "L2" }),
     });
   }
-  ask("routine", "Wat doe ik vaak 's ochtends?", `wandelen in het park met ${petName}`, ["wandelen"]);
+  ask("routine", "Waar ga ik vaak wandelen?", `in het park, met ${petName}`, ["park"]);
 
   for (const session of dates.keys()) {
     for (const text of random.sample(DISTRACTORS, random.int(1, 2))) {
       plant(session, { kind: "distractor", say: text, worthy: false });
     }
   }
+  const moodWord = moods[0]!.split(" ").slice(-1)[0]!.replace(/\W/g, "");
+  ask("recall", `Hoe voelde ik me op ${dutchDate(dates[moodSessions[0]!]!, true)}?`, MOOD_ANSWERS[moodWord]!, [moodWord]);
+
+  const intention = random.pick(INTENTIONS);
+  const intentionSessions = random.sample([...dates.keys()].slice(0, -1), 2).sort();
+  plant(intentionSessions[0]!, {
+    kind: "intention",
+    say: intention.say,
+    worthy: true,
+    expected: fact("user", [intention.keyword], { layer: "L7" }),
+    actions: ["ADD"],
+  });
+  plant(intentionSessions[1]!, {
+    kind: "intention",
+    say: intention.again,
+    worthy: true,
+    expected: fact("user", [intention.keyword], { layer: "L7" }),
+  });
+  ask("intention", "Wat ben ik van plan?", intention.answer, [intention.keyword]);
+
+  for (const session of random.sample([...dates.keys()], 2).sort()) {
+    plant(session, {
+      kind: "routine",
+      say: "Afgelopen zaterdag ben ik weer naar de markt geweest voor verse groente.",
+      worthy: true,
+      expected: fact("user", ["markt", "zaterdag"], { layer: "L2" }),
+    });
+  }
+  ask("routine", "Waar ga ik vaak op zaterdag heen?", "naar de markt", ["markt"]);
+
   const absentRelative = random.pick(["broer", "zus", "neef"]);
   ask("abstention", `Hoe heet mijn ${absentRelative}?`, "Onbekend: nooit verteld.", [], { abstain: true });
 

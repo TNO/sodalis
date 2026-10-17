@@ -8,11 +8,17 @@ import {
   LONGMEMEVAL_S_URL,
   parseLoCoMo,
   parseLongMemEval,
+  parseCsv,
+  parsePersonaMem,
+  PERSONAMEM_BENCHMARK_URL,
+  PERSONAMEM_FILE_URL,
+  selectPersonaMemRows,
   translateCase,
+  type PersonaMemHistory,
 } from "./benchmarks.js";
 import type { EvalCase } from "./cases.js";
 import { assertLocalOnly, chatClient, rolesFromEnv, type ChatRole } from "./config.js";
-import { runCase, type CaseResult } from "./harness.js";
+import { rejudge, runCase, type CaseResult } from "./harness.js";
 import { benchmarkIndex } from "./indexBench.js";
 import { componentMetrics, qaMetrics, roleSummary } from "./metrics.js";
 import { fetchPersonas, FIXTURE_PERSONAS, type Persona } from "./personas.js";
@@ -24,10 +30,16 @@ const USAGE = `Usage: pnpm --filter @sodalis/memory eval <command> [options]
 
 Commands:
   personas   --count 10 [--min-age 70] [--seed 1]       download personas
-  generate   [--seed 1] [--sessions 6] [--renderer template|llm] [--fixtures]
-  translate  [--limit 100] [--distractors 4]           Dutch LongMemEval-S subset
-  run        --set synthetic|longmemeval|longmemeval-nl|locomo [--limit N]
-             [--file synthetic.json] [--distractors N] [--types a,b] [--system2] [--threshold 0.3] [--label name]
+  generate   [--seed 1] [--sessions 6] [--renderer template|llm] [--fixtures] [--concurrency 1]
+                                                       (resumable)
+  translate  [--limit 100] [--per-type N] [--types a,b] [--distractors 2] [--assistant-chars 400]
+                                                       Dutch LongMemEval-S subset (resumable)
+  run        --set synthetic|longmemeval|longmemeval-nl|locomo|personamem [--limit N]
+             [--file synthetic.json] [--distractors N] [--types a,b] [--per-type N] [--personas 4]
+             [--system2 | --system2-compare] [--min-cluster 3] [--no-recall] [--no-memory] [--concurrency 1]
+             [--threshold 0.1] [--label name]
+  rejudge    --file a.json[,b.json]                    re-grade free-form answers
+                                                       with the JUDGE role (e.g. a thinking model)
   bench-index [--items 10000] [--dims 512]
 
 Model roles come from EVAL_<ROLE>_BASE_URL/_MODEL/... (see eval/README.md).
@@ -74,6 +86,14 @@ async function main(): Promise<void> {
       types: { type: "string" },
       set: { type: "string" },
       system2: { type: "boolean" },
+      "system2-compare": { type: "boolean" },
+      "no-recall": { type: "boolean" },
+      "no-memory": { type: "boolean" },
+      concurrency: { type: "string" },
+      personas: { type: "string" },
+      "min-cluster": { type: "string" },
+      "per-type": { type: "string" },
+      "assistant-chars": { type: "string" },
       threshold: { type: "string" },
       label: { type: "string" },
       file: { type: "string" },
@@ -108,14 +128,23 @@ async function main(): Promise<void> {
       }
       renderer = new LlmRenderer(chatClient(env, "RENDER"), chatClient(env, "JUDGE"));
     }
-    const cases: EvalCase[] = [];
-    for (const persona of personas) {
-      const scenario = generateScenario(persona, seed, { sessions: Number(values.sessions ?? 6) });
-      cases.push(await renderScenario(scenario, renderer));
-      console.error(`Rendered ${scenario.id}`);
-    }
     const path = join(DATA, "synthetic", `${renderer.id.replace(/[^\w.-]+/g, "_")}-${seed}.json`);
-    await writeJson(path, cases);
+    const scenarios = personas.map((persona) => generateScenario(persona, seed, { sessions: Number(values.sessions ?? 6) }));
+    const saved = await readJson<EvalCase[]>(path).catch((): EvalCase[] => []);
+    const byId = new Map(saved.map((evalCase) => [evalCase.id, evalCase]));
+    const pending = scenarios.filter((scenario) => !byId.has(`synthetic:${scenario.id}`));
+    let writes = Promise.resolve();
+    const worker = async () => {
+      for (let scenario = pending.shift(); scenario; scenario = pending.shift()) {
+        byId.set(`synthetic:${scenario.id}`, await renderScenario(scenario, renderer));
+        const snapshot = scenarios.flatMap((item) => byId.get(`synthetic:${item.id}`) ?? []);
+        writes = writes.then(() => writeJson(path, snapshot));
+        await writes;
+        console.error(`Rendered ${scenario.id}`);
+      }
+    };
+    await Promise.all(Array.from({ length: Number(values.concurrency ?? 1) }, worker));
+    const cases = scenarios.flatMap((item) => byId.get(`synthetic:${item.id}`) ?? []);
     if (renderer instanceof LlmRenderer && renderer.failures.length) {
       console.error(`${renderer.failures.length} sessions fell back to templates after failed verification.`);
     }
@@ -129,21 +158,50 @@ async function main(): Promise<void> {
     const cases = parseLongMemEval(records, {
       limit: Number(values.limit ?? 100),
       seed,
-      distractorSessions: Number(values.distractors ?? 4),
+      distractorSessions: Number(values.distractors ?? 2),
+      ...(values["per-type"] ? { perType: Number(values["per-type"]) } : {}),
+      ...(values.types ? { types: values.types.split(",") } : {}),
     });
     const client = chatClient(env, "TRANSLATE");
-    const translated: EvalCase[] = [];
+    const path = join(DATA, "longmemeval-nl.json");
+    const translated: EvalCase[] = await readJson<EvalCase[]>(path).catch(() => []);
+    const done = new Set(translated.map((evalCase) => evalCase.id));
     for (const evalCase of cases) {
-      translated.push(await translateCase(evalCase, client));
+      if (done.has(`${evalCase.id}:nl`)) continue;
+      try {
+        translated.push(await translateCase(evalCase, client, { assistantChars: Number(values["assistant-chars"] ?? 400) }));
+        await writeJson(path, translated);
+      } catch (error) {
+        console.error(`Skipped ${evalCase.id}: ${error instanceof Error ? error.message : String(error)}`);
+      }
       console.error(`Translated ${translated.length}/${cases.length}`);
     }
-    await writeJson(join(DATA, "longmemeval-nl.json"), translated);
     console.log(`Saved ${translated.length} cases. Spot-check a sample by hand before use.`);
     return;
   }
 
+  if (command === "rejudge") {
+    assertLocalOnly(env, ["JUDGE"], allowCloud);
+    if (!values.file) throw new Error(USAGE);
+    const judge = chatClient(env, "JUDGE");
+    for (const file of values.file.split(",")) {
+      const saved = await readJson<{ report: Record<string, unknown>; results: CaseResult[] }>(file);
+      const { results, changed } = await rejudge(saved.results, judge);
+      const report = {
+        ...saved.report,
+        qa: qaMetrics(results),
+        ...(saved.report.qaSystem2 ? { qaSystem2: qaMetrics(results, "system2") } : {}),
+        rejudged: { judge: env.EVAL_JUDGE_MODEL, changed },
+      };
+      await writeJson(file, { report, results });
+      const qa = report.qa.overall;
+      console.log(`${file}: ${changed} grades changed; QA ${qa.correct}/${qa.total}`);
+    }
+    return;
+  }
+
   if (command === "run") {
-    const roles: ChatRole[] = ["GATE", "EXTRACT", "RECONCILE", "ANSWER", "JUDGE", ...(values.system2 ? (["INDUCE"] as const) : [])];
+    const roles: ChatRole[] = ["GATE", "EXTRACT", "RECONCILE", "ANSWER", "JUDGE", ...(values.system2 || values["system2-compare"] ? (["INDUCE"] as const) : [])];
     assertLocalOnly(env, roles, allowCloud);
     const limit = values.limit ? Number(values.limit) : undefined;
     let cases: EvalCase[];
@@ -158,6 +216,7 @@ async function main(): Promise<void> {
           seed,
           ...(limit ? { limit } : {}),
           ...(values.types ? { types: values.types.split(",") } : {}),
+          ...(values["per-type"] ? { perType: Number(values["per-type"]) } : {}),
           ...(values.distractors ? { distractorSessions: Number(values.distractors) } : {}),
         });
         break;
@@ -167,32 +226,71 @@ async function main(): Promise<void> {
       case "locomo":
         cases = parseLoCoMo(await readJson(await cached(LOCOMO_URL, "locomo10.json")), limit ? { limit } : {});
         break;
+      case "personamem": {
+        const rows = selectPersonaMemRows(
+          parseCsv(await readFile(await cached(PERSONAMEM_BENCHMARK_URL, "personamem/benchmark.csv"), "utf8")),
+          Number(values.personas ?? 4),
+        );
+        const histories = new Map<string, PersonaMemHistory>();
+        for (const link of new Set(rows.map((row) => row.chat_history_32k_link!))) {
+          histories.set(link, await readJson(await cached(`${PERSONAMEM_FILE_URL}${link}`, `personamem/${link.split("/").at(-1)}`)));
+        }
+        cases = parsePersonaMem(rows, (link) => histories.get(link), { seed }).slice(0, limit);
+        break;
+      }
       default:
         throw new Error(USAGE);
     }
     const { roles: evalRoles, stats } = rolesFromEnv(env);
-    const results: CaseResult[] = [];
-    for (const evalCase of cases) {
-      const result = await runCase(evalCase, evalRoles, {
-        ...(values.system2 ? { system2: true } : {}),
-        ...(values.threshold ? { gateThreshold: Number(values.threshold) } : {}),
-      });
-      results.push(result);
-      const correct = result.questions.filter((question) => question.correct).length;
-      console.error(`${evalCase.id}: ${correct}/${result.questions.length} correct, ${result.items} items`);
-    }
+    const system2 = values["system2-compare"] ? ("compare" as const) : values.system2 === true;
+    const slots: (CaseResult | undefined)[] = new Array(cases.length);
+    const failed: string[] = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < cases.length) {
+        const index = next++;
+        const evalCase = cases[index]!;
+        let result: CaseResult;
+        try {
+          result = await runCase(evalCase, evalRoles, {
+            ...(system2 ? { system2 } : {}),
+            ...(values["no-recall"] ? { recall: false } : {}),
+            ...(values["no-memory"] ? { ingest: false } : {}),
+            ...(values["min-cluster"] ? { minClusterSize: Number(values["min-cluster"]) } : {}),
+            ...(values.threshold ? { gateThreshold: Number(values.threshold) } : {}),
+          });
+        } catch (error) {
+          failed.push(evalCase.id);
+          console.error(`${evalCase.id}: failed (${error instanceof Error ? error.message : String(error)})`);
+          continue;
+        }
+        slots[index] = result;
+        const score = (questions: CaseResult["questions"]) =>
+          `${questions.filter((question) => question.correct).length}/${questions.length}`;
+        console.error(
+          `${evalCase.id}: ${score(result.questions)} correct${result.questionsSystem2 ? `, ${score(result.questionsSystem2)} after System 2` : ""}, ${result.items} items`,
+        );
+      }
+    };
+    await Promise.all(Array.from({ length: Math.max(1, Number(values.concurrency ?? 1)) }, worker));
+    const results = slots.filter((result): result is CaseResult => result !== undefined);
     const byId = new Map(cases.map((evalCase) => [evalCase.id, evalCase.events]));
     const report = {
       label: values.label ?? values.set,
       set: values.set,
-      cases: cases.length,
-      system2: values.system2 === true,
+      cases: results.length,
+      failed,
+      system2,
+      recall: !values["no-recall"] && !values["no-memory"],
+      memory: !values["no-memory"],
       models: Object.fromEntries(
         ["EMBED", ...roles].map((role) => [role.toLowerCase(), env[`EVAL_${role}_MODEL`] ?? "(fallback)"]),
       ),
       components: cases.some((evalCase) => evalCase.events) ? componentMetrics(results, (id) => byId.get(id)) : undefined,
       qa: qaMetrics(results),
+      qaSystem2: system2 === "compare" ? qaMetrics(results, "system2") : undefined,
       roles: roleSummary(stats()),
+      induced: results.reduce((sum, result) => sum + (result.consolidation?.added ?? 0) + (result.consolidation?.replaced ?? 0), 0),
       ingestMs: results.reduce((sum, result) => sum + result.ingestMs, 0),
       embedMs: results.reduce((sum, result) => sum + result.embedMs, 0),
     };
@@ -200,6 +298,9 @@ async function main(): Promise<void> {
     await writeJson(join(DATA, "results", `${report.label}-${stamp}.json`), { report, results });
     console.log(JSON.stringify(report, null, 2));
     console.log(`QA accuracy: ${percent(report.qa.overall.rate)} (${report.qa.overall.correct}/${report.qa.overall.total})`);
+    if (report.qaSystem2) {
+      console.log(`After System 2: ${percent(report.qaSystem2.overall.rate)} (${report.qaSystem2.overall.correct}/${report.qaSystem2.overall.total})`);
+    }
     return;
   }
 

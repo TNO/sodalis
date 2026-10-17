@@ -60,8 +60,10 @@ retention policies, without substantial re-plumbing.
    | L4 | Identity: durable attributes, preferences, and people | v1 |
    | L5 | Knowledge (entities and relations) | Phase 3 |
    | L6 | Schemas and routines | Phase 3 |
-   | L7 | Intentions | Phase 3 |
+   | L7 | Intentions | Phase 3 (stated goals: v1) |
 
+   Extraction also writes L7 when the user explicitly states an ongoing goal
+   or plan; System 2 may still induce L7 items from repeated facts.
    Important dates are L2 facts with an `event_at` value, not a separate layer.
 
    Every item also carries:
@@ -96,7 +98,8 @@ retention policies, without substantial re-plumbing.
      over active L2, L3, and L4 items.
    - Apply quotas and a relevance threshold.
    - Follow supersedes chains up to 3 steps back.
-   - Pin L0, L4, and L2 items whose `event_at` falls in the next 14 days.
+   - Pin L0, L4, L2 items whose `event_at` falls in the next 14 days, and up to
+     3 active L7 intentions.
    - Inject a dated "Memory" block of at most about 800 tokens that marks
      stated versus inferred items.
    - Raw L1 transcripts are searched only through a later `recall_memory` tool.

@@ -95,3 +95,54 @@ export function formatRecallResult(result: RecallResult): string {
     .map((entry) => `- [${entry.date}, ${entry.source}, ${entry.provenance}] ${entry.text}`)
     .join("\n");
 }
+
+/**
+ * The `recall_memory` protocol shared by the AI service and the evaluation:
+ * the model answers with only this JSON object to search its memory first.
+ */
+export const RECALL_MEMORY_INSTRUCTION =
+  'If answering needs details from an earlier conversation that the Memory section does not contain, respond with only {"recall_memory":{"query":string,"from"?:"YYYY-MM-DD","to"?:"YYYY-MM-DD"}} to search your memory first; use the query in the language of the conversation. Then the JSON is your entire reply, with no text before or after it; never announce a search or ask permission.';
+
+export const RECALL_REPLY_PREFIX = '{"recall_memory"';
+
+export interface RecallCall {
+  readonly query: string;
+  readonly from?: string;
+  readonly to?: string;
+}
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** True when a (possibly partial) reply is, or may still become, a recall request. */
+export function mayBeRecallReply(text: string): boolean {
+  const compact = text.replace(/\s+/g, "");
+  return RECALL_REPLY_PREFIX.startsWith(compact) || compact.startsWith(RECALL_REPLY_PREFIX);
+}
+
+export function isRecallReply(text: string): boolean {
+  return text.replace(/\s+/g, "").startsWith(RECALL_REPLY_PREFIX);
+}
+
+/** Reads a complete recall request; undefined when it is malformed. */
+export function parseRecallCall(text: string): RecallCall | undefined {
+  try {
+    const payload: unknown = JSON.parse(text);
+    if (typeof payload !== "object" || payload === null) return undefined;
+    const call: unknown = (payload as Record<string, unknown>).recall_memory;
+    if (typeof call !== "object" || call === null) return undefined;
+    const { query, from, to } = call as Record<string, unknown>;
+    if (typeof query !== "string" || query.length > 500) return undefined;
+    return {
+      query,
+      ...(typeof from === "string" && DATE_PATTERN.test(from) ? { from } : {}),
+      ...(typeof to === "string" && DATE_PATTERN.test(to) ? { to } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** The prompt section with the excerpts of an earlier recall in this turn. */
+export function recalledContextPrompt(query: string, excerpts: string): string {
+  return `Recalled from earlier conversations for "${query}" (dated excerpts; answer from these and do not request another recall):\n${excerpts}`;
+}

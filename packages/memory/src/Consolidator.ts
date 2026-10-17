@@ -129,7 +129,7 @@ export class Consolidator {
     const freshIds = new Set(fresh.map((item) => item.id));
     const clusters = clusterItems(facts, embeddings, this.options.similarity ?? 0.6).filter(
       (cluster) =>
-        cluster.length >= (this.options.minClusterSize ?? 3) && cluster.some((item) => freshIds.has(item.id)),
+        cluster.length >= (this.options.minClusterSize ?? 2) && cluster.some((item) => freshIds.has(item.id)),
     );
     const induced: { item: InducedItem; embedding?: Float32Array }[] = [];
     for (const cluster of clusters) {
@@ -203,7 +203,9 @@ Rules:
 - Never diagnose or infer health conditions that were not stated.
 - If an existing memory is outdated, give its id in "replaces".
 - Do not repeat an existing memory that is still correct.
-- Keep the language of the facts. Return at most 3 memories, or none.
+- Write every text in the language of the facts (Dutch facts give Dutch
+  memories), even though these instructions are in English.
+- Return at most 3 memories, or none.
 - Return exactly one JSON object:
   {"items": [{"layer": "L5"|"L6"|"L7", "subject": string, "text": string, "evidence": [number], "replaces": number|null}]}`;
 

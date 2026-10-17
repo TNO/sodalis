@@ -7,6 +7,8 @@ import {
   Memory,
   MemoryService,
   MockEmbedder,
+  detectLanguage,
+  extractionUserPrompt,
   parseExtractedItems,
   PassThroughGate,
   redactCredentials,
@@ -58,6 +60,15 @@ describe("memory write path", () => {
     expect(memoryService.recordUserTurn(userTurn("Ik woon in Delft."))).toBeUndefined();
     expect(memory.store.countTurns()).toBe(0);
     expect((await memoryService.retrieve("Waar woon ik?")).block).toBe("");
+  });
+
+  it("by default passes a turn the gate is only mildly confident about", async () => {
+    const gate = new ScriptedGate((state) => ({ worthy: state.includes("Delft") ? 0.15 : 0.05 }));
+    const { service: memoryService, traces } = await service({ gate });
+    memoryService.recordUserTurn(userTurn("Hoe laat is het?"));
+    memoryService.recordUserTurn(userTurn("Mijn zus woont in Delft."));
+    await memoryService.drain();
+    expect(traces.map((trace) => trace.gate?.worthy)).toEqual([false, true]);
   });
 
   it("gates turns before extraction and passes the previous assistant turn as context", async () => {
@@ -120,6 +131,22 @@ describe("memory write path", () => {
       "Anna woont in Leuven en is verpleegkundige.",
     ]);
     expect(memory.store.sourceTurns(chain[0]!.id)).toHaveLength(2);
+  });
+
+  it("reconciles a restated goal against the stated L7 intention", async () => {
+    const extractor = new ScriptedExtractor((request) => [fact(request.userTurn, { layer: "L7" })]);
+    const reconciler = new ScriptedReconciler((candidate) =>
+      candidate.neighbours[0] ? { action: "UPDATE", targetId: candidate.neighbours[0].id, text: "Wil voor de zomer vijf kilo afvallen en let op wat hij eet." } : { action: "ADD" },
+    );
+    const { service: memoryService, memory, traces } = await service({ extractor, reconciler });
+    memoryService.recordUserTurn(userTurn("Ik wil voor de zomer vijf kilo afvallen."));
+    await memoryService.drain();
+    memoryService.recordUserTurn(userTurn("Ik let op wat ik eet, want ik wil afvallen."));
+    await memoryService.drain();
+    expect(traces.map((trace) => trace.decisions.map((decision) => decision.action))).toEqual([["ADD"], ["UPDATE"]]);
+    expect(memory.store.listItems({ layers: ["L7"], statuses: ["active"] }).map((item) => item.text)).toEqual([
+      "Wil voor de zomer vijf kilo afvallen en let op wat hij eet.",
+    ]);
   });
 
   it("only reconciles against neighbours with the same subject", async () => {
@@ -332,6 +359,18 @@ describe("memory write path", () => {
 });
 
 describe("write-path components", () => {
+  it("tells the extractor to keep the language of the user's message", () => {
+    expect(detectLanguage("Hi, my name is Oliver and I like drawing animals.")).toBe("en");
+    expect(detectLanguage("Ik voel me vandaag wat somber, en mijn knie doet pijn.")).toBe("nl");
+    expect(detectLanguage("Oké")).toBeUndefined();
+    expect(extractionUserPrompt({ userTurn: "I have a dog called Max.", turnTime: "2026-02-03T10:00:00Z" })).toContain(
+      "Write every text in English",
+    );
+    expect(extractionUserPrompt({ userTurn: "Ik heb een hond die Max heet.", turnTime: "2026-02-03T10:00:00Z" })).toContain(
+      "Write every text in Dutch",
+    );
+  });
+
   it("redacts labelled secrets, API keys, and card numbers", () => {
     expect(redactCredentials("pincode: 4821").text).toBe("pincode: [credential removed]");
     expect(redactCredentials("key sk-abcdefghijklmnopqrstuvwx1234").found).toBe(true);
@@ -343,6 +382,7 @@ describe("write-path components", () => {
     const items = parseExtractedItems({
       items: [
         { layer: "L2", subject: "user", text: "Tandarts", event_at: "2026-03-10", sensitivity: "general", provenance: "stated", transient: false },
+        { layer: "L7", subject: "user", text: "Wil Spaans leren", sensitivity: "general", provenance: "stated", transient: false },
         { layer: "L9", subject: "user", text: "invalid layer" },
         { layer: "L4", subject: "", text: "missing subject" },
         { layer: "L4", subject: "Anna", text: "Dochter", event_at: "volgende week", sensitivity: "health", provenance: "inferred" },
@@ -350,6 +390,7 @@ describe("write-path components", () => {
     });
     expect(items).toEqual([
       { layer: "L2", subject: "user", text: "Tandarts", eventAt: "2026-03-10", sensitivity: "general", provenance: "stated", transient: false },
+      { layer: "L7", subject: "user", text: "Wil Spaans leren", sensitivity: "general", provenance: "stated", transient: false },
       { layer: "L4", subject: "Anna", text: "Dochter", sensitivity: "health", provenance: "inferred", transient: false },
     ]);
   });
