@@ -6,6 +6,7 @@ import {
 } from "../src/ChatClient.js";
 import { LlmInducer } from "../src/Consolidator.js";
 import { LlmDecisionGate, PassThroughGate, type DecisionGate } from "../src/DecisionGate.js";
+import { SystemOneHttpGate } from "../src/SystemOneHttpGate.js";
 import { MockEmbedder, OpenAiCompatibleEmbedder, type Embedder } from "../src/Embedder.js";
 import { LlmExtractor } from "../src/Extractor.js";
 import { LlmReconciler, type Reconciler } from "../src/Reconciler.js";
@@ -148,10 +149,18 @@ export function rolesFromEnv(env: Env, options: { memoryEnabled?: boolean } = {}
       stats: () => Object.fromEntries(Object.entries(clients).map(([role, value]) => [role.toLowerCase(), { ...value.stats }])),
     };
   }
-  const gate: DecisionGate =
-    (env.EVAL_GATE_PROVIDER ?? "openai-compatible") === "pass-through" || !chatConfigured(env, "GATE")
-      ? new PassThroughGate()
-      : new LlmDecisionGate(client("GATE"));
+  const gateProvider = env.EVAL_GATE_PROVIDER ?? "openai-compatible";
+  let systemOne: SystemOneHttpGate | undefined;
+  let gate: DecisionGate;
+  if (gateProvider === "pass-through" || !chatConfigured(env, "GATE")) gate = new PassThroughGate();
+  else if (gateProvider === "systemone") {
+    gate = systemOne = new SystemOneHttpGate({
+      baseUrl: roleKey(env, "GATE", "BASE_URL")!,
+      model: roleKey(env, "GATE", "MODEL")!,
+      ...(env.EVAL_GATE_API_KEY ? { apiKey: env.EVAL_GATE_API_KEY } : {}),
+      timeoutMs: Number(env.EVAL_GATE_TIMEOUT_MS ?? 30_000),
+    });
+  } else gate = new LlmDecisionGate(client("GATE"));
   const extract = client("EXTRACT");
   return {
     roles: {
@@ -163,6 +172,9 @@ export function rolesFromEnv(env: Env, options: { memoryEnabled?: boolean } = {}
       ...(chatConfigured(env, "JUDGE") ? { judge: client("JUDGE") } : {}),
       inducer: new LlmInducer(client("INDUCE")),
     },
-    stats: () => Object.fromEntries(Object.entries(clients).map(([role, value]) => [role.toLowerCase(), { ...value.stats }])),
+    stats: () => ({
+      ...Object.fromEntries(Object.entries(clients).map(([role, value]) => [role.toLowerCase(), { ...value.stats }])),
+      ...(systemOne ? { gate: { ...systemOne.stats } } : {}),
+    }),
   };
 }

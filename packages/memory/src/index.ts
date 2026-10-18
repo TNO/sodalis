@@ -15,3 +15,4 @@ export * from "./Retriever.js";
 export * from "./Recall.js";
 export * from "./MemoryService.js";
 export * from "./Consolidator.js";
+export * from "./SystemOneHttpGate.js";

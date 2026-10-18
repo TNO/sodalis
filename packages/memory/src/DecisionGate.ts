@@ -7,7 +7,14 @@ import type { ChatClient } from "./ChatClient.js";
  */
 export type SystemOneQuestion =
   | { readonly key: string; readonly type: "noul"; readonly question: string }
-  | { readonly key: string; readonly type: "choice"; readonly question: string; readonly choices: readonly string[] };
+  | {
+      readonly key: string;
+      readonly type: "choice";
+      readonly question: string;
+      readonly choices: readonly string[];
+      /** Optional per-choice descriptions, sent as `criteria` to System One servers. */
+      readonly descriptions?: Readonly<Record<string, string>>;
+    };
 
 export interface SystemOneRequest {
   readonly state: string;
@@ -49,6 +56,15 @@ export const MEMORY_GATE_QUESTIONS: readonly SystemOneQuestion[] = [
     type: "choice",
     question: "What kind of information worth remembering does the user's latest message mainly contain?",
     choices: MEMORY_KINDS,
+    descriptions: {
+      fact: "a personal fact about the user's life, home, work or belongings",
+      preference: "something the user likes, dislikes, wants or usually does",
+      person: "a person in the user's life, such as family, friends or carers",
+      date_event: "a date, appointment, plan or event",
+      health: "health, medication, symptoms or care",
+      correction: "a correction of something said or known before",
+      none: "nothing personal worth remembering",
+    },
   },
   {
     key: "is_correction",

@@ -811,6 +811,11 @@ keywords. Embeddings use `EVAL_EMBED_PROVIDER` (`mock` or
 `openai-compatible`), `EVAL_EMBED_BASE_URL`, `EVAL_EMBED_MODEL`, and
 `EVAL_EMBED_DIMS` (512). The CLI refuses non-local URLs unless
 `--allow-cloud` is passed; ask the data owner's consent for each such run.
+`EVAL_GATE_PROVIDER=systemone` sends the gate questions in one request to a
+System One server (`POST <EVAL_GATE_BASE_URL>/v1/systemone`), such as vLLM
+Semantic Router serving a decision model:
+`vllm-sr serve -e vllm-sr/d3-edge --platform cpu --container-runtime podman --dtype float32`,
+then `EVAL_GATE_BASE_URL=http://localhost:8899 EVAL_GATE_MODEL=vllm-sr/d3-edge`.
 
 ```sh
 cd packages/memory

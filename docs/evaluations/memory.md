@@ -31,6 +31,11 @@ On a matched LongMemEval-S sample it scores **32/50 (64%) in English** and
   0.97, for 9% more extraction calls. QA rose to 68/72 (69 after System 2), the best
   result. It still filters about half of all turns in about 0.4 s. A pass-all
   gate (llama3.2:3b in effect) scored 67/72 at 2.2 times the extraction calls.
+- **Do not replace the gate with an off-the-shelf decision model yet.**
+  `vllm-sr/Vela-2.0-0.3B` and `vllm-sr/d3-edge` were fast on CPU (0.05–0.2 s),
+  but separated worthy turns poorly (AUC at most 0.55 and 0.86, against
+  0.998). `SystemOneHttpGate` stays available for a fine-tuned or larger
+  decider, for example one served by Lattice's planned `/v1/systemone`.
 - **Keep qwen3-embedding 0.6B at 512 dimensions.** granite-embedding-311m
   scored the same within noise (65 against 63–66) and offers no reason to
   switch.
@@ -203,6 +208,39 @@ All variants use qwen3:14b with prompt p1 unless stated.
 The baseline and the `minClusterSize` 3 run use the same configuration before
 System 2 (63 against 65). That gap is the run-to-run noise: local inference
 is not deterministic under concurrent requests, even at temperature 0.
+
+### Synthetic Dutch set: dedicated decision models as the gate
+
+Measured 2026-10-18. The decision models of vLLM Semantic Router answer
+System One questions with probabilities and no text generation. They ran in
+`vllm-sr serve` (0.5.0.dev20261017, engine mode) on CPU in the Podman VM
+(8 CPUs, 8 GiB), through `SystemOneHttpGate` (`EVAL_GATE_PROVIDER=systemone`).
+Labels are the 241 user turns of the synthetic set (120 worthy). AUC is the
+area under the ROC curve of `memory_worthy`. "Best P / R" is the threshold
+with the highest F1, in steps of 0.05. The probe variants are:
+
+- *ours*: the production state and question;
+- *short*: the user message only, with "Does this message share personal
+  information about the speaker or their life?";
+- *request*: `{request, context}` state fields.
+
+The probes call the server directly and are not committed.
+
+| Gate | Size | AUC (ours / short / request) | Best P / R | Time per question |
+| --- | --- | --- | --- | --- |
+| gemma4:e4b-mlx (current, logprobs) | 4B effective | 0.998 / – / – | 0.98 / 0.97 at 0.1 | 0.33 s per decision, 3 questions in parallel, Metal |
+| `vllm-sr/Vela-2.0-0.3B` | 0.3B encoder | 0.31 / 0.55 / 0.35 | 0.53 / 0.96 | 0.05–0.07 s, CPU |
+| `vllm-sr/d3-edge` (float32) | 0.8B | 0.71 / 0.86 / 0.76 | 0.69 / 0.89 (short) | 0.16–0.22 s, CPU |
+| `vllm-sr/d3-nano` | 2.2B | not run | | Killed for lack of memory in the 8 GiB VM, in float32 and bfloat16 |
+
+One full run used Vela at threshold 0.1 (`syn-vela03-t01`). It passed every
+turn: gate P/R 0.50 / 1.00 and 241 extraction calls, against 118. QA was
+67/72, and 68 after System 2, the same as the current gate. The extractor
+then acts as the filter, at twice the extraction cost. Vela's `is_correction`
+fired on 89 of 121 unworthy turns ("Goedemorgen." scored 0.82 worthy and a
+correction), so even a high threshold cannot be used with it. d3-edge did not
+load in bfloat16 on CPU: vllm-sr's start-up check reported "golden answers
+differ from the reference"; float32 passed.
 
 ### Public benchmarks (qwen3:14b)
 
@@ -393,3 +431,7 @@ are unchanged from the first run:
 5. Run Azure extraction as a ceiling, with consent for that run.
 6. Hy-Memory as a Python baseline, if a direct comparison is still wanted.
 7. Repeat `bench-index` only if the item count grows by orders of magnitude.
+8. A dedicated decision gate: try d3-nano or d3-mini with more VM memory (or
+   natively), and a decider fine-tuned on labelled Dutch turns. Lattice can
+   serve the Qwen3.5-based d3 models once its `/v1/systemone` (ADR-098)
+   lands; Vela's ModernBERT encoder would need a new Lattice architecture.

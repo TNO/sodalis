@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MockEmbedder, PassThroughGate, type ChatClient, type ChatCompletionRequest } from "../src/index.js";
+import { MockEmbedder, PassThroughGate, SystemOneHttpGate, type ChatClient, type ChatCompletionRequest } from "../src/index.js";
 import { fact, ScriptedExtractor, ScriptedInducer, ScriptedReconciler } from "../src/testing.js";
 import { parseCsv, parseLoCoMo, parseLoCoMoDate, parseLongMemEval, parseLongMemEvalDate, parsePersonaMem, selectPersonaMemRows, translateCase } from "./benchmarks.js";
 import { containsKeywords, type EvalCase } from "./cases.js";
@@ -512,6 +512,20 @@ describe("evaluation config", () => {
     expect(roles.answer.id).toBe("answer:m");
     expect(roles.gate).toBeInstanceOf(PassThroughGate);
     expect(roles.judge).toBeUndefined();
+  });
+
+  it("uses a System One HTTP gate when selected and reports its stats", () => {
+    const { roles, stats } = rolesFromEnv({
+      EVAL_GATE_PROVIDER: "systemone",
+      EVAL_GATE_BASE_URL: "http://localhost:8899",
+      EVAL_GATE_MODEL: "vllm-sr/Vela-2.0-0.3B",
+      EVAL_EXTRACT_BASE_URL: "http://localhost:1/v1",
+      EVAL_EXTRACT_MODEL: "m",
+      EVAL_EMBED_PROVIDER: "mock",
+    });
+    expect(roles.gate).toBeInstanceOf(SystemOneHttpGate);
+    expect(roles.gate.id).toBe("systemone:vllm-sr/Vela-2.0-0.3B");
+    expect(stats().gate).toMatchObject({ calls: 0, failures: 0 });
   });
 
   it("reads persona rows", () => {

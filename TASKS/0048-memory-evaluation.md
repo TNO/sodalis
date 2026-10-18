@@ -79,3 +79,9 @@ written by hand.
   is configured and a cloud run requires explicit consent. Results and
   reproducible local commands are in
   [Long-term memory](../docs/evaluations/memory.md).
+- 2026-10-18 Copilot: Added `SystemOneHttpGate` (`EVAL_GATE_PROVIDER=systemone`)
+  and tried vLLM Semantic Router decision models as the gate on CPU.
+  Vela-2.0-0.3B and d3-edge were fast but separated worthy turns poorly (AUC
+  at most 0.55 and 0.86, against 0.998 for gemma4 e4b); d3-nano did not fit
+  the 8 GiB VM. The gemma4 gate stays. See
+  [Long-term memory](../docs/evaluations/memory.md).
