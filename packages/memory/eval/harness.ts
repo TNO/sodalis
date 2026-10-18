@@ -35,7 +35,7 @@ export interface RunOptions {
    * every question before and after consolidation from the same ingest.
    */
   readonly system2?: boolean | "compare";
-  /** System 2 cluster size (default 3, as in production). */
+  /** System 2 cluster size (default 2, as in production). */
   readonly minClusterSize?: number;
   /** Offer the `recall_memory` tool to the answer model (default true, task 0049). */
   readonly recall?: boolean;

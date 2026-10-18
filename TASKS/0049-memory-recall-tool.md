@@ -1,6 +1,6 @@
 # 0049 Adding the recall_memory tool
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: assistant
 Depends on: 0047
@@ -31,3 +31,11 @@ summaries and L1 transcripts ([ADR 0005](../docs/adr/0005-long-term-memory.md)).
   flagged as health and turns not yet processed by the write path (the user
   turn and its assistant reply share a turn ID); retrieval also drops health
   entries from superseded history.
+- 2026-10-17 Copilot: The LLM-rendered Dutch evaluation includes six explicit
+  recall questions. The model answered 5/6 with the memory block alone and
+  5/6 without the `recall_memory` tool; LongMemEval-S assistant-content
+  questions score 1/10 because the assistant's own statements are deliberately
+  not extracted. The recall tool is implemented and covered by public-interface
+  tests. Its instruction was tightened to require the request JSON as the
+  entire reply; prose before the JSON remains an open robustness issue in the
+  [evaluation](../docs/evaluations/memory.md). Closed: acceptance criteria met.

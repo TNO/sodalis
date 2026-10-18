@@ -71,3 +71,10 @@ written by hand.
   fixes. Remaining: LLM-rendered sets with sampled personas, LongMemEval-S,
   LoCoMo, the Dutch subset, and the model comparison. Analysis: [Long-term
   memory evaluation](../docs/evaluations/memory.md).
+- 2026-10-18 Copilot: Completed the six-persona, LLM-rendered Dutch set,
+  extraction/gate/embedder comparisons, no-memory baselines, LoCoMo, and
+  PersonaMem-v2. The matched 50-question English/Dutch LongMemEval run is
+  underway; the resumable translation currently contains 18/50 cases. Azure
+  remains unmeasured because a cloud run requires explicit consent. Results
+  and reproducible local commands are in
+  [Long-term memory](../docs/evaluations/memory.md).

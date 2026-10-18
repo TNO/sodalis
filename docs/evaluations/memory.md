@@ -21,7 +21,8 @@ On a matched LongMemEval-S sample it scores TBD in English and TBD in
 machine-translated Dutch.
 
 - **Keep qwen3:14b as the local extraction model.** It was the most accurate
-  and the fastest of the five candidates. The newer Qwen3.8-27B was the
+  candidate; Gemma-4-26B-A4B had the shortest per-call latency but lower
+  extraction recall and QA. The newer Qwen3.8-27B was the
   weakest. It is conservative: it skips episodes, repeated activities, and
   moods, and so loses routines and intentions (54/72 with p3).
 - **Keep the gemma4 e4b gate and lower its threshold to 0.1 (now the
@@ -203,8 +204,8 @@ is not deterministic under concurrent requests, even at temperature 0.
 | Benchmark | Prompt | QA | Without memory |
 | --- | --- | --- | --- |
 | LongMemEval-S, 6 types (60) | p2 | 37/60 (62%) | TBD |
-| LongMemEval-S matched, English (50) | p3 | TBD | |
-| LongMemEval-S matched, Dutch (50) | p3 | TBD | |
+| LongMemEval-S matched, English (50) | p3 | pending | |
+| LongMemEval-S matched, Dutch (50) | p3 | pending | |
 | LoCoMo, 2 conversations (233) | p2 | 65/233 (28%) | |
 | PersonaMem-v2 (159, chance 25%) | p1 | 44/159 (28%); 42 after System 2 | |
 | PersonaMem-v2 (159) | p2 | 44/159 (28%); 42 after System 2 | 43/159 (27%) |

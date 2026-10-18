@@ -109,7 +109,7 @@ tasks 0045–0048 deliver version 1 and tasks 0049–0053 are follow-ups.
 - [x] 0046 Building the memory write path *(needs 0045)*
 - [x] 0047 Injecting memory into conversations and adding user controls *(needs 0045, 0046)*
 - [ ] 0048 Evaluating long-term memory *(needs 0045, 0046, 0047)*
-- [ ] 0049 Adding the recall_memory tool *(needs 0047)*
+- [x] 0049 Adding the recall_memory tool *(needs 0047)*
 - [x] 0050 Adding System 2 memory consolidation (L5–L7) *(needs 0048)*
 - [ ] 0051 Adding a Zvec memory index adapter *(needs 0048)*
 - [ ] 0052 Ingesting observations into memory *(needs 0047, 0038)*

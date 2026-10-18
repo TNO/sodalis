@@ -8,7 +8,8 @@ import { LlmInducer } from "../src/Consolidator.js";
 import { LlmDecisionGate, PassThroughGate, type DecisionGate } from "../src/DecisionGate.js";
 import { MockEmbedder, OpenAiCompatibleEmbedder, type Embedder } from "../src/Embedder.js";
 import { LlmExtractor } from "../src/Extractor.js";
-import { LlmReconciler } from "../src/Reconciler.js";
+import { LlmReconciler, type Reconciler } from "../src/Reconciler.js";
+import type { Extractor } from "../src/Extractor.js";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { EvalRoles } from "./harness.js";
@@ -59,8 +60,17 @@ export function configuredUrls(env: Env, roles: readonly ChatRole[]): string[] {
 }
 
 /** Enforces the cloud-consent rule (AGENTS.md): remote URLs need `--allow-cloud`. */
-export function assertLocalOnly(env: Env, roles: readonly ChatRole[], allowCloud: boolean): void {
-  const remote = configuredUrls(env, roles).filter((url) => !isLocalUrl(url));
+export function assertLocalOnly(
+  env: Env,
+  roles: readonly ChatRole[],
+  allowCloud: boolean,
+  options: { includeEmbedder?: boolean } = {},
+): void {
+  const urls = roles.flatMap((role) => (chatConfigured(env, role) ? [roleKey(env, role, "BASE_URL")!] : []));
+  if (options.includeEmbedder !== false && env.EVAL_EMBED_PROVIDER !== "mock" && env.EVAL_EMBED_BASE_URL) {
+    urls.push(env.EVAL_EMBED_BASE_URL);
+  }
+  const remote = urls.filter((url) => !isLocalUrl(url));
   if (remote.length && !allowCloud) {
     throw new Error(
       `This run would send data to ${[...new Set(remote)].join(", ")}. Get the user's consent for this run and pass --allow-cloud.`,
@@ -117,9 +127,25 @@ export interface InstrumentedRoles {
 }
 
 /** Builds the model roles from `EVAL_*` settings, instrumented per role. */
-export function rolesFromEnv(env: Env): InstrumentedRoles {
+export function rolesFromEnv(env: Env, options: { memoryEnabled?: boolean } = {}): InstrumentedRoles {
   const clients: Partial<Record<ChatRole, InstrumentedChatClient>> = {};
   const client = (role: ChatRole) => (clients[role] ??= new InstrumentedChatClient(chatClient(env, role)));
+  if (options.memoryEnabled === false) {
+    const unused = new Error("Memory roles are unavailable in a no-memory evaluation.");
+    const extractor: Extractor = { id: "disabled", async extract() { throw unused; } };
+    const reconciler: Reconciler = { id: "disabled", async reconcile() { throw unused; } };
+    return {
+      roles: {
+        embedder: new MockEmbedder(),
+        gate: new PassThroughGate(),
+        extractor,
+        reconciler,
+        answer: client("ANSWER"),
+        ...(chatConfigured(env, "JUDGE") ? { judge: client("JUDGE") } : {}),
+      },
+      stats: () => Object.fromEntries(Object.entries(clients).map(([role, value]) => [role.toLowerCase(), { ...value.stats }])),
+    };
+  }
   const gate: DecisionGate =
     (env.EVAL_GATE_PROVIDER ?? "openai-compatible") === "pass-through" || !chatConfigured(env, "GATE")
       ? new PassThroughGate()

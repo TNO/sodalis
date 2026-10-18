@@ -472,6 +472,21 @@ describe("evaluation config", () => {
     expect(() => assertLocalOnly(env, ["EXTRACT"], true)).not.toThrow();
   });
 
+  it("builds only answer and judge roles for no-memory runs", () => {
+    const { roles } = rolesFromEnv(
+      { EVAL_ANSWER_BASE_URL: "http://localhost:1/v1", EVAL_ANSWER_MODEL: "answer", EVAL_EMBED_BASE_URL: "https://unused.example", EVAL_EMBED_MODEL: "unused" },
+      { memoryEnabled: false },
+    );
+    expect(roles.answer.id).toBe("answer:answer");
+    expect(roles.embedder).toBeInstanceOf(MockEmbedder);
+    expect(roles.judge).toBeUndefined();
+    expect(() => assertLocalOnly(
+      { EVAL_ANSWER_BASE_URL: "http://localhost:1/v1", EVAL_ANSWER_MODEL: "answer", EVAL_EMBED_BASE_URL: "https://unused.example", EVAL_EMBED_MODEL: "unused" },
+      ["ANSWER"], false,
+      { includeEmbedder: false },
+    )).not.toThrow();
+  });
+
   it("falls back to the extraction model for answering and to a pass-through gate", () => {
     const { roles } = rolesFromEnv({ EVAL_EXTRACT_BASE_URL: "http://localhost:1/v1", EVAL_EXTRACT_MODEL: "m", EVAL_EMBED_PROVIDER: "mock" });
     expect(roles.answer.id).toBe("answer:m");

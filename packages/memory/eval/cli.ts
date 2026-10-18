@@ -36,7 +36,7 @@ Commands:
                                                        Dutch LongMemEval-S subset (resumable)
   run        --set synthetic|longmemeval|longmemeval-nl|locomo|personamem [--limit N]
              [--file synthetic.json] [--distractors N] [--types a,b] [--per-type N] [--personas 4]
-             [--system2 | --system2-compare] [--min-cluster 3] [--no-recall] [--no-memory] [--concurrency 1]
+             [--system2 | --system2-compare] [--min-cluster 2] [--no-recall] [--no-memory] [--concurrency 1]
              [--threshold 0.1] [--label name]
   rejudge    --file a.json[,b.json]                    re-grade free-form answers
                                                        with the JUDGE role (e.g. a thinking model)
@@ -201,8 +201,14 @@ async function main(): Promise<void> {
   }
 
   if (command === "run") {
-    const roles: ChatRole[] = ["GATE", "EXTRACT", "RECONCILE", "ANSWER", "JUDGE", ...(values.system2 || values["system2-compare"] ? (["INDUCE"] as const) : [])];
-    assertLocalOnly(env, roles, allowCloud);
+    const memoryEnabled = values["no-memory"] !== true;
+    if (!memoryEnabled && (values.system2 || values["system2-compare"])) {
+      throw new Error("--system2 and --system2-compare cannot be combined with --no-memory.");
+    }
+    const roles: ChatRole[] = memoryEnabled
+      ? ["GATE", "EXTRACT", "RECONCILE", "ANSWER", "JUDGE", ...(values.system2 || values["system2-compare"] ? (["INDUCE"] as const) : [])]
+      : ["ANSWER", "JUDGE"];
+    assertLocalOnly(env, roles, allowCloud, { includeEmbedder: memoryEnabled });
     const limit = values.limit ? Number(values.limit) : undefined;
     let cases: EvalCase[];
     switch (values.set) {
@@ -241,7 +247,7 @@ async function main(): Promise<void> {
       default:
         throw new Error(USAGE);
     }
-    const { roles: evalRoles, stats } = rolesFromEnv(env);
+    const { roles: evalRoles, stats } = rolesFromEnv(env, { memoryEnabled });
     const system2 = values["system2-compare"] ? ("compare" as const) : values.system2 === true;
     const slots: (CaseResult | undefined)[] = new Array(cases.length);
     const failed: string[] = [];
@@ -284,7 +290,10 @@ async function main(): Promise<void> {
       recall: !values["no-recall"] && !values["no-memory"],
       memory: !values["no-memory"],
       models: Object.fromEntries(
-        ["EMBED", ...roles].map((role) => [role.toLowerCase(), env[`EVAL_${role}_MODEL`] ?? "(fallback)"]),
+        [
+          ["embed", memoryEnabled ? env.EVAL_EMBED_MODEL ?? "(fallback)" : "(disabled)"],
+          ...roles.map((role) => [role.toLowerCase(), env[`EVAL_${role}_MODEL`] ?? "(fallback)"]),
+        ],
       ),
       components: cases.some((evalCase) => evalCase.events) ? componentMetrics(results, (id) => byId.get(id)) : undefined,
       qa: qaMetrics(results),
