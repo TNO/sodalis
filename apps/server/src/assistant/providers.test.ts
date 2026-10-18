@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LlmTextGenerationProvider } from "./OpenAiCompatibleLlmProvider.js";
-import { createLlmProvider } from "./providers.js";
+import { azureLlmExtraBody, createLlmProvider } from "./providers.js";
 
 interface CapturedRequest {
   readonly url: string;
@@ -113,6 +113,17 @@ describe("AI provider selection", () => {
       "https://example.cognitiveservices.azure.com/openai/v1/chat/completions",
     ]);
     expect(requests.map((request) => request.body.reasoning_effort)).toEqual(["low", "low", "low"]);
+  });
+
+  it("omits reasoning_effort for non-reasoning Azure deployments when the effort is off", async () => {
+    const { requests, fetch } = capture();
+    await generate(createLlmProvider({
+      ...azure, AZURE_LLM_DEPLOYMENT: "gpt-4.1-mini", AZURE_LLM_REASONING_EFFORT: "off",
+    }, { fetch }));
+    expect(requests[0]?.body.model).toBe("gpt-4.1-mini");
+    expect(requests[0]?.body).not.toHaveProperty("reasoning_effort");
+    expect(azureLlmExtraBody({ ...azure, AZURE_LLM_REASONING_EFFORT: "off" })).toEqual({});
+    expect(azureLlmExtraBody(azure)).toEqual({ reasoning_effort: "minimal" });
   });
 
   it("rejects incomplete or unsupported Azure configuration", () => {

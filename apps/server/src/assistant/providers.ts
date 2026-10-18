@@ -21,6 +21,8 @@ export interface LlmProviderOptions {
 const AZURE_LLM_HOSTS = [".openai.azure.com", ".services.ai.azure.com", ".cognitiveservices.azure.com"];
 const AZURE_LLM_RESOURCE_ENDPOINT = "https://<resource>.openai.azure.com/openai/v1";
 export const AZURE_LLM_REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
+/** `off` omits `reasoning_effort` for non-reasoning deployments such as gpt-4.1-mini. */
+const AZURE_LLM_REASONING_SETTINGS = [...AZURE_LLM_REASONING_EFFORTS, "off"] as const;
 
 /** The Azure OpenAI v1 base URL for an Azure OpenAI or Foundry resource endpoint. */
 function azureLlmEndpoint(value: string): string {
@@ -43,14 +45,14 @@ function azureLlmEndpoint(value: string): string {
   return `https://${endpoint.host}/openai/v1`;
 }
 
-export type AzureLlmReasoningEffort = (typeof AZURE_LLM_REASONING_EFFORTS)[number];
+export type AzureLlmReasoningEffort = (typeof AZURE_LLM_REASONING_SETTINGS)[number];
 
 /** The validated Azure reasoning effort; `minimal` keeps spoken replies fast. */
 function azureLlmReasoningEffort(value: string | undefined): AzureLlmReasoningEffort {
   const effort = value?.trim() || "minimal";
-  const known = AZURE_LLM_REASONING_EFFORTS.find((candidate) => candidate === effort);
+  const known = AZURE_LLM_REASONING_SETTINGS.find((candidate) => candidate === effort);
   if (!known) {
-    throw new Error(`AZURE_LLM_REASONING_EFFORT must be one of ${AZURE_LLM_REASONING_EFFORTS.join(", ")}.`);
+    throw new Error(`AZURE_LLM_REASONING_EFFORT must be one of ${AZURE_LLM_REASONING_SETTINGS.join(", ")}.`);
   }
   return known;
 }
@@ -81,6 +83,12 @@ export function azureLlmSettings(settings: LlmProviderSettings): AzureLlmSetting
     deployment: settings.AZURE_LLM_DEPLOYMENT.trim(),
     reasoningEffort: azureLlmReasoningEffort(settings.AZURE_LLM_REASONING_EFFORT),
   };
+}
+
+/** Request fields for the configured effort; empty when the effort is `off`. */
+export function azureLlmExtraBody(settings: LlmProviderSettings): Record<string, unknown> {
+  const { reasoningEffort } = azureLlmSettings(settings);
+  return reasoningEffort === "off" ? {} : { reasoning_effort: reasoningEffort };
 }
 
 export function createLlmProvider(
@@ -122,7 +130,7 @@ export function createLlmProvider(
         model: azure.deployment,
         apiKey: azure.key,
         apiKeyHeader: "api-key",
-        extraBody: { reasoning_effort: azure.reasoningEffort },
+        extraBody: azureLlmExtraBody(settings),
         ...fetchOption,
       });
     }

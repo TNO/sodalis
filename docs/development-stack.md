@@ -707,7 +707,8 @@ LLM_PROVIDER=azure
 AZURE_LLM_URL=https://<resource>.openai.azure.com/openai/v1
 AZURE_LLM_KEY=<your resource key>
 AZURE_LLM_DEPLOYMENT=gpt-5
-# Optional: minimal (default), low, medium, or high
+# Optional: minimal (default), low, medium, or high; off for non-reasoning
+# deployments such as gpt-4.1-mini, which reject reasoning_effort
 AZURE_LLM_REASONING_EFFORT=
 ```
 

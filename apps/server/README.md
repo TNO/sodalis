@@ -148,7 +148,8 @@ v1 API (provider ID `azure-openai-v1`). It requires:
 - `AZURE_LLM_DEPLOYMENT`: the deployment name, sent as `model` (for example
   `gpt-5`).
 - `AZURE_LLM_REASONING_EFFORT` (optional): `minimal` (default), `low`,
-  `medium`, or `high`.
+  `medium`, or `high`; `off` omits the field for non-reasoning deployments
+  such as `gpt-4.1-mini`.
 
 No temperature or token limit is sent, and 429/5xx responses are surfaced as
 errors without retries. Azure content-filter blocks fail the turn with an

@@ -17,7 +17,7 @@ import {
   type Embedder,
   type OpenAiCompatibleChatClientOptions,
 } from "@sodalis/memory";
-import { azureLlmSettings, type LlmProviderSettings } from "./providers.js";
+import { azureLlmExtraBody, azureLlmSettings, type LlmProviderSettings } from "./providers.js";
 
 export interface MemorySettings extends LlmProviderSettings {
   readonly MEMORY_ENABLED?: string;
@@ -154,7 +154,7 @@ function createExtractionClient(settings: MemorySettings, fetcher?: typeof fetch
         model: settings.MEMORY_EXTRACT_MODEL?.trim() || azure.deployment,
         apiKey: azure.key,
         apiKeyHeader: "api-key",
-        extraBody: { reasoning_effort: azure.reasoningEffort, ...extraBody },
+        extraBody: { ...azureLlmExtraBody(settings), ...extraBody },
         sendTemperature: false,
         ...responseFormat,
         ...fetchOption,
