@@ -82,6 +82,9 @@ retention policies, without substantial re-plumbing.
      used.
    - A Lattice `/v1/systemone` decider (ADR-098 in the Lattice repository) is a
      later drop-in replacement.
+     `SystemOneHttpGate` already sends the questions to any `/v1/systemone`
+     server. Off-the-shelf vLLM Semantic Router deciders scored below the
+     gemma4 e4b gate (see the memory evaluation).
    - The gate threshold favours recall over precision.
 7. **Extract and reconcile asynchronously, after the reply.** Writing never
    adds latency to the conversation.

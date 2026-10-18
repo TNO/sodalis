@@ -50,7 +50,8 @@ asynchronously after the reply.
   `pipelines/writer.py` (Apache-2.0) and record their origin.
 - Defaults: extraction uses Qwen3.8-27B. The gate uses a Qwen3.5-2B-class model
   or `Mapika/decider-2b`; check its Dutch accuracy in 0048. A Lattice
-  `/v1/systemone` adapter can follow once Lattice ships it.
+  `/v1/systemone` adapter can follow once Lattice ships it. (2026-10-18:
+  `SystemOneHttpGate` now speaks `/v1/systemone`; see 0048.)
 - Before running against Azure, follow the cloud-consent rule in AGENTS.md.
 
 ## Agent Notes
