@@ -1,9 +1,9 @@
 # Long-term memory
 
-Status: **In progress** (tasks 0048–0050); local pipeline and component
-evaluation are complete, while the matched English/Dutch benchmark is running.
-Follow-ups are listed under open items.
-Date: 2026-10-17. Tasks: 0048 (harness and quality), 0049 (`recall_memory`),
+Status: **Local evaluation complete** (tasks 0048–0050); the Azure ceiling is
+deferred because no Azure endpoint is configured and cloud runs require
+explicit consent. Follow-ups are listed under open items.
+Date: 2026-10-18. Tasks: 0048 (harness and quality), 0049 (`recall_memory`),
 0050 (System 2), 0051 (vector index). Design:
 [ADR 0005](../adr/0005-long-term-memory.md).
 
@@ -18,8 +18,8 @@ uses:
 - qwen3-embedding 0.6B;
 - SQLite with sqlite-vec.
 
-On a matched LongMemEval-S sample it scores TBD in English and TBD in
-machine-translated Dutch.
+On a matched LongMemEval-S sample it scores **32/50 (64%) in English** and
+**30/50 (60%) in machine-translated Dutch**.
 
 - **Keep qwen3:14b as the local extraction model.** It was the most accurate
   candidate; Gemma-4-26B-A4B had the shortest per-call latency but lower
@@ -111,6 +111,10 @@ There are 72 questions:
 | Dutch LongMemEval-S | The same 50 questions, translated by qwen3:14b. Assistant turns are cut to 400 characters. |
 | LoCoMo (CC BY-NC, local only) | First 2 conversations, adversarial questions skipped, 233 questions. Both speakers are treated as the user. |
 | PersonaMem-v2 (CC-BY-4.0) | 4 personas, 159 four-option questions on implicit preferences |
+
+One Dutch case timed out during the matched run and was retried individually
+with a longer local timeout. It is included in the 50-case score; the original
+failed attempt is retained alongside the combined result in ignored eval data.
 
 **Grading.**
 
@@ -204,12 +208,23 @@ is not deterministic under concurrent requests, even at temperature 0.
 
 | Benchmark | Prompt | QA | Without memory |
 | --- | --- | --- | --- |
-| LongMemEval-S, 6 types (60) | p2 | 37/60 (62%) | TBD |
-| LongMemEval-S matched, English (50) | p3 | pending | |
-| LongMemEval-S matched, Dutch (50) | p3 | pending | |
-| LoCoMo, 2 conversations (233) | p2 | 65/233 (28%) | |
-| PersonaMem-v2 (159, chance 25%) | p1 | 44/159 (28%); 42 after System 2 | |
+| LongMemEval-S, 6 types (60) | p2 | 37/60 (62%) | Not measured |
+| LongMemEval-S matched, English (50) | p3 | 32/50 (64%) | Not measured |
+| LongMemEval-S matched, Dutch (50) | p3 | 30/50 (60%) | Not measured |
+| LoCoMo, 2 conversations (233) | p2 | 65/233 (28%) | Not measured |
+| PersonaMem-v2 (159, chance 25%) | p1 | 44/159 (28%); 42 after System 2 | — |
 | PersonaMem-v2 (159) | p2 | 44/159 (28%); 42 after System 2 | 43/159 (27%) |
+
+Matched LongMemEval-S by answer type:
+
+| Type | English | Dutch |
+| --- | --- | --- |
+| Abstention | 4/5 | 4/5 |
+| Single-session preference | 5/10 | 5/10 |
+| Knowledge-update | 8/10 | 7/10 |
+| Temporal reasoning | 5/10 | 3/10 |
+| Multi-session | 3/7 | 3/7 |
+| Single-session user | 7/8 | 8/8 |
 
 LongMemEval-S (p2) by type:
 
@@ -243,8 +258,6 @@ PersonaMem-v2 (p2) by type:
 | Anti-stereotypical preferences | 4/20 |
 | Neutral preferences | 4/22 |
 | Health and medical conditions | 2/22 |
-
-Matched English against Dutch, by type: TBD.
 
 ### Latency and tokens
 
@@ -343,7 +356,10 @@ are unchanged from the first run:
   stored preferences are present in the memory block but do not change which
   option qwen3:14b picks. A larger answer model, or a prompt that asks it to
   apply the memories, is needed before PersonaMem says anything about System 2.
-- **Dutch against English:** TBD.
+- **Dutch against English:** the matched Dutch score is 4 questions lower
+  than English (30/50 against 32/50). The largest difference is temporal
+  reasoning (3/10 against 5/10); this small sample and the translation
+  artifacts do not establish a language effect.
 
 ## Limitations
 
@@ -357,11 +373,11 @@ are unchanged from the first run:
   scores are not comparable with published full-set results.
 - The judge is a local 12B model. The deterministic rules remove its known
   errors, but free-form grading was spot-checked only.
-- The Dutch subset is machine-translated by qwen3:14b. A spot check of about
-  ten cases found the meaning, names, and numbers intact, but there were
-  calques ("Wat zijn er enkele…"), a mixed u/je register, and an occasional
-  wrong term (kanimeshi became "kreeftsbloemkoolbowl"). Dutch scores include
-  translation noise.
+- The Dutch subset is machine-translated by qwen3:14b. A spot check of ten
+  questions and answers found names, numbers, and most meanings intact, but
+  also calques, a mixed u/je register, and wrong or unnatural terms ("smoker"
+  became "roker"; kanimeshi became "kreeftsbloemkoolbowl"). Dutch scores
+  include translation noise.
 - The prompt changed between runs. Compare only rows with the same prompt
   label.
 
