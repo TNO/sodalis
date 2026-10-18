@@ -53,9 +53,15 @@ export function chatConfigured(env: Env, role: ChatRole): boolean {
 }
 
 /** Every base URL the configuration would send data to. */
-export function configuredUrls(env: Env, roles: readonly ChatRole[]): string[] {
+export function configuredUrls(
+  env: Env,
+  roles: readonly ChatRole[],
+  options: { includeEmbedder?: boolean } = {},
+): string[] {
   const urls = roles.flatMap((role) => (chatConfigured(env, role) ? [roleKey(env, role, "BASE_URL")!] : []));
-  if (env.EVAL_EMBED_PROVIDER !== "mock" && env.EVAL_EMBED_BASE_URL) urls.push(env.EVAL_EMBED_BASE_URL);
+  if (options.includeEmbedder !== false && env.EVAL_EMBED_PROVIDER !== "mock" && env.EVAL_EMBED_BASE_URL) {
+    urls.push(env.EVAL_EMBED_BASE_URL);
+  }
   return urls;
 }
 
@@ -66,11 +72,7 @@ export function assertLocalOnly(
   allowCloud: boolean,
   options: { includeEmbedder?: boolean } = {},
 ): void {
-  const urls = roles.flatMap((role) => (chatConfigured(env, role) ? [roleKey(env, role, "BASE_URL")!] : []));
-  if (options.includeEmbedder !== false && env.EVAL_EMBED_PROVIDER !== "mock" && env.EVAL_EMBED_BASE_URL) {
-    urls.push(env.EVAL_EMBED_BASE_URL);
-  }
-  const remote = urls.filter((url) => !isLocalUrl(url));
+  const remote = configuredUrls(env, roles, options).filter((url) => !isLocalUrl(url));
   if (remote.length && !allowCloud) {
     throw new Error(
       `This run would send data to ${[...new Set(remote)].join(", ")}. Get the user's consent for this run and pass --allow-cloud.`,
