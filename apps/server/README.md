@@ -208,6 +208,10 @@ Settings (defaults in brackets):
 - `MEMORY_DB_PATH` [`data/memory.db`; `/data/memory/memory.db` in Compose],
   `MEMORY_REQUIRE_CONSENT` [`true`], `MEMORY_CONSOLIDATION` [`true`],
   `MEMORY_OBSERVATION_SOURCES` [`home`].
+- `MEMORY_HEALTH_CONSENT` [`false`]: for development, records the `health`
+  consent at startup when none has been recorded yet (policy version `env`).
+  A later withdrawal through the API is kept, so it never re-grants a
+  withdrawn consent. Real users should give it through the API instead.
 - Embeddings: `MEMORY_EMBED_PROVIDER` (`openai-compatible` or `mock`),
   `MEMORY_EMBED_BASE_URL`, `MEMORY_EMBED_MODEL`, `MEMORY_EMBED_DIMS` [512],
   `MEMORY_EMBED_API_KEY`.

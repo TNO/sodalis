@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Memory, MemoryService, MockEmbedder } from "@sodalis/memory";
 import { fact, ScriptedExtractor, ScriptedGate, ScriptedReconciler } from "@sodalis/memory/testing";
 import { createAssistantApp } from "./app.js";
@@ -239,5 +242,34 @@ describe("memory configuration", () => {
     });
     expect(runtime).toBeDefined();
     runtime?.service.memory.close();
+  });
+
+  it("seeds health consent from MEMORY_HEALTH_CONSENT only when none was recorded", async () => {
+    const base = {
+      MEMORY_ENABLED: "true",
+      MEMORY_EMBED_PROVIDER: "mock",
+      MEMORY_GATE_PROVIDER: "pass-through",
+      MEMORY_EXTRACT_BASE_URL: "http://127.0.0.1:8000/v1",
+      MEMORY_EXTRACT_MODEL: "qwen",
+    };
+    const dir = mkdtempSync(join(tmpdir(), "sodalis-health-"));
+    const path = join(dir, "memory.db");
+    try {
+      const off = await createMemoryFromEnv({ ...base, MEMORY_DB_PATH: path, MEMORY_HEALTH_CONSENT: "" });
+      expect(off?.service.memory.store.consent("health")).toBeUndefined();
+      off?.service.memory.close();
+
+      const seeded = await createMemoryFromEnv({ ...base, MEMORY_DB_PATH: path, MEMORY_HEALTH_CONSENT: "true" });
+      const store = seeded?.service.memory.store;
+      expect(store?.consent("health")).toMatchObject({ granted: true, policyVersion: "env" });
+      store?.recordConsent("health", false, "1");
+      seeded?.service.memory.close();
+
+      const restarted = await createMemoryFromEnv({ ...base, MEMORY_DB_PATH: path, MEMORY_HEALTH_CONSENT: "true" });
+      expect(restarted?.service.memory.store.hasConsent("health")).toBe(false);
+      restarted?.service.memory.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

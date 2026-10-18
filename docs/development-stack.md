@@ -794,6 +794,11 @@ curl -fsS -X PUT http://127.0.0.1:4176/api/memory/consent \
 curl -fsS http://127.0.0.1:4176/api/memory/status
 ```
 
+Health facts (diagnoses, medication, allergies) also need the `health`
+consent. Grant it the same way with `{"kind":"health","granted":true}`, or
+for development set `MEMORY_HEALTH_CONSENT=true` in `.env`; that records it
+once at startup and never overrides a later withdrawal.
+
 The database lives in the `memory_data` volume. `DELETE /api/memory/items/<id>`
 forgets one item; removing the volume forgets everything.
 

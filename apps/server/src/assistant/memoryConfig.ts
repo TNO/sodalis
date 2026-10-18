@@ -23,6 +23,7 @@ export interface MemorySettings extends LlmProviderSettings {
   readonly MEMORY_ENABLED?: string;
   readonly MEMORY_DB_PATH?: string;
   readonly MEMORY_REQUIRE_CONSENT?: string;
+  readonly MEMORY_HEALTH_CONSENT?: string;
   readonly MEMORY_CONSOLIDATION?: string;
   readonly MEMORY_OBSERVATION_SOURCES?: string;
   readonly MEMORY_EMBED_PROVIDER?: string;
@@ -187,8 +188,13 @@ export async function createMemoryFromEnv(
     .split(",")
     .map((source) => source.trim())
     .filter(Boolean);
+  const seedHealthConsent = flag(settings.MEMORY_HEALTH_CONSENT, false);
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const memory = await Memory.open({ path, embedder });
+  // Seeds health consent once; a later withdrawal through the API is kept across restarts.
+  if (seedHealthConsent && !memory.store.consent("health")) {
+    memory.store.recordConsent("health", true, "env");
+  }
   const service = new MemoryService({
     memory,
     gate,
