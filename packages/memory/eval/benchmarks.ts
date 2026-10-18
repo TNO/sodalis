@@ -316,6 +316,7 @@ export interface TranslateOptions {
 }
 
 const BATCH_CHARS = 4_000;
+const MAX_TEXT_CHARS = 500;
 
 /** Machine-translates a case to Dutch in batches; spot-check the output by hand. */
 export async function translateCase(evalCase: EvalCase, client: ChatClient, options: TranslateOptions = {}): Promise<EvalCase> {
@@ -333,7 +334,7 @@ export async function translateCase(evalCase: EvalCase, client: ChatClient, opti
     const translated = parseJsonObject(completion.content)?.texts;
     return Array.isArray(translated) && translated.length === batch.length ? translated.map(String) : undefined;
   };
-  const translate = async (texts: readonly string[]): Promise<string[]> => {
+  const translateBatches = async (texts: readonly string[]): Promise<string[]> => {
     const output: string[] = [];
     let start = 0;
     while (start < texts.length) {
@@ -353,6 +354,29 @@ export async function translateCase(evalCase: EvalCase, client: ChatClient, opti
       start = end;
     }
     return output;
+  };
+  const translate = async (texts: readonly string[]): Promise<string[]> => {
+    const chunks = texts.map((text) => {
+      const parts: string[] = [];
+      let start = 0;
+      while (start < text.length) {
+        let end = Math.min(start + MAX_TEXT_CHARS, text.length);
+        if (end < text.length) {
+          const boundary = text.lastIndexOf(" ", end);
+          if (boundary > start) end = boundary;
+        }
+        parts.push(text.slice(start, end));
+        start = end;
+      }
+      return parts;
+    });
+    const translated = await translateBatches(chunks.flat());
+    let offset = 0;
+    return chunks.map((parts) => {
+      const result = translated.slice(offset, offset + parts.length).join("");
+      offset += parts.length;
+      return result;
+    });
   };
   const clip = (turn: EvalTurn) =>
     turn.role === "assistant" && options.assistantChars !== undefined && turn.text.length > options.assistantChars

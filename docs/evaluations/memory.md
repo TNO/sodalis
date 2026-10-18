@@ -1,7 +1,8 @@
 # Long-term memory
 
-Status: **Complete for version 1** (tasks 0048–0050); follow-ups listed under
-open items.
+Status: **In progress** (tasks 0048–0050); local pipeline and component
+evaluation are complete, while the matched English/Dutch benchmark is running.
+Follow-ups are listed under open items.
 Date: 2026-10-17. Tasks: 0048 (harness and quality), 0049 (`recall_memory`),
 0050 (System 2), 0051 (vector index). Design:
 [ADR 0005](../adr/0005-long-term-memory.md).

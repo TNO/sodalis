@@ -414,6 +414,26 @@ describe("benchmark loaders", () => {
     expect(translated.questions[0]).toMatchObject({ question: "NL Q?", answer: "NL A" });
   });
 
+  it("splits oversized messages into bounded translation requests", async () => {
+    const requestSizes: number[] = [];
+    const translator = client((request) => {
+      const { texts } = JSON.parse(String(request.messages[1]!.content)) as { texts: string[] };
+      requestSizes.push(...texts.map((text) => text.length));
+      return JSON.stringify({ texts });
+    });
+    const text = "A long sentence. ".repeat(300);
+    const evalCase: EvalCase = {
+      id: "long",
+      source: "test",
+      language: "en",
+      sessions: [{ id: "s", date: "2023-04-10T17:50:00.000Z", turns: [{ role: "user", text }] }],
+      questions: [{ id: "q", type: "t", question: "Q?", answer: "A", askedAt: "2023-05-01T10:00:00.000Z" }],
+    };
+    const translated = await translateCase(evalCase, translator);
+    expect(requestSizes.every((size) => size <= 500)).toBe(true);
+    expect(translated.sessions[0]!.turns[0]!.text).toBe(text);
+  });
+
   it("re-grades free-form answers and never lets the judge accept a non-answer", async () => {
     const judged: string[] = [];
     const judge = client((request) => {
