@@ -221,4 +221,23 @@ describe("memory configuration", () => {
     expect(runtime?.service.active()).toBe(false);
     runtime?.service.memory.close();
   });
+
+  it("treats Compose's empty optional settings as unset", async () => {
+    const runtime = await createMemoryFromEnv({
+      MEMORY_ENABLED: "true",
+      MEMORY_DB_PATH: ":memory:",
+      MEMORY_EMBED_PROVIDER: "mock",
+      MEMORY_GATE_PROVIDER: "pass-through",
+      MEMORY_EXTRACT_PROVIDER: "azure",
+      MEMORY_EXTRACT_MODEL: "",
+      MEMORY_EXTRACT_EXTRA_BODY: "",
+      MEMORY_EXTRACT_RESPONSE_FORMAT: "",
+      AZURE_LLM_URL: "https://example.openai.azure.com/openai/v1",
+      AZURE_LLM_KEY: "cloud-key",
+      AZURE_LLM_DEPLOYMENT: "gpt-4.1-mini",
+      AZURE_LLM_REASONING_EFFORT: "off",
+    });
+    expect(runtime).toBeDefined();
+    runtime?.service.memory.close();
+  });
 });

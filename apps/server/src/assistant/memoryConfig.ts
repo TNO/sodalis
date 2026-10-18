@@ -130,7 +130,7 @@ function createGate(settings: MemorySettings, fetcher?: typeof fetch): DecisionG
 function createExtractionClient(settings: MemorySettings, fetcher?: typeof fetch): ChatClient {
   const fetchOption = fetcher ? { fetch: fetcher } : {};
   const extraBody = jsonObject("MEMORY_EXTRACT_EXTRA_BODY", settings.MEMORY_EXTRACT_EXTRA_BODY);
-  const format = settings.MEMORY_EXTRACT_RESPONSE_FORMAT;
+  const format = settings.MEMORY_EXTRACT_RESPONSE_FORMAT?.trim() || undefined;
   if (format !== undefined && !["json_schema", "json_object", "none"].includes(format)) {
     throw new Error("MEMORY_EXTRACT_RESPONSE_FORMAT must be json_schema, json_object, or none.");
   }
