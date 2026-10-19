@@ -4,10 +4,7 @@ import type {
   SpeechRequest,
   TextToSpeechProvider,
 } from "@sodalis/speech";
-import {
-  AmplitudeLipSyncAdapter,
-  type LipSyncAvatar,
-} from "./AmplitudeLipSyncAdapter.js";
+import { AmplitudeLipSyncAdapter } from "./AmplitudeLipSyncAdapter.js";
 
 export type SpeechAudioBuffer = AudioBuffer;
 export type SpeechAudioSource = AudioBufferSourceNode;

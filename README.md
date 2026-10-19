@@ -1,5 +1,8 @@
 # Sodalis
 
+[![CI](https://github.com/TNO/sodalis/actions/workflows/publish-images.yml/badge.svg?branch=main)](https://github.com/TNO/sodalis/actions/workflows/publish-images.yml)
+[![CodeQL](https://github.com/TNO/sodalis/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/TNO/sodalis/actions/workflows/codeql.yml)
+
 The name comes from Latin *sodalis*, meaning a companion, friend, or
 associate: an assistant that accompanies you at your desktop.
 
@@ -15,7 +18,8 @@ the standalone Docker Compose v2 `docker-compose` executable (not
 included in the repository: `models/` is git-ignored, so **every fresh
 checkout needs its own downloads**. From the repository root, download the
 default Piper voice before starting the stack. The default Parakeet TDT v3
-image downloads its own weights at build time:
+image, including its weights, is pulled prebuilt from
+`ghcr.io/tno/sodalis-parakeet-tdt` for Intel and Apple Silicon:
 
 ```sh
 mkdir -p models/piper
@@ -177,7 +181,14 @@ Sample Notes panel is an example.
 pnpm test
 pnpm typecheck
 pnpm build
+pnpm test:python   # speech-http and TTS comparison tests
 ```
+
+CI runs these checks on Ubuntu and macOS for every pull request, together
+with Compose validation, image builds, CodeQL, and dependency review. Pushes
+to `main` and `v*` tags publish multi-arch images to GHCR. See
+[Published images and CI](docs/development-stack.md#published-images-and-ci)
+and [ADR 0006](docs/adr/0006-ci-cd.md).
 
 Aster is vendored at `apps/desktop/public/aster/`. Its upstream `TESTING.md`
 describes the standalone browser suite. At the pinned upstream commit, the

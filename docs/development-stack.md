@@ -176,8 +176,9 @@ submitting silent segments, but noisy rooms need real-microphone testing.
 
 Set `STT_PROVIDER=whistle` or keep the default `STT_PROVIDER=parakeet-tdt`
 in `.env`, leave its matching URL blank, and run `pnpm stack:config` then
-`pnpm stack:up`. These profiles build their own CPU services;
-neither changes the TTS or LLM selection. The speech API remains the
+`pnpm stack:up`. Parakeet TDT is pulled from GHCR (see
+[Published images](#published-images-and-ci)); Whistle builds locally.
+Neither changes the TTS or LLM selection. The speech API remains the
 only browser-facing STT endpoint. Both builds download model weights;
 Parakeet uses a pinned conversion revision, while Whistle currently uses
 the default model fetched by the pinned Needle runtime. No recording is
@@ -881,6 +882,7 @@ affordable on local models.
 
 ```sh
 pnpm stack:config   # validate selection and Compose configuration
+pnpm stack:pull     # refresh published images (Parakeet TDT) for this selection
 pnpm stack:up       # build and start only the selected profiles
 pnpm stack:smoke    # exercise gateway, UI, AI, STT, TTS, and Home route
 pnpm stack:down     # stop this worktree's containers, retain Core's volume
@@ -996,6 +998,55 @@ Home API. Core's HTTP settings are UI-managed in 2026.8 and later; the
 development gateway does not send `X-Forwarded-For` to Core, so no proxy
 trust configuration or broad trusted-network allowlist is needed.
 
+## Published images and CI
+
+GitHub Actions publishes three images to GHCR for `linux/amd64` and
+`linux/arm64` (Apple Silicon) on every push to `main` and every `v*` tag:
+`ghcr.io/tno/sodalis-api`, `sodalis-gateway`, and `sodalis-parakeet-tdt`.
+They are tagged `main`, `sha-<short commit>`, and on releases `X.Y.Z`, `X.Y`,
+and `latest`. Each image carries OCI licence labels and a build provenance
+attestation:
+
+```sh
+gh attestation verify oci://ghcr.io/tno/sodalis-parakeet-tdt:main --owner TNO
+```
+
+- **Parakeet TDT** is pulled, not built. Compose uses
+  `ghcr.io/tno/sodalis-parakeet-tdt:${SODALIS_IMAGE_TAG}` (default `main`) and
+  pulls it only when it is missing; `pnpm stack:pull` refreshes it. To test a
+  change to `services/parakeet-tdt` or `services/speech-http`, set
+  `SODALIS_LOCAL_IMAGES=true`. `compose.local-images.yaml` then builds the
+  image locally.
+- **The API and gateway** still build locally, so your code changes take
+  effect. They reuse the published `:buildcache-amd64` and `:buildcache-arm64`
+  layers, so FFmpeg is not recompiled. Dependencies are fetched from the
+  lockfile in a separate layer, so source edits do not reinstall them.
+- The published `gateway` image includes the CC BY-NC 4.0 TalkingHead avatar
+  (non-commercial; `/srv/avatars/NOTICE.md`), and the Parakeet image includes
+  CC BY 4.0 NVIDIA weights. Keep that attribution when redistributing either
+  image.
+
+### What CI checks
+
+Pull requests run [`ci.yml`](../.github/workflows/ci.yml). The `ci-ok` job
+summarizes it for branch protection. CI never contacts a cloud provider and
+has no provider secrets, so live tests such as
+`AzureRealtimeSttEngine.live.test.ts` skip.
+
+| Job | Runs | Reproduce locally |
+| --- | --- | --- |
+| Node (Ubuntu, macOS) | `pnpm typecheck`, `pnpm test`, `pnpm build`; Ubuntu installs FFmpeg so transcoder tests run | the same commands |
+| Python | speech-http and TTS comparison `unittest` suites with FFmpeg | `pnpm test:python` |
+| Compose config | `pnpm stack:config` for `.env.example`, with and without `SODALIS_LOCAL_IMAGES=true` | the same command |
+| Image build | Builds `api` and `gateway`, and `parakeet-tdt` when its service files change | `docker build -f services/<image>/Dockerfile .` |
+| Quality | actionlint; dependency review blocks high-severity vulnerabilities | `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12` |
+
+[`codeql.yml`](../.github/workflows/codeql.yml) scans TypeScript, Python, and
+the workflows. Dependabot proposes weekly action, npm, and base-image updates.
+Without FFmpeg installed locally, the FFmpeg-dependent vitest and Python tests
+skip; CI always runs them. The decision record is
+[ADR 0006](adr/0006-ci-cd.md).
+
 ## Troubleshooting
 
 - **Compose not found or cannot connect:** Check `docker compose version`,
@@ -1007,7 +1058,10 @@ trust configuration or broad trusted-network allowlist is needed.
   default.
 - **Model path error:** Download the named file and matching Piper JSON to
   the exact paths above, or set an external engine URL. On first use the CPU
-  images can take several minutes to build.
+  images can take several minutes to build or pull.
+- **Cannot pull `ghcr.io/tno/...`:** The image may not be published yet or
+  may be private. Run `docker login ghcr.io`, or set `SODALIS_LOCAL_IMAGES=true`
+  to build it locally.
 - **Gateway returns 502:** Inspect `pnpm exec tsx scripts/dev-stack.ts ps`
   and Compose logs for `speech`, `ai`, or the selected engine. Confirm the
   external URL is reachable from the container and speaks the expected

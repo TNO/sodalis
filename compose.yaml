@@ -6,6 +6,9 @@ services:
     build:
       context: .
       dockerfile: services/gateway/Dockerfile
+      cache_from:
+        - ghcr.io/tno/sodalis-gateway:buildcache-amd64
+        - ghcr.io/tno/sodalis-gateway:buildcache-arm64
     image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-gateway:dev
     ports:
       - "127.0.0.1:${SODALIS_PORT:-4176}:8080"
@@ -19,6 +22,9 @@ services:
     build:
       context: .
       dockerfile: services/api/Dockerfile
+      cache_from:
+        - ghcr.io/tno/sodalis-api:buildcache-amd64
+        - ghcr.io/tno/sodalis-api:buildcache-arm64
     image: sodalis-api:dev
     command: ["pnpm", "--filter", "@sodalis/server", "start:speech"]
     environment:
@@ -41,6 +47,9 @@ services:
     build:
       context: .
       dockerfile: services/api/Dockerfile
+      cache_from:
+        - ghcr.io/tno/sodalis-api:buildcache-amd64
+        - ghcr.io/tno/sodalis-api:buildcache-arm64
     image: sodalis-api:dev
     command: ["pnpm", "--filter", "@sodalis/server", "start:ai"]
     environment:
@@ -130,10 +139,9 @@ services:
   parakeet-tdt:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-parakeet-tdt
     profiles: ["parakeet-tdt"]
-    build:
-      context: .
-      dockerfile: services/parakeet-tdt/Dockerfile
-    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-parakeet-tdt:dev
+    # Published by CI; set SODALIS_LOCAL_IMAGES=true to build it locally instead.
+    image: ghcr.io/tno/sodalis-parakeet-tdt:${SODALIS_IMAGE_TAG:-main}
+    pull_policy: missing
 
   piper:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-piper

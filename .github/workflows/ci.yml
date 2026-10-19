@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+  # Pushes to main and release tags run CI through publish-images.yml.
+  workflow_call:
+    inputs:
+      build-images:
+        description: Build-check the Docker images (the caller may build them itself).
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede earlier runs of a PR; never cancel runs called for main or tags.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      images: ${{ steps.images.outputs.images }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            parakeet:
+              - services/parakeet-tdt/**
+              - services/speech-http/**
+      - id: images
+        env:
+          # Empty unless called from another workflow.
+          BUILD_IMAGES: ${{ format('{0}', inputs.build-images) }}
+          PARAKEET: ${{ github.event_name != 'pull_request' || steps.filter.outputs.parakeet == 'true' }}
+        run: |
+          if [ "$BUILD_IMAGES" = "false" ]; then
+            echo 'images=[]' >> "$GITHUB_OUTPUT"
+          elif [ "$PARAKEET" = "true" ]; then
+            echo 'images=["api","gateway","parakeet-tdt"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'images=["api","gateway"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  node:
+    name: Node (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The server image transcodes with ffmpeg; without it those tests skip.
+      - name: Install ffmpeg
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -n 1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: pnpm test:python
+
+  compose:
+    name: Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Renders the example selection only; no provider is contacted.
+      - run: cp .env.example .env
+      - name: Published images
+        run: pnpm stack:config
+      - name: Locally built images
+        run: |
+          echo 'SODALIS_LOCAL_IMAGES=true' > "$RUNNER_TEMP/local-images.env"
+          pnpm stack:config --env "$RUNNER_TEMP/local-images.env"
+
+  docker:
+    name: Image build (${{ matrix.image }})
+    needs: changes
+    if: needs.changes.outputs.images != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.changes.outputs.images) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: services/${{ matrix.image }}/Dockerfile
+          push: false
+          cache-from: |
+            type=gha,scope=${{ matrix.image }}
+            type=registry,ref=ghcr.io/tno/sodalis-${{ matrix.image }}:buildcache-amd64
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+
+  quality:
+    name: Workflow lint and dependency review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        if: github.event_name == 'pull_request'
+        with:
+          fail-on-severity: high
+
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [changes, node, python, compose, docker, quality]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job to succeed or be skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in success|skipped) ;; *) exit 1 ;; esac
+          done

@@ -148,3 +148,4 @@ packages/memory/eval/.data/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+__pycache__/
