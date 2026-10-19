@@ -14,7 +14,7 @@ rather than choosing a model only from a written list. This task starts after
 the native Sodalis avatar collection in 0014 is available as local,
 profile-validated assets.
 The two-option prototype switch and its local persistence are tracked in
-[0054](./0054-add-male-thuiszorg-avatar-option.md). Reuse that behavior where
+[0055](./0055-add-male-thuiszorg-avatar-option.md). Reuse that behavior where
 appropriate; this task remains responsible for the full gallery.
 
 ## Acceptance Criteria

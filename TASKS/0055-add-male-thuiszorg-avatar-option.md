@@ -1,4 +1,4 @@
-# 0054 Adding a male thuiszorg-style avatar option
+# 0055 Adding a male thuiszorg-style avatar option
 
 Status: done
 Priority: medium
@@ -8,8 +8,8 @@ Depends on: 0010, 0012, 0013, 0016
 ## Context
 
 The desktop previously showed only the non-commercial TalkingHead brunette.
-This task delivers one original, rights-verified male avatar and a small two-option
-selector ahead of the broader three-avatar collection in
+This task delivers one original, rights-verified male avatar and a small
+two-option selector ahead of the broader three-avatar collection in
 [0014](./0014-generate-mpfb-avatar.md) and the full gallery in
 [0015](./0015-build-avatar-selection.md). Follow the approved
 [design specification](../docs/avatar/MALE_THUISZORG_AVATAR_SPEC.md) and the
@@ -80,12 +80,14 @@ existing [avatar profile](../docs/avatar/SODALIS_AVATAR_PROFILE.md).
   mode. These controls ran without Avatar Lab errors. The Lab displayed
   60 FPS in this preview session; this is an observed render-loop reading,
   not a representative-hardware benchmark.
-- 2026-10-19: Closed 0054. Visual approval, smooth-performance feedback,
-  Avatar Lab checks, acceptance tests, and workspace validation are complete.
-  The previously noted hair/temple shape and larger GLB size are accepted
-  quality trade-offs for this approved asset, not open blockers. Screen-edge
-  gaze can turn both avatars to a full profile; this predates the male model
-  and is outside this task.
+- 2026-10-19: Closed the male-avatar task. Visual approval,
+  smooth-performance feedback, Avatar Lab checks, acceptance tests, and
+  workspace validation are complete. The previously noted hair/temple shape
+  and larger GLB size are accepted quality trade-offs for this approved asset,
+  not open blockers. Screen-edge gaze can turn both avatars to a full profile;
+  this predates the male model and is outside this task.
 - 2026-10-19: Included the editable Blender source project in
   `tools/avatar-authoring/source/` for distribution alongside the pinned
   rebuild scripts and approved GLB.
+- 2026-10-19: Renumbered from 0054 to 0055 to preserve the independently
+  added MetaHuman evaluation task 0054 on main.

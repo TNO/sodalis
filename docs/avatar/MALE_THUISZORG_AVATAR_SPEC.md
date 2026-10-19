@@ -12,7 +12,7 @@ selection in the existing prototype desktop. It does not replace the
 [Sodalis Avatar Profile](./SODALIS_AVATAR_PROFILE.md) or deliver the larger
 native collection and gallery in [task 0014](../../TASKS/0014-generate-mpfb-avatar.md)
 and [task 0015](../../TASKS/0015-build-avatar-selection.md). Track delivery
-in [task 0054](../../TASKS/0054-add-male-thuiszorg-avatar-option.md).
+in [task 0055](../../TASKS/0055-add-male-thuiszorg-avatar-option.md).
 
 ## Character and visual direction
 

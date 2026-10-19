@@ -16,7 +16,7 @@ Sodalis avatars. Use MPFB 2.x and Blender as authoring tools, then deliver
 optimized GLBs that conform to the existing Sodalis Avatar Profile and run
 through TalkingHead. MPFB and Blender must not become runtime dependencies.
 The approved single male thuiszorg-style avatar and prototype two-option
-selector are tracked separately in [0054](./0054-add-male-thuiszorg-avatar-option.md);
+selector are tracked separately in [0055](./0055-add-male-thuiszorg-avatar-option.md);
 they do not complete this larger collection.
 
 Prefer this owned authoring pipeline over a production collection dependent on
