@@ -1,4 +1,5 @@
 import { AVATAR_PROFILE_ID, type AvatarAsset } from "@sodalis/avatar";
+import { createAvatarCatalogue } from "./avatarCatalogue.js";
 
 export const DEFAULT_AVATAR_ASSET: AvatarAsset = {
   id: "talkinghead-brunette",
@@ -16,3 +17,23 @@ export const DEFAULT_AVATAR_ASSET: AvatarAsset = {
       }
     : {}),
 };
+
+// MPFB candidates stay development-only until TASKS/0014 verifies their licences.
+const MPFB_CANDIDATES: AvatarAsset[] = [
+  {
+    id: "sodalis-henk",
+    name: "Henk",
+    modelUrl: `${import.meta.env.BASE_URL}avatars/sodalis-henk.glb`,
+    profile: AVATAR_PROFILE_ID,
+    framing: { preferred: "upper-body" },
+  },
+];
+
+export const AVATAR_CATALOGUE = createAvatarCatalogue([
+  DEFAULT_AVATAR_ASSET,
+  ...(import.meta.env.DEV ? MPFB_CANDIDATES : []),
+]);
+
+export const ACTIVE_AVATAR_ASSET = AVATAR_CATALOGUE.select(
+  typeof location === "undefined" ? "" : location.search,
+);

@@ -26,6 +26,9 @@ function createCompatibleScene() {
   const root = new Group();
   root.name = "AvatarRoot";
   scene.add(root);
+  const armature = new Group();
+  armature.name = "Armature";
+  root.add(armature);
 
   const bones = coreBones.map((name) => {
     const bone = new Bone();
@@ -33,9 +36,14 @@ function createCompatibleScene() {
     return bone;
   });
   bones.forEach((bone, index) => {
-    if (index === 0) root.add(bone);
+    if (index === 0) armature.add(bone);
     else bones[index - 1]?.add(bone);
   });
+  for (const name of ["LeftEye", "RightEye"]) {
+    const eye = new Bone();
+    eye.name = name;
+    bones[5]?.add(eye);
+  }
 
   const geometry = new BufferGeometry();
   geometry.setAttribute(
@@ -81,6 +89,7 @@ describe("avatar GLB validator", () => {
     expect(report.valid).toBe(true);
     expect(report.checks.map((check) => check.id)).toEqual([
       "rig",
+      "talkinghead",
       "morphs",
       "materials",
       "textures",
@@ -107,6 +116,24 @@ describe("avatar GLB validator", () => {
     expect(findCheck(report, "morphs").status).toBe("fail");
     expect(findCheck(report, "morphs").message).toContain("mouthPucker");
     expect(findCheck(report, "morphs").message).toContain("viseme_U");
+  });
+
+  it("reports the Armature root and eye bones TalkingHead needs", () => {
+    const { scene, root, bones } = createCompatibleScene();
+    expect(findCheck(validateAvatarScene(scene), "talkinghead").status).toBe(
+      "pass",
+    );
+
+    root.children[0]!.name = "sodalis-henk";
+    bones[5]?.remove(bones[5].getObjectByName("RightEye")!);
+    const report = validateAvatarScene(scene);
+
+    expect(report.valid).toBe(false);
+    const check = findCheck(report, "talkinghead");
+    expect(check.status).toBe("fail");
+    expect(check.message).toContain("Armature");
+    expect(check.message).toContain("RightEye");
+    expect(check.message).not.toContain("LeftEye");
   });
 
   it("rejects a skinned mesh with missing skin attributes", () => {
@@ -188,6 +215,6 @@ describe("avatar GLB validator", () => {
 
     expect(report.valid).toBe(false);
     expect(findCheck(report, "glb").status).toBe("fail");
-    expect(report.checks.filter((check) => check.status === "skipped")).toHaveLength(7);
+    expect(report.checks.filter((check) => check.status === "skipped")).toHaveLength(8);
   });
 });

@@ -17,6 +17,9 @@ avatar; no model is approved for commercial use.
   Mixamo-named bone hierarchy expected by TalkingHead 1.7.0. The validator
   checks the named core joints and skin attributes needed by the current
   head/upper-body behavior; it does not certify every limb or finger joint.
+  TalkingHead 1.7.0 also resolves an `Armature` node (its default model root)
+  and `LeftEye`/`RightEye` bones under `Head` by name; the validator's
+  `talkinghead` check fails when any of them is missing.
 - Morph targets: names and case must match the lists below. All 52 ARKit face
   units and all 15 Oculus/Meta visemes are required across visible meshes.
 - Materials: use glTF core metallic-roughness PBR, represented by
@@ -135,6 +138,9 @@ at runtime.
 
 1. Use Blender 4.2.0 or later and the MPFB2 Blender extension. The MPFB2
    `v2.0.17` release is the version provenance recorded for this profile.
+   Blender 5.2 needs MPFB 2.0.18 or later; the scripted pipeline in
+   `tools/avatar-authoring/` was built with Blender 5.2.2 and MPFB 2.0.18 and
+   automates steps 2–4 (see its README).
 2. Install the MakeHuman system assets needed by the character. In MPFB's
    facial-shape-key workflow, enable **`visemes02`** for the 15 Meta/Oculus
    visemes and **`faceunits01`** for the 52 ARKit face units. Do not substitute
@@ -158,6 +164,6 @@ MPFB version provenance and authoring references:
 - [TalkingHead 1.7.0 model compatibility notes](https://github.com/met4citizen/TalkingHead/blob/v1.7.0/README.md)
 
 The included example is a pipeline smoke-test asset, not a commercially
-approved production model. Generating original models with Blender and MPFB
-and adding an in-app chooser for multiple validated assets remain follow-up
-tasks.
+approved production model. Development builds also list MPFB-generated
+candidates, selectable with `?avatar=<id>`; an in-app chooser for validated
+production assets remains a follow-up task.

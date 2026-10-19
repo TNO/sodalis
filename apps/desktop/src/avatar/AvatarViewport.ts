@@ -2,7 +2,7 @@ import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import type { AttentionTargetRegistry } from "@sodalis/avatar";
-import { DEFAULT_AVATAR_ASSET } from "./defaultAvatar.js";
+import { ACTIVE_AVATAR_ASSET } from "./defaultAvatar.js";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -33,7 +33,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
     if (initializing || removed) return;
     initializing = true;
     const attempt = ++generation;
-    status = `Preparing the ${DEFAULT_AVATAR_ASSET.name} avatar viewer…`;
+    status = `Preparing the ${ACTIVE_AVATAR_ASSET.name} avatar viewer…`;
     scene?.dispose();
     scene = undefined;
     attrs.onScene?.(undefined);
@@ -57,11 +57,11 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
         },
       });
       attrs.onScene?.(scene);
-      status = `Loading ${DEFAULT_AVATAR_ASSET.name} avatar…`;
+      status = `Loading ${ACTIVE_AVATAR_ASSET.name} avatar…`;
       m.redraw();
-      await scene.controller.load(DEFAULT_AVATAR_ASSET);
+      await scene.controller.load(ACTIVE_AVATAR_ASSET);
       if (removed || attempt !== generation) return;
-      status = `${DEFAULT_AVATAR_ASSET.name} avatar ready.`;
+      status = `${ACTIVE_AVATAR_ASSET.name} avatar ready.`;
     } catch (error) {
       if (removed || attempt !== generation) return;
       status = `3D avatar unavailable: ${errorMessage(error)}`;
@@ -108,7 +108,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
             : null,
           vnode.attrs.interactive &&
           vnode.attrs.onActivate &&
-          status === `${DEFAULT_AVATAR_ASSET.name} avatar ready.`
+          status === `${ACTIVE_AVATAR_ASSET.name} avatar ready.`
             ? m(
                 "button.avatar-interaction-target[type=button]",
                 {
@@ -124,7 +124,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
           vnode.attrs.notificationCount &&
           vnode.attrs.notificationCount > 0 &&
           vnode.attrs.onNotificationsActivate &&
-          status === `${DEFAULT_AVATAR_ASSET.name} avatar ready.`
+          status === `${ACTIVE_AVATAR_ASSET.name} avatar ready.`
               ? m(
                   "button.avatar-notification-indicator[type=button]",
                   {
@@ -151,7 +151,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
             "p.avatar-viewport-status[role=status][aria-live=polite]",
             {
               class:
-                status === `${DEFAULT_AVATAR_ASSET.name} avatar ready.`
+                status === `${ACTIVE_AVATAR_ASSET.name} avatar ready.`
                   ? "avatar-viewport-status-ready"
                   : "",
             },

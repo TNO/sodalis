@@ -1,0 +1,34 @@
+{
+  "id": "sodalis-henk",
+  "name": "Henk",
+  "description": "Older male adult, friendly and neutral, contemporary casual clothing.",
+  "maxTextureSize": 2048,
+  "mpfb": {
+    "name": "henk",
+    "phenotype": {
+      "gender": 1.0,
+      "age": 0.82,
+      "muscle": 0.5,
+      "weight": 0.55,
+      "proportions": 0.5,
+      "height": 0.5,
+      "cupsize": 0.5,
+      "firmness": 0.5,
+      "race": { "asian": 0.0, "caucasian": 1.0, "african": 0.0 }
+    },
+    "targets": [],
+    "skin_mhmat": "old_caucasian_male/old_caucasian_male.mhmat",
+    "eyes": "high-poly/high-poly.mhclo",
+    "eyebrows": "eyebrow001/eyebrow001.mhclo",
+    "eyelashes": "eyelashes01/eyelashes01.mhclo",
+    "teeth": "teeth_base/teeth_base.mhclo",
+    "tongue": "tongue01/tongue01.mhclo",
+    "hair": "short02/short02.mhclo",
+    "proxy": "",
+    "clothes": [
+      "male_casualsuit04/male_casualsuit04.mhclo",
+      "shoes01/shoes01.mhclo"
+    ],
+    "expressions": []
+  }
+}

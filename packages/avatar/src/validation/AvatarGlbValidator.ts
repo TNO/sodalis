@@ -47,6 +47,10 @@ export interface AvatarGlbValidationReport {
   metrics: AvatarGlbValidationMetrics;
 }
 
+// TalkingHead 1.7.0 resolves these by name when it loads a model.
+const TALKINGHEAD_MODEL_ROOT = "Armature";
+const TALKINGHEAD_EYE_BONES = ["LeftEye", "RightEye"] as const;
+
 function check(
   id: string,
   name: string,
@@ -184,6 +188,12 @@ function validationFailure(message: string): AvatarGlbValidationReport {
         "Not inspected because the GLB could not be parsed.",
       ),
       check(
+        "talkinghead",
+        "TalkingHead skeleton anchors",
+        "skipped",
+        "Not inspected because the GLB could not be parsed.",
+      ),
+      check(
         "morphs",
         "ARKit and Oculus morph targets",
         "skipped",
@@ -253,6 +263,15 @@ export function validateAvatarScene(
   const hasBoundHumanoidRig = skinnedMeshes.some((mesh) =>
     hasRequiredBoneHierarchy(mesh.skeleton.bones),
   );
+  const head = bones.get("Head");
+  const missingTalkingHead = [
+    ...(scene.getObjectByName(TALKINGHEAD_MODEL_ROOT)
+      ? []
+      : [`a "${TALKINGHEAD_MODEL_ROOT}" root node`]),
+    ...TALKINGHEAD_EYE_BONES.filter(
+      (name) => !head?.getObjectByName(name),
+    ).map((name) => `the ${name} bone under Head`),
+  ];
   const missingMorphs = [...AVATAR_ARKIT_SHAPES, ...AVATAR_VISEMES].filter(
     (name) => !morphs.has(name),
   );
@@ -374,6 +393,14 @@ export function validateAvatarScene(
                 ? [`${invalidSkinMeshes.length} skinned mesh(es) have missing or mismatched skinIndex/skinWeight attributes.`]
                 : []),
             ].join(" "),
+    ),
+    check(
+      "talkinghead",
+      "TalkingHead skeleton anchors",
+      missingTalkingHead.length === 0 ? "pass" : "fail",
+      missingTalkingHead.length === 0
+        ? `Found the ${TALKINGHEAD_MODEL_ROOT} root and ${TALKINGHEAD_EYE_BONES.join("/")} bones.`
+        : `TalkingHead needs ${missingTalkingHead.join(", ")}.`,
     ),
     check(
       "morphs",

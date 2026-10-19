@@ -1,15 +1,13 @@
 # 0014 Building a native Sodalis avatar asset pipeline
 
-Status: open
+Status: in-progress
 Priority: medium
 Subsystem: avatar
 Depends on: 0010, 0012
 Owner: Copilot
-Agent: unassigned
+Agent: Copilot
 
 ## Context
-
-**Future task — do not implement as part of the current milestone.**
 
 Build a small, attractive, legally redistributable collection of native
 Sodalis avatars. Use MPFB 2.x and Blender as authoring tools, then deliver
@@ -201,3 +199,27 @@ runtime architecture.
   baseline authoring section in the avatar profile at that time.
 - 2026-10-03: Expanded this future task from the user's detailed asset-pipeline
   brief. Keep it open; do not start authoring until the user selects this task.
+- 2026-10-19: Started at the user's request. Installed Blender 5.2.2 and MPFB
+  2.0.18 (2.0.17 fails in Blender 5.2) plus the CC0 asset packs, and added
+  the scripted pipeline in `tools/avatar-authoring/` (`setup.sh`,
+  `build_avatar.py`, recipes). The first candidate, `sodalis-henk` (older
+  male), passes every validator check: 37,328 triangles, 9 draw calls, 11
+  textures of at most 2048 px, a 10 MB GLB, and all 52 ARKit + 15 visemes.
+  It loads in Avatar Lab via `?avatar=sodalis-henk` (dev builds only).
+- Pipeline findings: TalkingHead 1.7.0 needs an `Armature` root and
+  `LeftEye`/`RightEye` bones, which MPFB's Mixamo rig lacks, so the build
+  adds them and the validator gained a `talkinghead` check. MPFB bone rolls
+  differ from the RPM frames TalkingHead's poses assume (up to 180°), so the
+  build aligns rest frames to `rpm_rest_frames.json`. Opaque textures had
+  unused alpha links, which kept them as PNG; they are now unlinked so the
+  export writes JPEG (18 MB → 10 MB).
+- Licensing: every asset used by Henk, including `faceunits01` and
+  `visemes02` targets, is CC0 according to MPFB pack metadata; the manifest
+  is in `apps/desktop/public/avatars/NOTICE.md`.
+- Open visual issues for review: MPFB's aged eyelids read as squinting and
+  dark at runtime; age reads closer to 50 than 65; the short02 hair and
+  T-shirt look dated; skin is flat under the runtime lighting. Next: tune the
+  recipe and materials, then build the older-female and younger candidates,
+  run the conversational Avatar Lab evaluation, and record the evaluation in
+  `docs/evaluations/`. The hard-coded brunette attribution in the assistant
+  panel should come from catalogue metadata once a chooser exists.
