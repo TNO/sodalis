@@ -78,3 +78,26 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
 ## Progress notes
 
 - 2026-10-19: Licence reviewed. Windows chosen for Unreal (more storage).
+- 2026-10-19: Inspected Anna's export (UE 5.8.3, kept in `~/avatar-work/anna`):
+  - Head FBX LOD0: 34.7k verts, 859 FACS corrective shape keys and 874 bones.
+    It has no ARKit or viseme names.
+  - Body FBX LOD0: 60.8k tris, 341 bones, no shape keys.
+  - DCC zip: head/body DNA plus 2K maps.
+  - **There is no hair (groom or cards) and no clothing** in the export.
+- 2026-10-19: Built Epic's OpenRigLogic (MIT) with Python bindings for
+  Blender 5.2 / Python 3.13 on arm64. Local fixes, none in the repo:
+  - link `Python3::Module`;
+  - use the SWIG 4.5 `SWIG_STRINGIFY` rename;
+  - add `.so` symlinks;
+  - add an `@loader_path` rpath.
+
+  It loads `head.dna`: 263 raw controls, 870 joints and 782 blend-shape
+  channels. Evaluating a control gives joint deltas plus the corrective
+  (e.g. `jawOpen` → `jaw_open`). Poly Hammer's add-on was not needed; its
+  compiled bindings come from a private repository.
+- 2026-10-19: **Blocked on data, not platform.**
+  - No ARKit→`CTRL_expressions` mapping ships with OpenRigLogic or Poly
+    Hammer. Epic's `mh_arkit_mapping_pose` asset is inside Unreal; a
+    third-party GitHub copy has no clear licence, so it is not used.
+  - No Oculus viseme set exists for MetaHumans.
+  - No exportable hair is in the export.
