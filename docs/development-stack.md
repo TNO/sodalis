@@ -741,14 +741,16 @@ Two opt-in scripts measure LLM providers for the
 `scripts/llm-compare.ts` calls the providers in-process through the same
 factory as the AI service, with the fixed Dutch prompt set and action list in
 `scripts/llm-prompts.json` (10 chat and 10 action prompts). It reads `.env`
-plus an optional `--env <overlay>` such as `.env.azure` (the same overlay
-semantics as `pnpm stack:up --env`), runs one excluded warm-up per
-configuration, and then
+when present and overlays an optional `--env <overlay>` such as `.env.azure`
+(the same overlay semantics as `pnpm stack:up --env`). It runs one excluded
+warm-up per configuration, and then
 `--repetitions` passes (default 3). Configurations: `local` (`LLM_BASE_URL`
 and `LLM_MODEL`, with `host.docker.internal` rewritten to `127.0.0.1`, or
 `--local-url` and `--local-model`), `azure-minimal`, `azure-low`,
 `azure-medium`, `azure-high` (the `AZURE_LLM_*` settings with that reasoning
-effort), and `mock`. Pass the deployment's prices per million tokens to
+effort), `azure-off` (the configured Azure deployment without a
+`reasoning_effort` request field, for non-reasoning models such as
+gpt-4.1-mini), and `mock`. Pass the deployment's prices per million tokens to
 estimate cost; reasoning tokens are billed as output.
 
 ```sh
@@ -758,7 +760,18 @@ pnpm exec tsx scripts/llm-compare.ts --configs local --label local-llama3.2-3b
 pnpm exec tsx scripts/llm-compare.ts \
   --configs azure-minimal,azure-low,azure-medium,azure-high \
   --input-price <input> --output-price <output> --currency USD --label azure-gpt-5
+# gpt-4.1-mini (billed): put its endpoint, key, and deployment in the ignored
+# .env.gpt-4.1-mini overlay; azure-off omits reasoning_effort.
+pnpm exec tsx scripts/llm-compare.ts \
+  --env .env.gpt-4.1-mini --configs azure-off --label azure-gpt-4.1-mini-off
 ```
+
+The overlay needs `AZURE_LLM_URL`, `AZURE_LLM_KEY`, and
+`AZURE_LLM_DEPLOYMENT` set for the intended Azure resource and deployment.
+`azure-off` sets `AZURE_LLM_REASONING_EFFORT=off` for this run regardless of
+the overlay's value. The comparison makes one excluded warm-up request and
+then 20 prompts per repetition (60 requests with the default three
+repetitions). Do not run it without consent to send those prompts to Azure.
 
 Each run writes `results.json` (every raw response), `summary.md`, and
 `review.md` to `models/llm-eval/<label>/`. Rate each configuration in
