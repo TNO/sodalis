@@ -112,6 +112,45 @@ connected to Sodalis playback, are described in the
 Final analyses of these provider evaluations are collected in
 [`docs/evaluations/`](docs/evaluations/README.md).
 
+## Long-term memory and consent
+
+Long-term memory ([ADR 0005](docs/adr/0005-long-term-memory.md)) is **off**
+by default. With `MEMORY_ENABLED=true`, it still stores nothing until
+consent is recorded. There are two separate consents, both kept in the
+memory database (the `memory_data` volume), so they survive restarts:
+
+| Consent | Allows | Without it |
+| --- | --- | --- |
+| `memory` | Storing turns and extracting general memories (facts, people, dates, preferences), and using them in replies | Memory is inactive: nothing is stored, queued, or retrieved |
+| `health` | Also storing and recalling health memories (diagnoses, medication, allergies) | Health memories are dropped before storage; existing ones are hidden from replies |
+
+Grant or withdraw either consent at runtime; the latest record wins:
+
+```sh
+curl -fsS -X PUT http://127.0.0.1:4176/api/memory/consent \
+  -H 'content-type: application/json' -d '{"kind":"health","granted":true}'
+curl -fsS http://127.0.0.1:4176/api/memory/status   # shows both consents
+```
+
+Two **development-only** `.env` settings change the defaults:
+
+- `MEMORY_REQUIRE_CONSENT=false` skips the `memory` consent check entirely.
+  It does not grant `health`.
+- `MEMORY_HEALTH_CONSENT=true` records the `health` consent at startup,
+  but **only when no health consent was ever recorded**. It is stored with
+  policy version `env`. If you later withdraw it through the API, a restart
+  does not grant it again. To reset the stored consent, record it again
+  through the API.
+
+Health memories from observed events (for example Home sensors) are never
+stored, even with `health` consent. Withdrawing a consent does not delete
+anything: use `DELETE /api/memory/items/<id>` or `DELETE
+/api/memory/transcripts`, or remove the volume to forget everything. With
+`MEMORY_EXTRACT_PROVIDER=azure`, user messages are sent to your
+`AZURE_LLM_*` resource for extraction. See the
+[memory settings](apps/server/README.md#long-term-memory) for all
+`MEMORY_*` options.
+
 ## Frontend-only development
 
 `pnpm dev` starts the Vite desktop. To use the already running Compose
