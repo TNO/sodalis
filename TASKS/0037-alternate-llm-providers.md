@@ -59,3 +59,8 @@ service.
   for speed at equal quality; it stays the default. Closed with follow-ups
   0043 (vLLM, `json_schema`) and 0044 (prompt for confirmed actions).
   Analysis: [LLM provider evaluation](../docs/evaluations/llm-providers.md).
+- 2026-10-19 Copilot: Added `azure-off` to `scripts/llm-compare.ts` for
+  non-reasoning deployments and measured Azure gpt-4.1-mini (60 turns, about
+  $0.04 at Data Zone list prices). Restructured the evaluation around one
+  comparison of all six configurations. gpt-4.1-mini awaits a user rating
+  and a live stack check.

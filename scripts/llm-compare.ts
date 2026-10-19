@@ -3,7 +3,7 @@
  * (task 0037): latency, JSON and utterance-schema validity, semantic actions, tokens, and cost.
  * Opt-in and networked: never part of `pnpm test`.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
@@ -298,7 +298,7 @@ function hostUrl(value: string): string {
   return value.replace("://host.docker.internal", "://127.0.0.1");
 }
 
-function configurations(
+export function configurations(
   names: readonly string[],
   env: Readonly<Record<string, string | undefined>>,
   localUrl: string | undefined,
@@ -322,9 +322,11 @@ function configurations(
         },
       };
     }
-    const effort = AZURE_LLM_REASONING_EFFORTS.find((candidate) => name === `azure-${candidate}`);
+    const effort = name === "azure-off"
+      ? "off"
+      : AZURE_LLM_REASONING_EFFORTS.find((candidate) => name === `azure-${candidate}`);
     if (!effort) {
-      throw new Error(`Unknown configuration "${name}"; use local, mock, or azure-<${
+      throw new Error(`Unknown configuration "${name}"; use local, mock, azure-off, or azure-<${
         AZURE_LLM_REASONING_EFFORTS.join("|")}>.`);
     }
     return {
@@ -443,8 +445,9 @@ async function main(): Promise<void> {
     return;
   }
   // Like `pnpm stack:up --env`, an explicit overlay (for example .env.azure) replaces matching .env settings.
+  const baseEnv = resolve(root, ".env");
   const env = {
-    ...parseEnv(readFileSync(resolve(root, ".env"), "utf8")),
+    ...(values.env && !existsSync(baseEnv) ? {} : parseEnv(readFileSync(baseEnv, "utf8"))),
     ...(values.env ? parseEnv(readFileSync(resolve(root, values.env), "utf8")) : {}),
   };
   const configs = configurations(
