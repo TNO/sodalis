@@ -970,3 +970,93 @@ body {
     flex: 1 1 9rem;
   }
 }
+
+.avatar-stage {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 35%, #3b3f4c 0%, #1b1d24 60%, #0e0f13 100%);
+}
+
+.avatar-stage .avatar-viewport {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.avatar-stage .avatar-viewport-status-ready {
+  display: none;
+}
+
+.avatar-stage-panel {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: min(22rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  padding: 1rem;
+  overflow-y: auto;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 14px;
+  background: rgb(18 20 26 / 78%);
+  color: #e8e9ee;
+  backdrop-filter: blur(12px);
+}
+
+.avatar-stage-panel h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.4rem;
+}
+
+.avatar-stage-panel a {
+  color: #a9c1ff;
+}
+
+.avatar-stage-avatars {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.avatar-stage-avatars a[aria-current="page"] {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.avatar-stage-say {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.avatar-stage-say label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.avatar-stage-say textarea {
+  width: 100%;
+  padding: 0.4rem;
+  border-radius: 8px;
+  color: inherit;
+  background: rgb(255 255 255 / 6%);
+  font: inherit;
+  resize: vertical;
+}
+
+.avatar-stage-say .avatar-stage-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.avatar-stage-say .avatar-stage-inline input[type="range"] {
+  flex: 1;
+  margin: 0;
+}
+
+.avatar-stage-say textarea {
+  min-height: 5rem;
+}

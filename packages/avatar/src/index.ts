@@ -137,8 +137,75 @@ export interface AvatarAffect {
 
 export const AVATAR_PROFILE_ID = "sodalis-avatar-0.1";
 
-export const AVATAR_FRAMINGS = ["head", "upper-body", "half-body"] as const;
+export const AVATAR_FRAMINGS = [
+  "face",
+  "head",
+  "head-shoulders",
+  "bust",
+  "half-body",
+  "three-quarter",
+  "full-body",
+] as const;
 export type AvatarFramingName = (typeof AVATAR_FRAMINGS)[number];
+
+/** Human-readable names for {@link AVATAR_FRAMINGS}. */
+export const AVATAR_FRAMING_LABELS: Record<AvatarFramingName, string> = {
+  face: "Face",
+  head: "Head",
+  "head-shoulders": "Head & shoulders",
+  bust: "Bust",
+  "half-body": "Half body",
+  "three-quarter": "Three-quarter",
+  "full-body": "Full body",
+};
+
+export const AVATAR_DYNAMIC_BONE_TYPES = [
+  "point",
+  "link",
+  "mix1",
+  "mix2",
+  "full",
+] as const;
+export type AvatarDynamicBoneType = (typeof AVATAR_DYNAMIC_BONE_TYPES)[number];
+
+/** Per-axis value [x, y, z, twist], or one value for every axis. */
+export type AvatarDynamicBoneAxes =
+  | number
+  | readonly [number, number, number, number];
+
+export type AvatarVector3 = readonly [number, number, number];
+
+/**
+ * Spring-damper simulation for one optional model bone, such as a hair strand.
+ * The simulation rotates or moves the bone's parent, so list a chain's child
+ * bones, never its root. Units are metres and seconds.
+ */
+export interface AvatarDynamicBone {
+  bone: string;
+  type: AvatarDynamicBoneType;
+  stiffness: AvatarDynamicBoneAxes;
+  damping: AvatarDynamicBoneAxes;
+  external?: number;
+  limits?: readonly [
+    AvatarDynamicBoneLimit,
+    AvatarDynamicBoneLimit,
+    AvatarDynamicBoneLimit,
+    AvatarDynamicBoneLimit,
+  ];
+  pivot?: boolean;
+  deltaLocal?: AvatarVector3;
+  excludes?: readonly AvatarDynamicBoneExclude[];
+}
+
+export type AvatarDynamicBoneLimit =
+  | readonly [number | null, number | null]
+  | null;
+
+export interface AvatarDynamicBoneExclude {
+  bone: string;
+  radius: number;
+  deltaLocal?: AvatarVector3;
+}
 
 export interface AvatarAsset {
   id: string;
@@ -146,6 +213,7 @@ export interface AvatarAsset {
   modelUrl: string;
   profile: typeof AVATAR_PROFILE_ID;
   hiddenNodes?: readonly string[];
+  dynamicBones?: readonly AvatarDynamicBone[];
   framing?: {
     preferred: AvatarFramingName;
     cameraTargetYOffset?: number;
@@ -155,6 +223,8 @@ export interface AvatarAsset {
     blinkScale?: number;
     expressionScale?: number;
     headMotionScale?: number;
+    /** Scales how far TalkingHead's standing idle poses lean away from straight (0–1). */
+    poseScale?: number;
   };
 }
 
@@ -301,6 +371,7 @@ function validateBehavior(
     blinkScale: value.blinkScale,
     expressionScale: value.expressionScale,
     headMotionScale: value.headMotionScale,
+    poseScale: value.poseScale,
   };
   for (const [path, scale] of Object.entries(scales)) {
     if (scale !== undefined && (!isFiniteNumber(scale) || scale < 0)) {
@@ -309,6 +380,12 @@ function validateBehavior(
         message: "Must be a finite number greater than or equal to zero.",
       });
     }
+  }
+  if (isFiniteNumber(scales.poseScale) && scales.poseScale > 1) {
+    issues.push({
+      path: "behavior.poseScale",
+      message: "Must be at most 1.",
+    });
   }
 
   return {
@@ -320,6 +397,9 @@ function validateBehavior(
       : {}),
     ...(isFiniteNumber(scales.headMotionScale)
       ? { headMotionScale: scales.headMotionScale }
+      : {}),
+    ...(isFiniteNumber(scales.poseScale) && scales.poseScale <= 1
+      ? { poseScale: scales.poseScale }
       : {}),
   };
 }
@@ -360,6 +440,186 @@ function validateHiddenNodes(
   }
 
   return hiddenNodes;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isVector3(value: unknown): value is AvatarVector3 {
+  return (
+    Array.isArray(value) && value.length === 3 && value.every(isFiniteNumber)
+  );
+}
+
+function isDynamicBoneAxes(value: unknown): value is AvatarDynamicBoneAxes {
+  if (isFiniteNumber(value)) return value >= 0;
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    value.every((axis) => isFiniteNumber(axis) && axis >= 0)
+  );
+}
+
+function isDynamicBoneLimits(
+  value: unknown,
+): value is NonNullable<AvatarDynamicBone["limits"]> {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    value.every(
+      (limit) =>
+        limit === null ||
+        (Array.isArray(limit) &&
+          limit.length === 2 &&
+          limit.every((end) => end === null || isFiniteNumber(end))),
+    )
+  );
+}
+
+function validateDynamicBoneExcludes(
+  value: unknown,
+  path: string,
+  issues: AvatarAssetIssue[],
+): AvatarDynamicBoneExclude[] | undefined {
+  if (!Array.isArray(value)) {
+    issues.push({ path, message: "Must be an array." });
+    return undefined;
+  }
+  const excludes: AvatarDynamicBoneExclude[] = [];
+  for (const [index, exclude] of value.entries()) {
+    const at = `${path}.${index}`;
+    if (
+      !isRecord(exclude) ||
+      !isNonEmptyString(exclude.bone) ||
+      !isFiniteNumber(exclude.radius) ||
+      exclude.radius < 0 ||
+      (exclude.deltaLocal !== undefined && !isVector3(exclude.deltaLocal))
+    ) {
+      issues.push({
+        path: at,
+        message:
+          "Must have a bone name, a non-negative radius and an optional [x, y, z] deltaLocal.",
+      });
+      continue;
+    }
+    excludes.push({
+      bone: exclude.bone.trim(),
+      radius: exclude.radius,
+      ...(isVector3(exclude.deltaLocal)
+        ? { deltaLocal: exclude.deltaLocal }
+        : {}),
+    });
+  }
+  return excludes;
+}
+
+function validateDynamicBones(
+  value: unknown,
+  issues: AvatarAssetIssue[],
+): AvatarDynamicBone[] | undefined {
+  if (!Array.isArray(value)) {
+    issues.push({ path: "dynamicBones", message: "Must be an array." });
+    return undefined;
+  }
+
+  const names = new Set<string>();
+  const bones: AvatarDynamicBone[] = [];
+  for (const [index, item] of value.entries()) {
+    const path = `dynamicBones.${index}`;
+    if (!isRecord(item)) {
+      issues.push({ path, message: "Must be an object." });
+      continue;
+    }
+    const startIssues = issues.length;
+    const bone = isNonEmptyString(item.bone) ? item.bone.trim() : "";
+    if (!bone) {
+      issues.push({
+        path: `${path}.bone`,
+        message: "Must be a non-empty bone name.",
+      });
+    } else if (names.has(bone)) {
+      issues.push({
+        path: `${path}.bone`,
+        message: `Bone "${bone}" is listed more than once.`,
+      });
+    }
+    names.add(bone);
+    if (!hasValue(AVATAR_DYNAMIC_BONE_TYPES, item.type)) {
+      issues.push({
+        path: `${path}.type`,
+        message: `Must be one of: ${AVATAR_DYNAMIC_BONE_TYPES.join(", ")}.`,
+      });
+    }
+    for (const key of ["stiffness", "damping"] as const) {
+      if (!isDynamicBoneAxes(item[key])) {
+        issues.push({
+          path: `${path}.${key}`,
+          message:
+            "Must be a non-negative number or an array of four non-negative numbers.",
+        });
+      }
+    }
+    if (
+      item.external !== undefined &&
+      !(isFiniteNumber(item.external) && item.external >= 0 && item.external <= 1)
+    ) {
+      issues.push({
+        path: `${path}.external`,
+        message: "Must be a number from 0 to 1.",
+      });
+    }
+    if (item.limits !== undefined && !isDynamicBoneLimits(item.limits)) {
+      issues.push({
+        path: `${path}.limits`,
+        message: "Must be four [low, high] pairs or nulls.",
+      });
+    }
+    if (item.pivot !== undefined && typeof item.pivot !== "boolean") {
+      issues.push({ path: `${path}.pivot`, message: "Must be a boolean." });
+    }
+    if (item.pivot === true && item.type === "point") {
+      issues.push({
+        path: `${path}.pivot`,
+        message: "A point bone cannot be a pivot.",
+      });
+    }
+    if (item.deltaLocal !== undefined && !isVector3(item.deltaLocal)) {
+      issues.push({
+        path: `${path}.deltaLocal`,
+        message: "Must be an [x, y, z] array of numbers.",
+      });
+    }
+    const excludes =
+      item.excludes === undefined
+        ? undefined
+        : validateDynamicBoneExcludes(
+            item.excludes,
+            `${path}.excludes`,
+            issues,
+          );
+
+    if (
+      issues.length > startIssues ||
+      !hasValue(AVATAR_DYNAMIC_BONE_TYPES, item.type) ||
+      !isDynamicBoneAxes(item.stiffness) ||
+      !isDynamicBoneAxes(item.damping)
+    ) {
+      continue;
+    }
+    bones.push({
+      bone,
+      type: item.type,
+      stiffness: item.stiffness,
+      damping: item.damping,
+      ...(isFiniteNumber(item.external) ? { external: item.external } : {}),
+      ...(isDynamicBoneLimits(item.limits) ? { limits: item.limits } : {}),
+      ...(typeof item.pivot === "boolean" ? { pivot: item.pivot } : {}),
+      ...(isVector3(item.deltaLocal) ? { deltaLocal: item.deltaLocal } : {}),
+      ...(excludes ? { excludes } : {}),
+    });
+  }
+  return bones;
 }
 
 export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
@@ -403,6 +663,10 @@ export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
     value.hiddenNodes === undefined
       ? undefined
       : validateHiddenNodes(value.hiddenNodes, issues);
+  const dynamicBones =
+    value.dynamicBones === undefined
+      ? undefined
+      : validateDynamicBones(value.dynamicBones, issues);
 
   if (issues.length > 0) return { ok: false, issues };
 
@@ -414,6 +678,7 @@ export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
       modelUrl,
       profile: AVATAR_PROFILE_ID,
       ...(hiddenNodes ? { hiddenNodes } : {}),
+      ...(dynamicBones ? { dynamicBones } : {}),
       ...(framing ? { framing } : {}),
       ...(behavior ? { behavior } : {}),
     },

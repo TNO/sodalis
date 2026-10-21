@@ -17,6 +17,8 @@ import {
   type DesktopHost,
 } from "@sodalis/desktop-host";
 import { createDesktopAssistantActionRuntime } from "./assistant/createDesktopAssistantActions.js";
+import { ACTIVE_AVATAR_CREDIT } from "./avatar/defaultAvatar.js";
+import { isStageRequested } from "./avatar/stageRoute.js";
 import { createSampleNotes } from "./integrations/SampleNotes.js";
 import "mithril-materialized/index.css";
 import "./styles.css";
@@ -202,21 +204,21 @@ const DesktopShell = () => {
                 m(
                   "a",
                   {
-                    href: "https://github.com/met4citizen/TalkingHead/blob/v1.7.0/avatars/brunette.glb",
+                    href: ACTIVE_AVATAR_CREDIT.href,
                     target: "_blank",
                     rel: "noreferrer",
                   },
-                  "Ready Player Me brunette (TalkingHead example)",
+                  ACTIVE_AVATAR_CREDIT.label,
                 ),
                 " · ",
                 m(
                   "a",
                   {
-                    href: "https://creativecommons.org/licenses/by-nc/4.0/",
+                    href: ACTIVE_AVATAR_CREDIT.licenceHref,
                     target: "_blank",
                     rel: "noreferrer",
                   },
-                  "CC BY-NC 4.0",
+                  ACTIVE_AVATAR_CREDIT.licence,
                 ),
               ]),
               import.meta.env.DEV
@@ -255,4 +257,9 @@ const DesktopShell = () => {
 
 const root = document.getElementById("app");
 if (!root) throw new Error("Sodalis desktop root element is missing.");
-m.mount(root, DesktopShell);
+if (import.meta.env.DEV && isStageRequested(location.search)) {
+  const { AvatarStage } = await import("./avatar/AvatarStage.js");
+  m.mount(root, AvatarStage);
+} else {
+  m.mount(root, DesktopShell);
+}

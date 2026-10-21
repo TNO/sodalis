@@ -133,6 +133,8 @@ dist
 # pnpm
 .pnpm-store
 models/
+# Evaluation-only avatars that must not be redistributed (TASKS/0054)
+apps/desktop/public/avatars/eval/
 packages/memory/eval/.data/
 
 # yarn v3
@@ -148,3 +150,4 @@ packages/memory/eval/.data/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+__pycache__/

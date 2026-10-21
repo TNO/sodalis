@@ -26,6 +26,7 @@ declare module "@met4citizen/talkinghead" {
       url: string;
       avatarMood: string;
       avatarMute: true;
+      modelDynamicBones?: readonly unknown[];
     }): Promise<void>;
     animate(deltaMilliseconds: number): void;
     setMood(mood: string): void;
@@ -42,5 +43,16 @@ declare module "@met4citizen/talkinghead" {
     ): void;
     stopGesture(transitionMilliseconds?: number): void;
     dispose(): void;
+  }
+}
+
+declare module "@met4citizen/talkinghead/modules/lipsync-en.mjs" {
+  export class LipsyncEn {
+    preProcessText(text: string): string;
+    wordsToVisemes(words: string): {
+      visemes: string[];
+      times: number[];
+      durations: number[];
+    };
   }
 }

@@ -8,7 +8,8 @@
     "./internal/talkinghead": "./src/adapters/TalkingHeadAvatarController.ts",
     "./internal/scene": "./src/scene/AvatarScene.ts",
     "./internal/validation": "./src/validation/AvatarGlbValidator.ts",
-    "./testing": "./src/testing/MockVisemeSequence.ts"
+    "./testing": "./src/testing/MockVisemeSequence.ts",
+    "./testing/text": "./src/testing/TextVisemeSequence.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

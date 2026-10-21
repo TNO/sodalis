@@ -1,0 +1,94 @@
+{
+  "_note": "Oculus visemes composed from MetaHuman rig controls (tuned on Anna; the control set is shared by all MetaHumans) (CTRL_expressions.*, '*' = all L/R or UL/UR/DL/DR sides). Evaluation-only, hand-authored weights.",
+  "viseme_sil": {
+    "mouthLipsTogether*": 0.35,
+    "mouthLipsTighten*": 0.1,
+    "jawOpen": 0.03
+  },
+  "viseme_PP": {
+    "mouthLipsPress*": 0.6,
+    "mouthPress*": 0.4,
+    "mouthLipsTogether*": 0.7,
+    "jawOpen": 0.08
+  },
+  "viseme_FF": {
+    "mouthLowerLipBite*": 1.0,
+    "mouthLowerLipRollIn*": 0.3,
+    "mouthLowerLipTowardsTeeth*": 0.5,
+    "mouthUpperLipRaise*": 0.35,
+    "jawOpen": 0.08
+  },
+  "viseme_TH": {
+    "jawOpen": 0.25,
+    "tongueOut": 0.6,
+    "tongueTipUp": 0.2,
+    "mouthUpperLipRaise*": 0.15
+  },
+  "viseme_DD": {
+    "jawOpen": 0.2,
+    "tongueUp": 0.5,
+    "tongueTipUp": 0.6,
+    "mouthStretch*": 0.15
+  },
+  "viseme_kk": {
+    "jawOpen": 0.32,
+    "tongueUp": 0.4,
+    "tongueIn": 0.4,
+    "mouthStretch*": 0.3
+  },
+  "viseme_CH": {
+    "jawOpen": 0.12,
+    "mouthFunnel*": 0.55,
+    "mouthLipsTowards*": 0.3,
+    "mouthUpperLipRaise*": 0.2
+  },
+  "viseme_SS": {
+    "jawOpen": 0.05,
+    "mouthStretch*": 0.35,
+    "mouthCornerPull*": 0.15,
+    "mouthUpperLipRaise*": 0.15,
+    "mouthLowerLipDepress*": 0.15
+  },
+  "viseme_nn": {
+    "jawOpen": 0.12,
+    "tongueTipUp": 0.7,
+    "tongueUp": 0.4,
+    "mouthStretch*": 0.1
+  },
+  "viseme_RR": {
+    "jawOpen": 0.15,
+    "mouthFunnel*": 0.35,
+    "mouthLipsPurse*": 0.3,
+    "mouthCornerNarrow*": 0.3
+  },
+  "viseme_aa": {
+    "jawOpen": 0.55,
+    "mouthUpperLipRaise*": 0.15,
+    "mouthLowerLipDepress*": 0.2
+  },
+  "viseme_E": {
+    "jawOpen": 0.3,
+    "mouthStretch*": 0.4,
+    "mouthCornerPull*": 0.2,
+    "mouthUpperLipRaise*": 0.15
+  },
+  "viseme_I": {
+    "jawOpen": 0.15,
+    "mouthCornerPull*": 0.45,
+    "mouthStretch*": 0.35,
+    "mouthCornerWide*": 0.3
+  },
+  "viseme_O": {
+    "jawOpen": 0.45,
+    "mouthFunnel*": 0.9,
+    "mouthLipsPurse*": 0.35,
+    "mouthCornerNarrow*": 0.5
+  },
+  "viseme_U": {
+    "jawOpen": 0.08,
+    "mouthLipsPurse*": 1.0,
+    "mouthFunnel*": 0.4,
+    "mouthLipsTowards*": 0.6,
+    "mouthCornerNarrow*": 0.4
+  }
+}

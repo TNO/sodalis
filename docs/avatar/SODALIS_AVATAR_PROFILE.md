@@ -101,9 +101,16 @@ profile names above.
 
 | Field | Contract |
 |---|---|
-| `preferred` | `head`, `upper-body`, or `half-body`; default framing for the runtime |
+| `preferred` | Default framing for the runtime: `face`, `head`, `head-shoulders`, `bust`, `half-body`, `three-quarter`, or `full-body` |
 | `cameraTargetYOffset` | Optional finite offset in meters added to the measured framing target |
-| `cameraDistanceScale` | Optional finite positive multiplier for the bounds-derived camera distance |
+| `cameraDistanceScale` | Optional finite positive multiplier for the landmark-derived camera distance |
+
+Each framing shows a fixed anatomical range: `face` the face only, `head` the
+whole head, `head-shoulders` down to the shoulders, `bust` to the chest,
+`half-body` to the waist, `three-quarter` to the knees, and `full-body` to the
+feet. The runtime locates these limits from the `LeftEye`, `Neck`, `LeftArm`,
+`Spine2`, `Spine1`, `Spine`, `Hips`, `LeftLeg`, and `LeftFoot` joints, falling
+back to proportions of the avatar's height when a joint is missing.
 
 `AvatarAsset.behavior` may scale expression and head movement. The controller
 caps expression scaling at 6 and head-motion scaling at 3. The desktop sets

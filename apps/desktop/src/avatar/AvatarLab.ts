@@ -3,6 +3,7 @@ import type { VnodeDOM } from "mithril";
 import {
   AVATAR_EXPRESSIONS,
   AVATAR_FRAMINGS,
+  AVATAR_FRAMING_LABELS,
   AVATAR_STATES,
   type AvatarAffect,
   type AvatarExpression,
@@ -70,7 +71,7 @@ export function createAvatarLabState(): AvatarLabState {
       expression: "neutral",
       intensity: 0.7,
     },
-    framing: "upper-body",
+    framing: "bust",
     quality: "auto",
     reducedMotion: false,
     showGazeTarget: false,
@@ -223,7 +224,7 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
                   },
                 },
                 AVATAR_FRAMINGS.map((framing) =>
-                  m("option", { value: framing }, framing),
+                  m("option", { value: framing }, AVATAR_FRAMING_LABELS[framing]),
                 ),
               ),
             ]),

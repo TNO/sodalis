@@ -1,0 +1,180 @@
+{
+  "id": "sodalis-sofia",
+  "name": "Sofia",
+  "description": "Woman around 30 with long dark hair and a detailed face; high-detail desktop build.",
+  "maxTextureSize": 4096,
+  "subdivision": 1,
+  "imageAdjustments": {
+    "hairtex1": {
+      "multiply": [
+        0.13,
+        0.115,
+        0.125
+      ]
+    }
+  },
+  "alphaCutoffs": {
+    "Hair": 0.3
+  },
+  "roughness": {
+    "punkduck_female_tight_jeans": 0.85
+  },
+  "hairBones": {
+    "chains": 6,
+    "segments": 3
+  },
+  "mpfb": {
+    "name": "sofia",
+    "phenotype": {
+      "gender": 0.0,
+      "age": 0.53,
+      "muscle": 0.5,
+      "weight": 0.42,
+      "proportions": 1.0,
+      "height": 0.55,
+      "cupsize": 0.55,
+      "firmness": 0.6,
+      "race": {
+        "asian": 0.0,
+        "caucasian": 1.0,
+        "african": 0.0
+      }
+    },
+    "targets": [
+      {
+        "target": "head-oval",
+        "value": 1.0
+      },
+      {
+        "target": "head-scale-horiz-decr",
+        "value": 0.35
+      },
+      {
+        "target": "chin-width-decr",
+        "value": 0.5
+      },
+      {
+        "target": "chin-prominent-incr",
+        "value": 0.3
+      },
+      {
+        "target": "chin-height-incr",
+        "value": 0.2
+      },
+      {
+        "target": "l-cheek-bones-incr",
+        "value": 0.7
+      },
+      {
+        "target": "r-cheek-bones-incr",
+        "value": 0.7
+      },
+      {
+        "target": "l-cheek-volume-decr",
+        "value": 0.5
+      },
+      {
+        "target": "r-cheek-volume-decr",
+        "value": 0.5
+      },
+      {
+        "target": "l-cheek-inner-decr",
+        "value": 0.4
+      },
+      {
+        "target": "r-cheek-inner-decr",
+        "value": 0.4
+      },
+      {
+        "target": "mouth-upperlip-volume-incr",
+        "value": 0.9
+      },
+      {
+        "target": "mouth-lowerlip-volume-incr",
+        "value": 0.8
+      },
+      {
+        "target": "mouth-cupidsbow-incr",
+        "value": 0.8
+      },
+      {
+        "target": "mouth-angles-up",
+        "value": 0.4
+      },
+      {
+        "target": "mouth-scale-horiz-incr",
+        "value": 0.15
+      },
+      {
+        "target": "nose-scale-horiz-decr",
+        "value": 0.5
+      },
+      {
+        "target": "nose-point-width-decr",
+        "value": 0.6
+      },
+      {
+        "target": "nose-point-up",
+        "value": 0.4
+      },
+      {
+        "target": "nose-width1-decr",
+        "value": 0.4
+      },
+      {
+        "target": "nose-scale-vert-decr",
+        "value": 0.2
+      },
+      {
+        "target": "l-eye-scale-incr",
+        "value": 0.4
+      },
+      {
+        "target": "r-eye-scale-incr",
+        "value": 0.4
+      },
+      {
+        "target": "l-eye-corner2-up",
+        "value": 0.5
+      },
+      {
+        "target": "r-eye-corner2-up",
+        "value": 0.5
+      },
+      {
+        "target": "l-eye-height2-incr",
+        "value": 0.3
+      },
+      {
+        "target": "r-eye-height2-incr",
+        "value": 0.3
+      },
+      {
+        "target": "eyebrows-angle-up",
+        "value": 0.5
+      },
+      {
+        "target": "eyebrows-trans-up",
+        "value": 0.2
+      }
+    ],
+    "skin_mhmat": "toigo_light_skin_with_natural_makeup/toigo_light_skin_with_natural_makeup.mhmat",
+    "eyes": "high-poly/high-poly.mhclo",
+    "eyes_material_type": "MAKESKIN",
+    "alternative_materials": {
+      "2c12f43b-1303-432c-b7ce-d78346baf2e6": "materials/mindfront_brown_eye_02/mindfront_brown_eye_02.mhmat"
+    },
+    "eyebrows": "mindfront_eyebrows_03/mindfront_eyebrows_03.mhclo",
+    "eyelashes": "mindfront_eyelashes_02/mindfront_eyelashes_02.mhclo",
+    "teeth": "teeth_base/teeth_base.mhclo",
+    "tongue": "tongue01/tongue01.mhclo",
+    "hair": "elvs_lady_hippy_hair/elvs_lady_hippy_hair.mhclo",
+    "proxy": "",
+    "clothes": [
+      "punkduck_v_neck_top/punkduck_v_neck_top.mhclo",
+      "punkduck_female_tight_jeans/punkduck_female_tight_jeans.mhclo",
+      "mindfront_shoes_oxford_female/mindfront_shoes_oxford_female.mhclo"
+    ],
+    "expressions": []
+  }
+}

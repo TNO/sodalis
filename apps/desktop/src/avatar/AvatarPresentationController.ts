@@ -189,7 +189,7 @@ export function createAvatarPresentationController(
     dock,
     visible,
     scale: 1,
-    framing: "upper-body",
+    framing: "bust",
     reducedMotion: false,
   };
   let effectivePlacement: AvatarPlacement =

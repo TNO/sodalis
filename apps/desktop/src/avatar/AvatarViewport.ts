@@ -1,6 +1,9 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
-import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
+import type {
+  AvatarSceneHandle,
+  AvatarSceneLook,
+} from "@sodalis/avatar/internal/scene";
 import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import { ACTIVE_AVATAR_ASSET } from "./defaultAvatar.js";
 
@@ -10,6 +13,7 @@ function errorMessage(error: unknown): string {
 
 interface AvatarViewportAttrs {
   targetRegistry?: AttentionTargetRegistry;
+  look?: AvatarSceneLook;
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
   gazeOverlay?: string;
   showGazeTarget?: boolean;
@@ -44,6 +48,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
       if (removed || attempt !== generation) return;
       if (!canvas) throw new Error("The avatar canvas could not be created.");
       scene = createAvatarScene(canvas, {
+        ...(attrs.look ? { look: attrs.look } : {}),
         ...(attrs.targetRegistry
           ? { targetRegistry: attrs.targetRegistry }
           : {}),

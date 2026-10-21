@@ -116,6 +116,23 @@ describe("TalkingHead avatar controller", () => {
     expect(runtime.lookAhead).toHaveBeenLastCalledWith(650);
   });
 
+  it("passes rigged hair spring bones to the runtime only when configured", async () => {
+    const { runtime, controller } = createHarness();
+    const dynamicBones = [
+      { bone: "Hair1_2", type: "link", stiffness: 20, damping: 2 },
+    ] as const;
+
+    await controller.load(testAsset);
+    expect(runtime.showAvatar.mock.calls[0]?.[0]).not.toHaveProperty(
+      "modelDynamicBones",
+    );
+
+    await controller.load({ ...testAsset, id: "rigged", dynamicBones });
+    expect(runtime.showAvatar).toHaveBeenLastCalledWith(
+      expect.objectContaining({ modelDynamicBones: dynamicBones }),
+    );
+  });
+
   it("hides configured model nodes after the avatar loads", async () => {
     const { scene, runtime, controller } = createHarness();
     const glasses = new Mesh(new BoxGeometry(), new MeshStandardMaterial());
@@ -309,6 +326,39 @@ describe("TalkingHead avatar controller", () => {
       ([morph]) => morph === "mouthSmileLeft",
     )?.[1];
     expect(smileWeight).toBeCloseTo(0.6237);
+  });
+
+  it("damps standing idle poses toward straight with poseScale", async () => {
+    const runtime = {
+      ...createRuntime(),
+      poseFactory: vi.fn((template: unknown) => ({ template })),
+      poseCurrentTemplate: undefined as unknown,
+      poseBase: undefined as unknown,
+      poseTarget: undefined as unknown,
+      poseTemplates: {
+        straight: {
+          props: {
+            "Hips.rotation": { x: 0, y: 0, z: 0 },
+            "LeftUpLeg.rotation": { x: 0, y: 0, z: -3.1 },
+          },
+        },
+        hip: { props: { "Hips.rotation": { x: 0.2, y: 0, z: 0.1 } } },
+        side: { props: { "LeftUpLeg.rotation": { x: 0, y: 0, z: 3.1 } } },
+        kneel: { props: { "Hips.rotation": { x: 1, y: 0, z: 0 } } },
+      },
+    };
+    runtime.poseCurrentTemplate = runtime.poseTemplates.hip;
+    const { controller } = createHarness(runtime);
+    await controller.load({ ...testAsset, behavior: { poseScale: 0.5 } });
+
+    const hips = runtime.poseTemplates.hip.props["Hips.rotation"];
+    expect(hips.x).toBeCloseTo(0.1);
+    expect(hips.z).toBeCloseTo(0.05);
+    expect(runtime.poseTemplates.kneel.props["Hips.rotation"].x).toBe(1);
+    const legs = runtime.poseTemplates.side.props["LeftUpLeg.rotation"];
+    expect(Math.abs(Math.abs(legs.z) - Math.PI)).toBeLessThan(0.06);
+    expect(runtime.poseBase).toEqual({ template: runtime.poseTemplates.hip });
+    expect(runtime.poseTarget).toEqual({ template: runtime.poseTemplates.hip });
   });
 
   it("biases listening state toward eye contact", async () => {

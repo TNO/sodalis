@@ -27,6 +27,7 @@ and avatar foundation; later work is sequenced by explicit dependencies.
 - [ ] 0014 Building the native Sodalis avatar asset pipeline
   *(needs 0010, 0012)*
 - [ ] 0015 Building in-app avatar selection *(needs 0014)*
+- [ ] 0054 Evaluating a MetaHuman avatar export *(needs 0014)*
 
 ## Desktop avatar presentation
 

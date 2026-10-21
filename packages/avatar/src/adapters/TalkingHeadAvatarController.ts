@@ -1,5 +1,6 @@
 /// <reference path="./talkinghead.d.ts" />
 
+import { Euler as ThreeEuler, Quaternion } from "three";
 import type { Camera, Euler, Object3D, Scene } from "three";
 import {
   AVATAR_VISEMES,
@@ -8,6 +9,7 @@ import {
   type AvatarAffect,
   type AvatarAsset,
   type AvatarBehaviorController,
+  type AvatarDynamicBone,
   type AvatarExpression,
   type AvatarGesture,
   type AvatarLookTarget,
@@ -38,7 +40,14 @@ interface TalkingHeadOptions {
   avatarSpeakingHeadMove: number;
 }
 
+type PoseTemplateProps = Record<string, { x: number; y: number; z: number }>;
+
 interface TalkingHeadRuntime {
+  poseTemplates?: Record<string, { props: PoseTemplateProps }>;
+  poseCurrentTemplate?: unknown;
+  poseBase?: unknown;
+  poseTarget?: unknown;
+  poseFactory?(template: unknown): unknown;
   opt: {
     avatarIdleHeadMove: number;
     avatarSpeakingHeadMove: number;
@@ -47,6 +56,7 @@ interface TalkingHeadRuntime {
     url: string;
     avatarMood: string;
     avatarMute: true;
+    modelDynamicBones?: readonly AvatarDynamicBone[];
   }): Promise<void>;
   animate(deltaMilliseconds: number): void;
   setMood(mood: string): void;
@@ -81,6 +91,49 @@ export interface TalkingHeadAvatarControllerOptions {
 interface LoadedRuntime {
   instance: TalkingHeadRuntime;
   dispose(): void;
+}
+
+/** TalkingHead's standing idle poses; kneeling and sitting templates are left alone. */
+const IDLE_POSES = ["side", "hip", "turn", "back", "wide"] as const;
+
+function scaleIdlePoses(runtime: TalkingHeadRuntime, scale: number): void {
+  const templates = runtime.poseTemplates;
+  const straight = templates?.straight?.props;
+  if (!templates || !straight || scale === 1) return;
+  for (const name of IDLE_POSES) {
+    const props = templates[name]?.props;
+    if (!props) continue;
+    for (const [key, value] of Object.entries(props)) {
+      const reference = straight[key];
+      if (!reference) continue;
+      if (key.endsWith(".rotation")) {
+        // Slerp, not Euler lerp: some joints wrap around ±π between templates.
+        const from = new Quaternion().setFromEuler(
+          new ThreeEuler(reference.x, reference.y, reference.z, "XYZ"),
+        );
+        const to = new Quaternion().setFromEuler(
+          new ThreeEuler(value.x, value.y, value.z, "XYZ"),
+        );
+        const euler = new ThreeEuler().setFromQuaternion(
+          from.slerp(to, scale),
+          "XYZ",
+        );
+        props[key] = { x: euler.x, y: euler.y, z: euler.z };
+      } else if (key.endsWith(".position")) {
+        props[key] = {
+          x: reference.x + (value.x - reference.x) * scale,
+          y: reference.y + (value.y - reference.y) * scale,
+          z: reference.z + (value.z - reference.z) * scale,
+        };
+      }
+    }
+  }
+  // The constructor has already built the first pose from the unscaled template;
+  // rebuild it the same way.
+  if (runtime.poseFactory && runtime.poseCurrentTemplate) {
+    runtime.poseBase = runtime.poseFactory(runtime.poseCurrentTemplate);
+    runtime.poseTarget = runtime.poseFactory(runtime.poseCurrentTemplate);
+  }
 }
 
 interface ActiveGesture {
@@ -552,11 +605,15 @@ export function createTalkingHeadAvatarController({
       }
       signal?.throwIfAborted();
 
+      scaleIdlePoses(runtime, validation.asset.behavior?.poseScale ?? 1);
       loaded = { instance: runtime, dispose: disposeRuntime };
       const loadPromise = runtime.showAvatar({
         url: validation.asset.modelUrl,
         avatarMood: "neutral",
         avatarMute: true,
+        ...(validation.asset.dynamicBones?.length
+          ? { modelDynamicBones: validation.asset.dynamicBones }
+          : {}),
       });
       let rejectCancelled!: (reason: unknown) => void;
       const cancelled = new Promise<never>((_resolve, reject) => {

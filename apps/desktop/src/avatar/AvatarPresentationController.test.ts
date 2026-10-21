@@ -30,7 +30,7 @@ describe("AvatarPresentationController", () => {
       effectivePlacement: "bottom-left",
       visible: false,
       scale: 1,
-      framing: "upper-body",
+      framing: "bust",
       reducedMotion: false,
     });
   });
@@ -52,7 +52,7 @@ describe("AvatarPresentationController", () => {
     expect(viewport.style.getPropertyValue("--avatar-presentation-scale")).toBe(
       "1.14",
     );
-    expect(controller.state.framing).toBe("upper-body");
+    expect(controller.state.framing).toBe("bust");
   });
 
   it("docks away from important regions when automatic docking is selected", () => {

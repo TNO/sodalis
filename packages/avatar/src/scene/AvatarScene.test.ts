@@ -1,5 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { Group, type Camera, type Scene } from "three";
+import { afterEach, describe, expect, it, vi, type Mock } from "vitest";
+import {
+  NeutralToneMapping,
+  Group,
+  type Camera,
+  type Scene,
+  type ToneMapping,
+} from "three";
 import { createAvatarScene } from "./AvatarScene.js";
 import type { AvatarAsset } from "../index.js";
 
@@ -25,6 +31,51 @@ describe("Sodalis avatar scene", () => {
     });
     vi.unstubAllGlobals();
     document.body.replaceChildren();
+  });
+
+  it("renders the stage look at full device resolution with neutral tone mapping", () => {
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    Object.defineProperty(window, "devicePixelRatio", {
+      configurable: true,
+      value: 3,
+    });
+    const host = document.createElement("div");
+    const canvas = document.createElement("canvas");
+    host.append(canvas);
+    document.body.append(host);
+    const renderer: {
+      toneMapping?: ToneMapping;
+      toneMappingExposure?: number;
+    } & Record<
+      "setClearColor" | "setPixelRatio" | "setSize" | "render" | "dispose",
+      Mock<(...args: unknown[]) => void>
+    > = {
+      setClearColor: vi.fn(),
+      setPixelRatio: vi.fn(),
+      setSize: vi.fn(),
+      render: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const createRenderer = vi.fn(() => renderer);
+
+    const scene = createAvatarScene(canvas, {
+      look: "stage",
+      createRenderer,
+      createRuntime: () => {
+        throw new Error("Not loaded in this test.");
+      },
+    });
+
+    expect(createRenderer).toHaveBeenCalledWith(
+      canvas,
+      expect.objectContaining({ powerPreference: "high-performance" }),
+    );
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(3);
+    expect(renderer.toneMapping).toBe(NeutralToneMapping);
+    scene.setQuality("low");
+    expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1);
+    scene.dispose();
   });
 
   it("updates the avatar before rendering in one owner-controlled loop", async () => {
@@ -111,7 +162,7 @@ describe("Sodalis avatar scene", () => {
       value: 2,
     });
     scene.setFraming("head");
-    expect(avatarCamera).toHaveProperty("fov", 22);
+    expect(avatarCamera).toHaveProperty("fov", 20);
     scene.setQuality("low");
     expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1);
     scene.setQuality("medium");

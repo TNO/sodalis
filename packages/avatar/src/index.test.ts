@@ -101,12 +101,13 @@ describe("public avatar contract", () => {
       modelUrl: "/avatars/companion.glb",
       profile: "sodalis-avatar-0.1",
       framing: {
-        preferred: "upper-body",
+        preferred: "bust",
         cameraDistanceScale: 1.1,
       },
       hiddenNodes: ["Wolf3D_Glasses"],
       behavior: {
         blinkScale: 0.9,
+        poseScale: 0.4,
       },
     };
 
@@ -142,6 +143,21 @@ describe("public avatar contract", () => {
     });
   });
 
+  it("rejects a pose scale above one", () => {
+    const validation = validateAvatarAsset({
+      id: "companion",
+      name: "Companion",
+      modelUrl: "/avatars/companion.glb",
+      profile: "sodalis-avatar-0.1",
+      behavior: { poseScale: 1.5 },
+    });
+
+    expect(validation).toMatchObject({
+      ok: false,
+      issues: [{ path: "behavior.poseScale" }],
+    });
+  });
+
   it("rejects empty or duplicate hidden model node names", () => {
     const validation = validateAvatarAsset({
       id: "companion",
@@ -156,6 +172,65 @@ describe("public avatar contract", () => {
       issues: [
         { path: "hiddenNodes.0" },
         { path: "hiddenNodes.2" },
+      ],
+    });
+  });
+
+  it("accepts spring-bone settings for rigged hair", () => {
+    const asset: AvatarAsset = {
+      id: "companion",
+      name: "Companion",
+      modelUrl: "/avatars/companion.glb",
+      profile: "sodalis-avatar-0.1",
+      dynamicBones: [
+        {
+          bone: "Hair1_2",
+          type: "link",
+          stiffness: 20,
+          damping: [2, 2, 2, 4],
+          external: 0.6,
+          limits: [null, null, [null, 0.01], null],
+          excludes: [
+            { bone: "Head", radius: 0.11, deltaLocal: [0, 0.05, 0.02] },
+          ],
+        },
+        { bone: "Hair1_3", type: "full", stiffness: 40, damping: 3, pivot: true },
+      ],
+    };
+
+    expect(validateAvatarAsset(asset)).toEqual({ ok: true, asset });
+  });
+
+  it("rejects invalid or duplicate spring-bone settings by path", () => {
+    const validation = validateAvatarAsset({
+      id: "companion",
+      name: "Companion",
+      modelUrl: "/avatars/companion.glb",
+      profile: "sodalis-avatar-0.1",
+      dynamicBones: [
+        { bone: "Hair1_2", type: "wobble", stiffness: -1, damping: [1, 2] },
+        { bone: "Hair1_2", type: "point", stiffness: 1, damping: 1, pivot: true },
+        {
+          bone: "Hair1_3",
+          type: "link",
+          stiffness: 1,
+          damping: 1,
+          external: 2,
+          excludes: [{ bone: "Head" }],
+        },
+      ],
+    });
+
+    expect(validation).toMatchObject({
+      ok: false,
+      issues: [
+        { path: "dynamicBones.0.type" },
+        { path: "dynamicBones.0.stiffness" },
+        { path: "dynamicBones.0.damping" },
+        { path: "dynamicBones.1.bone" },
+        { path: "dynamicBones.1.pivot" },
+        { path: "dynamicBones.2.external" },
+        { path: "dynamicBones.2.excludes.0" },
       ],
     });
   });

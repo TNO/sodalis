@@ -1,14 +1,28 @@
 import {
+  NeutralToneMapping,
   AmbientLight,
   Box3,
   DirectionalLight,
+  HemisphereLight,
+  PCFSoftShadowMap,
   PerspectiveCamera,
+  PMREMGenerator,
+  type Texture,
   Scene,
   Vector3,
   WebGLRenderer,
   type Camera,
+  type ShadowMapType,
+  type ToneMapping,
   type WebGLRendererParameters,
 } from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import {
+  framingFieldOfView,
+  framingSpan,
+  type FramingLandmarks,
+} from "./framing.js";
+import { enhanceStageAvatar, fitShadowCamera } from "./stageRealism.js";
 import type {
   AttentionTargetRegistry,
   AvatarUiTargetRegistry,
@@ -30,7 +44,17 @@ interface RendererPort {
   setSize(width: number, height: number, updateStyle?: boolean): void;
   render(scene: Scene, camera: Camera): void;
   dispose(): void;
+  toneMapping?: ToneMapping;
+  toneMappingExposure?: number;
+  shadowMap?: { enabled: boolean; type: ShadowMapType };
 }
+
+/**
+ * `companion` is the light, power-saving desktop look. `stage` is for
+ * full-screen evaluation on capable hardware: discrete GPU, full device
+ * resolution and three-point studio lighting.
+ */
+export type AvatarSceneLook = "companion" | "stage";
 
 export interface AvatarSceneOptions {
   createRenderer?: (
@@ -39,6 +63,7 @@ export interface AvatarSceneOptions {
   ) => RendererPort;
   createRuntime?: TalkingHeadAvatarControllerOptions["createRuntime"];
   targetRegistry?: AttentionTargetRegistry | AvatarUiTargetRegistry;
+  look?: AvatarSceneLook;
   onReady?: () => void;
   onError?: (error: Error) => void;
   onFpsChange?: (fps: number | undefined) => void;
@@ -63,11 +88,30 @@ export function createAvatarScene(
   const host = canvas.parentElement;
   if (!host) throw new Error("Avatar canvas must be attached to a host element.");
 
+  const look = options.look ?? "companion";
   const scene = new Scene();
-  scene.add(new AmbientLight(0xffffff, 1.6));
-  const keyLight = new DirectionalLight(0xffffff, 2.2);
-  keyLight.position.set(-2, 3, 4);
-  scene.add(keyLight);
+  let shadowLight: DirectionalLight | undefined;
+  if (look === "stage") {
+    scene.add(new HemisphereLight(0xf2f4ff, 0x3a3230, 1.1));
+    const key = new DirectionalLight(0xfff1e0, 3.2);
+    key.position.set(-1.6, 2.6, 2.4);
+    key.castShadow = true;
+    key.shadow.mapSize.set(4096, 4096);
+    key.shadow.bias = -0.0002;
+    key.shadow.normalBias = 0.006;
+    key.shadow.intensity = 0.6;
+    shadowLight = key;
+    const fill = new DirectionalLight(0xdce6ff, 1.1);
+    fill.position.set(2.2, 1.6, 2);
+    const rim = new DirectionalLight(0xffffff, 2.4);
+    rim.position.set(0.8, 2.4, -2.6);
+    scene.add(key, key.target, fill, rim);
+  } else {
+    scene.add(new AmbientLight(0xffffff, 1.6));
+    const keyLight = new DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(-2, 3, 4);
+    scene.add(keyLight);
+  }
 
   const camera = new PerspectiveCamera(30, 1, 0.1, 100);
   camera.position.set(0, 1.35, 3.2);
@@ -77,7 +121,7 @@ export function createAvatarScene(
     canvas,
     alpha: true,
     antialias: true,
-    powerPreference: "low-power",
+    powerPreference: look === "stage" ? "high-performance" : "low-power",
   };
   const renderer =
     options.createRenderer?.(canvas, rendererOptions) ??
@@ -93,6 +137,10 @@ export function createAvatarScene(
       const bounds = new Box3().setFromObject(scene);
       if (bounds.isEmpty()) return;
       avatarBounds = bounds;
+      if (shadowLight) {
+        enhanceStageAvatar(scene);
+        fitShadowCamera(shadowLight, bounds);
+      }
       framingMetadata = asset.framing;
       if (asset.framing) framing = asset.framing.preferred;
       applyFraming(framing);
@@ -101,28 +149,32 @@ export function createAvatarScene(
   });
 
   renderer.setClearColor(0x000000, 0);
+  let environment: Texture | undefined;
+  if (look === "stage") {
+    renderer.toneMapping = NeutralToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    if (renderer.shadowMap) {
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = PCFSoftShadowMap;
+    }
+    // Image-based light gives eyes catch-lights and skin a specular response.
+    if (renderer instanceof WebGLRenderer) {
+      const pmrem = new PMREMGenerator(renderer);
+      const room = new RoomEnvironment();
+      environment = pmrem.fromScene(room, 0.04).texture;
+      room.dispose();
+      pmrem.dispose();
+      scene.environment = environment;
+      scene.environmentIntensity = 0.45;
+    }
+  }
   const qualityDprCaps: Record<AvatarQuality, number> = {
     low: 1,
     medium: 1.5,
-    high: 2,
-    auto: 1.5,
+    high: look === "stage" ? Number.POSITIVE_INFINITY : 2,
+    auto: look === "stage" ? Number.POSITIVE_INFINITY : 1.5,
   };
-  const framingFov: Record<AvatarFramingName, number> = {
-    head: 22,
-    "upper-body": 30,
-    "half-body": 38,
-  };
-  const framingHeight: Record<AvatarFramingName, number> = {
-    head: 0.28,
-    "upper-body": 0.62,
-    "half-body": 0.9,
-  };
-  const framingTargetHeight: Record<AvatarFramingName, number> = {
-    head: 0.88,
-    "upper-body": 0.68,
-    "half-body": 0.56,
-  };
-  let framing: AvatarFramingName = "upper-body";
+  let framing: AvatarFramingName = "bust";
   let framingMetadata: AvatarAsset["framing"];
   let avatarBounds: Box3 | undefined;
   let quality: AvatarQuality = "auto";
@@ -158,24 +210,41 @@ export function createAvatarScene(
     applyFraming(framing);
   };
 
+  const landmarkHeight = (name: string) => {
+    const joint = scene.getObjectByName(name);
+    return joint ? joint.getWorldPosition(new Vector3()).y : undefined;
+  };
+
   const applyFraming = (nextFraming: AvatarFramingName) => {
-    const fieldOfView = framingFov[nextFraming];
-    if (fieldOfView === undefined) {
-      throw new RangeError(`Unknown avatar framing "${nextFraming}".`);
-    }
-    camera.fov = fieldOfView;
+    camera.fov = framingFieldOfView(nextFraming);
     if (avatarBounds) {
       const size = avatarBounds.getSize(new Vector3());
       if (size.y > 0) {
         const center = avatarBounds.getCenter(new Vector3());
-        const head = scene.getObjectByName("Head");
-        const targetY =
-          nextFraming === "head" && head
-            ? head.getWorldPosition(new Vector3()).y
-            : avatarBounds.min.y + size.y * framingTargetHeight[nextFraming];
+        const landmarks: FramingLandmarks = {
+          top: avatarBounds.max.y,
+          bottom: avatarBounds.min.y,
+        };
+        const joints = {
+          eye: "LeftEye",
+          neck: "Neck",
+          shoulder: "LeftArm",
+          chest: "Spine2",
+          spine1: "Spine1",
+          spine: "Spine",
+          hips: "Hips",
+          knee: "LeftLeg",
+          foot: "LeftFoot",
+        } as const;
+        for (const [key, joint] of Object.entries(joints)) {
+          const y = landmarkHeight(joint);
+          if (y !== undefined) landmarks[key as keyof typeof joints] = y;
+        }
+        const span = framingSpan(nextFraming, landmarks);
         const target = new Vector3(
           center.x,
-          targetY + (framingMetadata?.cameraTargetYOffset ?? 0),
+          (span.top + span.bottom) / 2 +
+            (framingMetadata?.cameraTargetYOffset ?? 0),
           center.z,
         );
         const halfVerticalFov = (camera.fov * Math.PI) / 360;
@@ -183,14 +252,19 @@ export function createAvatarScene(
           Math.tan(halfVerticalFov) * camera.aspect,
         );
         const verticalDistance =
-          (size.y * framingHeight[nextFraming]) /
-          (2 * Math.tan(halfVerticalFov));
+          (span.top - span.bottom) / (2 * Math.tan(halfVerticalFov));
+        // The A-pose arm span would dominate a wide full-screen stage, so the
+        // stage frames by height alone.
         const horizontalDistance =
-          size.x > 0 ? size.x / (2 * Math.tan(halfHorizontalFov)) : 0;
+          look !== "stage" && size.x > 0
+            ? Math.min(size.x, span.width) / (2 * Math.tan(halfHorizontalFov))
+            : 0;
+        // Measured from the front of the face or chest rather than the bounds
+        // centre, so close framings do not push the camera into the nose.
         const distance =
           Math.max(verticalDistance, horizontalDistance) *
             (framingMetadata?.cameraDistanceScale ?? 1) +
-          size.z / 2;
+          Math.min(size.z / 2, 0.15);
         camera.position.set(
           target.x,
           target.y,
@@ -320,6 +394,7 @@ export function createAvatarScene(
       try {
         controller.dispose();
       } finally {
+        environment?.dispose();
         renderer.dispose();
         scene.clear();
       }
