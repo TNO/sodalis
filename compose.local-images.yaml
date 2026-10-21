@@ -1,0 +1,9 @@
+# Builds images that compose.yaml otherwise pulls from GHCR. dev-stack.ts adds
+# this file when SODALIS_LOCAL_IMAGES=true, e.g. to test a Dockerfile change.
+services:
+  parakeet-tdt:
+    build:
+      context: .
+      dockerfile: services/parakeet-tdt/Dockerfile
+    image: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-parakeet-tdt:dev
+    pull_policy: build

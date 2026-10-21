@@ -33,3 +33,4 @@ a single place to find conclusions.
 | [Alternate STT providers](stt-providers.md) | 0035 | Complete; Azure measured on private clips only, Redux not measured |
 | [Alternate LLM providers](llm-providers.md) | 0037 | Complete |
 | [Long-term memory](memory.md) | 0048, 0049, 0050, 0051 | Local evaluation complete; Azure ceiling deferred pending configuration and consent |
+| [CI test tiers and code quality tooling](ci-quality-and-tests.md) | 0054, 0055 | Complete |

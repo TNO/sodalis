@@ -8,7 +8,16 @@
 - Keep Aster source unchanged unless an intentional, documented patch is
   required; update its pinned commit record when refreshing the vendor snapshot.
 - Add behavior tests at public interfaces and run `pnpm test`,
-  `pnpm typecheck`, and `pnpm build` for changes to workspace code.
+  `pnpm typecheck`, and `pnpm build` for changes to workspace code (and
+  `pnpm test:python` for Python changes). CI runs the same gates; keep the
+  `ci-ok` check green.
+- Test tiers (ADR 0006):
+  - Changes to security, privacy, Home safety, memory consent and deletion,
+    stack selection, or public server/package APIs need behavior tests.
+  - Avatar and desktop UX changes need tests for their behavior.
+  - Evaluation and benchmark scripts need no tests.
+  - Live cloud tests must self-skip without credentials and never run in CI.
+- Never add cloud-provider secrets to GitHub Actions.
 - The initial slice intentionally has no LLM, speech, memory, or external
   account integration.
 - Put the final, consolidated analysis of each evaluation (for example

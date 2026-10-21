@@ -1,0 +1,159 @@
+name: Publish images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/tno
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      # The build job below builds (and so checks) every image.
+      build-images: false
+
+  images:
+    name: Select images
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      # Image licences must cover bundled assets; keep attribution with them.
+      - id: matrix
+        run: |
+          jq -c . <<'EOF' | sed 's/^/matrix=/' >> "$GITHUB_OUTPUT"
+          [
+            {"name": "api", "licenses": "MIT",
+             "description": "Sodalis speech, AI, and Home API services."},
+            {"name": "gateway", "licenses": "MIT AND CC-BY-NC-4.0",
+             "description": "Sodalis desktop and API gateway. Includes the TalkingHead brunette avatar (CC BY-NC 4.0, non-commercial); see /srv/avatars/NOTICE.md."},
+            {"name": "parakeet-tdt", "licenses": "MIT AND CC-BY-4.0",
+             "description": "Sodalis Parakeet TDT STT service. Includes NVIDIA Parakeet TDT 0.6B v3 weights (CC BY 4.0), converted to int8 ONNX by csukuangfj for sherpa-onnx (Apache-2.0)."}
+          ]
+          EOF
+
+  build:
+    name: Build ${{ matrix.image.name }} (${{ matrix.arch }})
+    needs: [ci, images]
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.images.outputs.matrix) }}
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/sodalis-${{ matrix.image.name }}
+          labels: |
+            org.opencontainers.image.title=sodalis-${{ matrix.image.name }}
+            org.opencontainers.image.licenses=${{ matrix.image.licenses }}
+            org.opencontainers.image.description=${{ matrix.image.description }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: services/${{ matrix.image.name }}/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/sodalis-${{ matrix.image.name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/sodalis-${{ matrix.image.name }}:buildcache-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/sodalis-${{ matrix.image.name }}:buildcache-${{ matrix.arch }},mode=max,image-manifest=true,oci-mediatypes=true
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digests-${{ matrix.image.name }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: Publish ${{ matrix.image.name }}
+    needs: [images, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.images.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.image.name }}-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # main -> :main; v1.2.3 -> :1.2.3, :1.2, :latest; always :sha-<short>.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/sodalis-${{ matrix.image.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - name: Create multi-arch manifest
+        id: manifest
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ env.REGISTRY }}/sodalis-${{ matrix.image.name }}
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}
+          LICENSES: ${{ matrix.image.licenses }}
+          DESCRIPTION: ${{ matrix.image.description }}
+        run: |
+          mapfile -t tags < <(jq -r '.tags[] | "--tag=" + .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          sources=()
+          for digest in *; do sources+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create "${tags[@]}" \
+            --annotation "index:org.opencontainers.image.source=$SOURCE" \
+            --annotation "index:org.opencontainers.image.revision=$GITHUB_SHA" \
+            --annotation "index:org.opencontainers.image.licenses=$LICENSES" \
+            --annotation "index:org.opencontainers.image.description=$DESCRIPTION" \
+            "${sources[@]}"
+          digest=$(docker buildx imagetools inspect "$IMAGE:sha-${GITHUB_SHA::7}" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.REGISTRY }}/sodalis-${{ matrix.image.name }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
+          push-to-registry: true
