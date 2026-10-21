@@ -280,7 +280,8 @@ VITE_SODALIS_EVAL_AVATARS=1 pnpm --filter @sodalis/desktop dev
 
 Evaluation avatars are listed in `EVALUATION_CANDIDATES` in
 `apps/desktop/src/avatar/defaultAvatar.ts` and only load in development
-with that flag. For a new character, add an entry with its id, GLB path,
+with that flag (on the `mpfb-avatar-pipeline` branch until it is merged,
+together with `?stage` and the framing levels). For a new character, add an entry with its id, GLB path,
 attribution and `behavior.poseScale`.
 
 Check:
