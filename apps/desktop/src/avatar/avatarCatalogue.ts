@@ -7,6 +7,7 @@ export interface AvatarCatalogue {
 
 export function createAvatarCatalogue(
   entries: readonly AvatarAsset[],
+  defaultId?: string,
 ): AvatarCatalogue {
   if (entries.length === 0) {
     throw new Error("An avatar catalogue needs at least one avatar.");
@@ -26,7 +27,7 @@ export function createAvatarCatalogue(
     byId.set(result.asset.id, result.asset);
   }
   const list = [...byId.values()];
-  const fallback = list[0] as AvatarAsset;
+  const fallback = (defaultId && byId.get(defaultId)) || (list[0] as AvatarAsset);
 
   return {
     list: () => list,

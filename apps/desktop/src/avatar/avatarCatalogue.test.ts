@@ -28,6 +28,18 @@ describe("createAvatarCatalogue", () => {
     expect(catalogue.select("?avatar=unknown").id).toBe("first");
   });
 
+  it("uses a configured default id when it is in the catalogue", () => {
+    const withDefault = createAvatarCatalogue(
+      [asset("first"), asset("second")],
+      "second",
+    );
+    expect(withDefault.select("").id).toBe("second");
+    expect(withDefault.select("?avatar=first").id).toBe("first");
+    expect(
+      createAvatarCatalogue([asset("first")], "missing").select("").id,
+    ).toBe("first");
+  });
+
   it("rejects an empty catalogue, duplicate ids, and invalid metadata", () => {
     expect(() => createAvatarCatalogue([])).toThrow(/at least one/);
     expect(() => createAvatarCatalogue([asset("a"), asset("a")])).toThrow(

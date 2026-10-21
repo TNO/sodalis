@@ -82,13 +82,17 @@ const EVALUATION_CANDIDATES: AvatarAsset[] = [
   },
 ];
 
-export const AVATAR_CATALOGUE = createAvatarCatalogue([
-  DEFAULT_AVATAR_ASSET,
-  ...(import.meta.env.DEV ? MPFB_CANDIDATES : []),
-  ...(import.meta.env.DEV && import.meta.env.VITE_SODALIS_EVAL_AVATARS === "1"
-    ? EVALUATION_CANDIDATES
-    : []),
-]);
+export const AVATAR_CATALOGUE = createAvatarCatalogue(
+  [
+    DEFAULT_AVATAR_ASSET,
+    ...(import.meta.env.DEV ? MPFB_CANDIDATES : []),
+    ...(import.meta.env.DEV && import.meta.env.VITE_SODALIS_EVAL_AVATARS === "1"
+      ? EVALUATION_CANDIDATES
+      : []),
+  ],
+  // Development-only override of the avatar shown without ?avatar=.
+  import.meta.env.DEV ? import.meta.env.VITE_SODALIS_DEFAULT_AVATAR : undefined,
+);
 
 export const ACTIVE_AVATAR_ASSET = AVATAR_CATALOGUE.select(
   typeof location === "undefined" ? "" : location.search,

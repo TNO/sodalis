@@ -284,6 +284,18 @@ with that flag (on the `mpfb-avatar-pipeline` branch until it is merged,
 together with `?stage` and the framing levels). For a new character, add an entry with its id, GLB path,
 attribution and `behavior.poseScale`.
 
+To make an evaluation avatar the default on your machine, without
+`?avatar=`, put this in the git-ignored `apps/desktop/.env.local` and restart
+the dev server:
+
+```bash
+VITE_SODALIS_EVAL_AVATARS=1
+VITE_SODALIS_DEFAULT_AVATAR=metahuman-anna-eval
+```
+
+The override applies to development builds only; an unknown id falls back to
+the first catalogue entry.
+
 Check:
 
 - **Avatar Lab validator**: `valid: true`. A MetaHuman with an outfit gives
