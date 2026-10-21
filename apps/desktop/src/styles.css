@@ -1045,6 +1045,23 @@ body {
   resize: vertical;
 }
 
+.avatar-stage-say select {
+  position: static;
+  width: 100%;
+  height: auto;
+  padding: 0.4rem;
+  border-radius: 8px;
+  color: inherit;
+  background: rgb(255 255 255 / 6%);
+  font: inherit;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.avatar-stage-say option {
+  color: #111;
+}
+
 .avatar-stage-say .avatar-stage-inline {
   display: flex;
   align-items: center;

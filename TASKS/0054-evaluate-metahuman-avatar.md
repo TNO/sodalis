@@ -318,6 +318,17 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   plus `build_openriglogic.sh` and `extract_face_ao.py`). A fresh OpenRigLogic
   build and `characters/anna.json` reproduce the installed GLB byte for byte.
   Tutorial: [docs/avatar/metahuman-to-sodalis.md](../docs/avatar/metahuman-to-sodalis.md).
+- Dutch lip-sync test data: `scripts/azure-visemes.py` records the 50
+  sentences in `scripts/tts-sentences.json` with `nl-NL-FennaNeural` through
+  the Azure Speech SDK (the REST endpoint returns no visemes), about 2,300
+  billed characters. It writes MP3s, viseme ids with offsets, and word
+  boundaries to the ignored `public/avatars/eval/speech-nl/` (2.6 MB, 13–56
+  visemes per clip). `createAzureVisemeSequence` (`@sodalis/avatar/testing/azure`)
+  maps Azure's 22 ids to the 15 Oculus visemes; Dutch g/ch (id 12) maps to
+  `kk`. The stage's *Recorded Dutch* picker plays a clip and starts the track
+  on the audio's `playing` event. The resource key works only through the
+  regional endpoint (`westeurope`), not the custom domain.
 - Open: tearline shell, baked ambient occlusion, 4K texture sources,
-  T-shirt (garment FBX not exported), Azure viseme-timed lip sync, the
+  T-shirt (garment FBX not exported), judging the Dutch viseme timing by eye
+  and tuning `visemes.json`, Azure visemes in the live speech path, the
   evaluation write-up, and the licence.

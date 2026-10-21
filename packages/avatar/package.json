@@ -9,7 +9,8 @@
     "./internal/scene": "./src/scene/AvatarScene.ts",
     "./internal/validation": "./src/validation/AvatarGlbValidator.ts",
     "./testing": "./src/testing/MockVisemeSequence.ts",
-    "./testing/text": "./src/testing/TextVisemeSequence.ts"
+    "./testing/text": "./src/testing/TextVisemeSequence.ts",
+    "./testing/azure": "./src/testing/AzureVisemeSequence.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

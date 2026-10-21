@@ -306,7 +306,11 @@ Check:
   head and body, and the collar.
 - **Eyes**: open, mid-blink, closed, and looking up/down/left/right.
 - **Speech**: *Say it* with the on-device voice for visemes; then the idle
-  poses for a minute for body motion.
+  poses for a minute for body motion. *Say it* uses English text rules with
+  estimated timing. For Dutch with real timing, record Azure clips with
+  [`scripts/azure-visemes.py`](../../scripts/azure-visemes.py) (billed; get
+  consent first). The stage then shows *Recorded Dutch*, which plays a clip
+  with Azure's viseme track mapped to the 15 visemes.
 
 ## Observations and troubleshooting
 

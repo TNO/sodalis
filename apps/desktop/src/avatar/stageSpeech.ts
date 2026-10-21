@@ -1,4 +1,8 @@
 import type { AvatarBehaviorController } from "@sodalis/avatar";
+import {
+  createAzureVisemeSequence,
+  type AzureVisemeEvent,
+} from "@sodalis/avatar/testing/azure";
 import { createTextVisemeSequence } from "@sodalis/avatar/testing/text";
 
 /** Seconds per TalkingHead viseme unit for a system voice at rate 1. */
@@ -47,4 +51,36 @@ export function speakOnStage(request: StageSpeechRequest): void {
   utterance.rate = request.rate;
   utterance.onstart = () => request.controller.startMockSpeech(sequence);
   synth.speak(utterance);
+}
+
+/** A recorded TTS clip with Azure viseme timing, from `scripts/azure-visemes.py`. */
+export interface RecordedClip {
+  readonly text: string;
+  readonly durationMs: number;
+  readonly visemes: readonly AzureVisemeEvent[];
+}
+
+export interface RecordedClipIndex {
+  readonly voice: string;
+  readonly clips: readonly { readonly id: string; readonly text: string }[];
+}
+
+export interface RecordedSpeechRequest {
+  clip: RecordedClip;
+  audio: Pick<HTMLAudioElement, "play" | "addEventListener">;
+  controller: Pick<AvatarBehaviorController, "startMockSpeech">;
+}
+
+/**
+ * Plays a recorded clip and starts its viseme track when the audio starts, so
+ * lip sync follows the real audio timing.
+ */
+export async function playRecordedOnStage(request: RecordedSpeechRequest): Promise<void> {
+  const sequence = createAzureVisemeSequence(request.clip.visemes, request.clip.durationMs);
+  request.audio.addEventListener(
+    "playing",
+    () => request.controller.startMockSpeech(sequence),
+    { once: true },
+  );
+  await request.audio.play();
 }

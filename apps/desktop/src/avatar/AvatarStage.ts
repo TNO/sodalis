@@ -10,10 +10,18 @@ import {
   ACTIVE_AVATAR_CREDIT,
   AVATAR_CATALOGUE,
 } from "./defaultAvatar.js";
-import { pickOnDeviceVoice, speakOnStage } from "./stageSpeech.js";
+import {
+  pickOnDeviceVoice,
+  playRecordedOnStage,
+  speakOnStage,
+  type RecordedClip,
+  type RecordedClipIndex,
+} from "./stageSpeech.js";
 
 const SAMPLE_LINE =
   "Hello, I'm your Sodalis assistant. Shall we look at your messages together?";
+/** Ignored Azure clips with viseme timing, made by `scripts/azure-visemes.py`. */
+const RECORDED_BASE = `${import.meta.env.BASE_URL}avatars/eval/speech-nl/`;
 
 
 /**
@@ -33,6 +41,37 @@ export const AvatarStage = (): m.Component => {
   const synth = typeof speechSynthesis === "undefined" ? undefined : speechSynthesis;
   const refreshVoices = () => {
     voices = synth?.getVoices() ?? [];
+    m.redraw();
+  };
+  let recorded: RecordedClipIndex | undefined;
+  let clipId = "";
+  let audio: HTMLAudioElement | undefined;
+  const loadRecorded = async () => {
+    try {
+      const response = await fetch(`${RECORDED_BASE}index.json`);
+      if (!response.ok) return;
+      recorded = (await response.json()) as RecordedClipIndex;
+      clipId = recorded.clips[0]?.id ?? "";
+      m.redraw();
+    } catch {
+      recorded = undefined;
+    }
+  };
+  const playRecorded = async () => {
+    if (!scene || !clipId) return;
+    try {
+      const response = await fetch(`${RECORDED_BASE}${clipId}.json`);
+      if (!response.ok) throw new Error(`Clip ${clipId} is missing.`);
+      const clip = (await response.json()) as RecordedClip;
+      synth?.cancel();
+      audio?.pause();
+      audio = new Audio(`${RECORDED_BASE}${clipId}.mp3`);
+      await playRecordedOnStage({ clip, audio, controller: scene.controller });
+      lab.state = "speaking";
+      lab.error = undefined;
+    } catch (error) {
+      lab.error = error instanceof Error ? error.message : String(error);
+    }
     m.redraw();
   };
   const presentation = createAvatarPresentationController({ storage: undefined });
@@ -64,10 +103,12 @@ export const AvatarStage = (): m.Component => {
       attention.attach(vnode.dom as HTMLElement);
       refreshVoices();
       synth?.addEventListener("voiceschanged", refreshVoices);
+      void loadRecorded();
     },
     onremove() {
       synth?.removeEventListener("voiceschanged", refreshVoices);
       synth?.cancel();
+      audio?.pause();
       attention.detach();
     },
     view() {
@@ -137,6 +178,24 @@ export const AvatarStage = (): m.Component => {
             m("button[type=submit]", { disabled: !scene }, "Say it"),
             m("p.avatar-lab-help",
               "Lip sync uses TalkingHead's English text rules; voice timing is estimated."),
+          ]),
+          recorded && m("form.avatar-stage-say", {
+            onsubmit: (event: Event) => {
+              event.preventDefault();
+              void playRecorded();
+            },
+          }, [
+            m("label", [`Recorded Dutch (${recorded.voice})`, m("select", {
+              value: clipId,
+              onchange: (event: Event) => {
+                clipId = (event.currentTarget as HTMLSelectElement).value;
+              },
+            }, recorded.clips.map((clip) =>
+              m("option", { value: clip.id }, `${clip.id} · ${clip.text}`),
+            ))]),
+            m("button[type=submit]", { disabled: !scene }, "Play clip"),
+            m("p.avatar-lab-help",
+              "Azure TTS audio; lip sync follows Azure's viseme timing."),
           ]),
           m(Lab, { scene, attention, value: lab }),
         ]),

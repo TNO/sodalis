@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { pickOnDeviceVoice, speakOnStage } from "./stageSpeech.js";
+import { pickOnDeviceVoice, playRecordedOnStage, speakOnStage } from "./stageSpeech.js";
 
 const voice = (name: string, lang: string, localService: boolean) =>
   ({ name, lang, localService, default: false }) as SpeechSynthesisVoice;
@@ -52,5 +52,29 @@ describe("stage speech", () => {
     const startMockSpeech = vi.fn();
     speakOnStage({ text: "Hello.", rate: 1, controller: { startMockSpeech } });
     expect(startMockSpeech).toHaveBeenCalledOnce();
+  });
+
+  it("starts a recorded clip's Azure viseme track when its audio starts playing", async () => {
+    const startMockSpeech = vi.fn();
+    let onPlaying: (() => void) | undefined;
+    const audio = {
+      play: vi.fn(async () => undefined),
+      addEventListener: vi.fn((type: string, listener: () => void) => {
+        if (type === "playing") onPlaying = listener;
+      }),
+    };
+
+    await playRecordedOnStage({
+      clip: { text: "Hallo", durationMs: 600, visemes: [{ id: 12, offsetMs: 100 }, { id: 2, offsetMs: 200 }] },
+      audio: audio as unknown as Pick<HTMLAudioElement, "play" | "addEventListener">,
+      controller: { startMockSpeech },
+    });
+
+    expect(audio.play).toHaveBeenCalledOnce();
+    expect(startMockSpeech).not.toHaveBeenCalled();
+    onPlaying?.();
+    expect(startMockSpeech).toHaveBeenCalledWith(
+      expect.objectContaining({ durationSeconds: 0.6 }),
+    );
   });
 });
