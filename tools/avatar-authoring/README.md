@@ -61,3 +61,9 @@ approved source and GLB.
 - Update the checksum and component list in
   `apps/desktop/public/avatars/sodalis-male-thuiszorg.manifest.json` and the
   avatar profile documentation whenever the GLB changes.
+
+## MetaHuman avatars
+
+[`metahuman/`](./metahuman/) converts an Unreal MetaHuman into an
+evaluation-only Sodalis GLB; see
+[docs/avatar/metahuman-to-sodalis.md](../../docs/avatar/metahuman-to-sodalis.md).

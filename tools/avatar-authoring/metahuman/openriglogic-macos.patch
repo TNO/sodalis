@@ -1,0 +1,51 @@
+diff --git a/python/dna/CMakeLists.txt b/python/dna/CMakeLists.txt
+index 9bc7f59..34253e9 100644
+--- a/python/dna/CMakeLists.txt
++++ b/python/dna/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-find_package(Python3 ${DNA_BUILD_PYTHON_WRAPPER} EXACT COMPONENTS Interpreter Development)
++find_package(Python3 ${DNA_BUILD_PYTHON_WRAPPER} EXACT REQUIRED COMPONENTS Interpreter Development.Module)
+ find_package(SWIG REQUIRED)
+ include(UseSWIG)
+ 
+@@ -41,7 +41,7 @@ target_link_libraries(${PYDNA}
+     PUBLIC
+         ${PYDNA_DEPENDENCIES}
+     PRIVATE
+-        Python3::Python)
++        Python3::Module)
+ 
+ set(component_name dna)  # Make sure py3dna and dna targets are under the same dna component name
+ get_property(wrapper_files TARGET ${PYDNA} PROPERTY SWIG_SUPPORT_FILES)
+diff --git a/python/riglogic/CMakeLists.txt b/python/riglogic/CMakeLists.txt
+index 307e11a..c7f266e 100644
+--- a/python/riglogic/CMakeLists.txt
++++ b/python/riglogic/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-find_package(Python3 ${RL_BUILD_PYTHON_WRAPPER} EXACT COMPONENTS Interpreter Development)
++find_package(Python3 ${RL_BUILD_PYTHON_WRAPPER} EXACT REQUIRED COMPONENTS Interpreter Development.Module)
+ find_package(SWIG REQUIRED)
+ include(UseSWIG)
+ 
+@@ -47,7 +47,7 @@ target_link_libraries(${PYRL}
+     PUBLIC
+         ${PYRL_DEPENDENCIES}
+     PRIVATE
+-        Python3::Python)
++        Python3::Module)
+ 
+ set(component_name riglogic4)  # Make sure py3riglogic and riglogic4 targets are under the same riglogic4 component name
+ get_property(wrapper_files TARGET ${PYRL} PROPERTY SWIG_SUPPORT_FILES)
+diff --git a/python/riglogic/RigLogic.i b/python/riglogic/RigLogic.i
+index c408c3a..5c0d031 100644
+--- a/python/riglogic/RigLogic.i
++++ b/python/riglogic/RigLogic.i
+@@ -149,7 +149,7 @@ static swig_module_info* GetSwigModule(const char* type_table_name) {
+ }
+ 
+ SWIGRUNTIME swig_module_info* SWIG_Python_GetModule_Patched(void *SWIGUNUSEDPARM(clientdata)) {
+-    swig_module_info* module = GetSwigModule(SWIG_EXPAND_AND_QUOTE_STRING(PYDNA_SWIG_TYPE_TABLE));
++    swig_module_info* module = GetSwigModule(SWIG_STRINGIFY(PYDNA_SWIG_TYPE_TABLE));
+     return module;
+ }
+ 

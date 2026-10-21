@@ -101,3 +101,9 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     third-party GitHub copy has no clear licence, so it is not used.
   - No Oculus viseme set exists for MetaHumans.
   - No exportable hair is in the export.
+- 2026-10-21: Unblocked with Unreal exports (ARKit pose asset as T3D, hair
+  and brow cards, glTF garments). The conversion now runs end to end; the
+  detailed progress notes are on the `mpfb-avatar-pipeline` branch. Generic
+  workflow and Unreal settings:
+  [docs/avatar/metahuman-to-sodalis.md](../docs/avatar/metahuman-to-sodalis.md).
+  Tools: `tools/avatar-authoring/metahuman/`.
