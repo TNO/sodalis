@@ -57,3 +57,10 @@ definition is covered by TalkingHead's license:
 
 The prototype desktop also bundles the non-commercial brunette above, so the
 desktop bundle as a whole remains restricted to non-commercial use.
+
+## Licensed avatars (not in this repository)
+
+Builds may also contain avatars in `avatars/licensed/`, copied from a private
+asset store (see `docs/avatar/licensed-avatars.md`). They are not covered by
+Sodalis's MIT licence and are licensed for use only within Sodalis; their
+terms are in `avatars/licensed/NOTICE.md` of the build.
