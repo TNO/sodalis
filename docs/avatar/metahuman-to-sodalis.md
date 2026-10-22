@@ -13,12 +13,17 @@ checkout. Replace these placeholders in commands and filenames.
 
 ![Anna in Sodalis, Bust framing](images/metahuman/anna-bust.jpg)
 
-> **Licence.** MetaHumans fall under the Unreal Engine EULA. Converted
-> avatars are for evaluation in Sodalis and must not be redistributed.
-> Never commit MetaHuman exports, DNA files, textures, the ARKit mapping
-> derived from Epic's pose asset, or the resulting GLB. The repository
-> ignores `apps/desktop/public/avatars/eval/` for that reason. The scripts in
-> `tools/avatar-authoring/metahuman/` are ours and contain no Epic content.
+> **Licence.** Keep converted avatars for local evaluation until the
+> provenance and distribution terms of each component are checked.
+> Unreal's EULA allows certain character models developed with Engine Code
+> to be distributed as Non-Engine Products; acquired MetaHuman and Fab
+> assets may have different restrictions. Do not commit MetaHuman exports,
+> DNA files, textures, Epic-derived ARKit mappings or the resulting GLB
+> without clearance. See the
+> [licensing assessment](../evaluations/metahuman-fab-licensing.md).
+> The repository ignores `apps/desktop/public/avatars/eval/` for that
+> reason. The scripts in `tools/avatar-authoring/metahuman/` are ours and
+> contain no Epic content.
 
 ## Next-character checklist
 
