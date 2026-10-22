@@ -29,7 +29,7 @@ describe("stage speech", () => {
       text: "Hello there.",
       rate: 2,
       voice: samantha,
-      controller: { startMockSpeech },
+      controller: { startMockSpeech, setState: vi.fn() },
       synth,
       createUtterance: (text) =>
         ({ text, rate: 1, voice: null }) as unknown as SpeechSynthesisUtterance,
@@ -41,16 +41,55 @@ describe("stage speech", () => {
     utterance?.onstart?.(new Event("start") as SpeechSynthesisEvent);
     const sequence = startMockSpeech.mock.calls[0]?.[0];
     const normal = vi.fn();
-    speakOnStage({ text: "Hello there.", rate: 1, controller: { startMockSpeech: normal } });
+    speakOnStage({ text: "Hello there.", rate: 1, controller: { startMockSpeech: normal, setState: vi.fn() } });
     expect(sequence.durationSeconds).toBeCloseTo(
       normal.mock.calls[0]?.[0].durationSeconds / 2,
       5,
     );
   });
 
+  it("stops estimated lip sync when the voice finishes", () => {
+    const startMockSpeech = vi.fn();
+    const setState = vi.fn();
+    let utterance: SpeechSynthesisUtterance | undefined;
+    speakOnStage({
+      text: "Hello there.",
+      rate: 1,
+      voice: voice("Samantha", "en-US", true),
+      controller: { startMockSpeech, setState },
+      synth: { cancel: vi.fn(), speak: (next) => { utterance = next; } },
+      createUtterance: (text) => ({ text }) as unknown as SpeechSynthesisUtterance,
+    });
+
+    utterance?.onstart?.(new Event("start") as SpeechSynthesisEvent);
+    expect(setState).not.toHaveBeenCalled();
+    utterance?.onend?.(new Event("end") as SpeechSynthesisEvent);
+    expect(setState).toHaveBeenCalledWith("idle");
+  });
+
+  it("ignores the end of a voice that a newer sentence cancelled", () => {
+    const setState = vi.fn();
+    const utterances: SpeechSynthesisUtterance[] = [];
+    const synth = { cancel: vi.fn(), speak: (next: SpeechSynthesisUtterance) => { utterances.push(next); } };
+    const request = {
+      text: "Hello.",
+      rate: 1,
+      voice: voice("Samantha", "en-US", true),
+      controller: { startMockSpeech: vi.fn(), setState },
+      synth,
+      createUtterance: (text: string) => ({ text }) as unknown as SpeechSynthesisUtterance,
+    };
+
+    speakOnStage(request);
+    speakOnStage(request);
+    utterances[0]?.onend?.(new Event("end") as SpeechSynthesisEvent);
+
+    expect(setState).not.toHaveBeenCalled();
+  });
+
   it("plays lip sync silently when no on-device voice is chosen", () => {
     const startMockSpeech = vi.fn();
-    speakOnStage({ text: "Hello.", rate: 1, controller: { startMockSpeech } });
+    speakOnStage({ text: "Hello.", rate: 1, controller: { startMockSpeech, setState: vi.fn() } });
     expect(startMockSpeech).toHaveBeenCalledOnce();
   });
 

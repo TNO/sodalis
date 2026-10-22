@@ -21,10 +21,13 @@ export function pickOnDeviceVoice(
   return english.find((voice) => voice.default) ?? english[0];
 }
 
+/** Latest utterance per synthesizer; a cancelled one must not stop its successor. */
+const currentUtterance = new WeakMap<object, SpeechSynthesisUtterance>();
+
 export interface StageSpeechRequest {
   text: string;
   rate: number;
-  controller: Pick<AvatarBehaviorController, "startMockSpeech">;
+  controller: Pick<AvatarBehaviorController, "startMockSpeech" | "setState">;
   voice?: SpeechSynthesisVoice;
   synth?: Pick<SpeechSynthesis, "cancel" | "speak">;
   createUtterance?: (text: string) => SpeechSynthesisUtterance;
@@ -32,7 +35,7 @@ export interface StageSpeechRequest {
 
 /**
  * Plays rule-based lip sync for `text`. With an on-device voice it starts when
- * the voice does; timing is estimated, not aligned to the audio.
+ * the voice does and stops when it ends; timing in between is estimated.
  */
 export function speakOnStage(request: StageSpeechRequest): void {
   const sequence = createTextVisemeSequence(request.text, {
@@ -50,6 +53,12 @@ export function speakOnStage(request: StageSpeechRequest): void {
   utterance.voice = voice;
   utterance.rate = request.rate;
   utterance.onstart = () => request.controller.startMockSpeech(sequence);
+  utterance.onend = () => {
+    if (currentUtterance.get(synth) === utterance) {
+      request.controller.setState("idle");
+    }
+  };
+  currentUtterance.set(synth, utterance);
   synth.speak(utterance);
 }
 

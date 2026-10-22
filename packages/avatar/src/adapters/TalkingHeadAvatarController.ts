@@ -152,7 +152,9 @@ interface ActiveGesture {
 
 interface AmbientPoseJoint {
   node: Object3D;
-  baseRotation: Euler;
+  /** Rotation before our offset, and the quaternion we wrote on top of it. */
+  before?: Euler;
+  written?: Quaternion;
 }
 
 interface AmbientPose {
@@ -160,7 +162,24 @@ interface AmbientPose {
   spine1?: AmbientPoseJoint;
   spine2?: AmbientPoseJoint;
   elapsedSeconds: number;
-  applied: boolean;
+  /** 0..1 blend of the idle sway, eased so state changes never snap. */
+  weight: number;
+}
+
+/** Seconds for the idle sway to fade fully in or out. */
+const AMBIENT_FADE_SECONDS = 0.6;
+
+interface VisemeFade {
+  from: Record<SpeechViseme, number>;
+  to: Record<SpeechViseme, number>;
+  elapsedSeconds: number;
+  durationSeconds: number;
+}
+
+/** TalkingHead's per-morph state; `realtime` bypasses its smoothing. */
+interface RealtimeMorph {
+  realtime: number | null;
+  needsUpdate: boolean;
 }
 
 function applyState(
@@ -334,6 +353,8 @@ export function createTalkingHeadAvatarController({
   let cancelPendingLoad: ((reason: unknown) => void) | undefined;
   let activeGesture: ActiveGesture | undefined;
   let visemeWeights = silenceWeights();
+  let appliedVisemeWeights = silenceWeights();
+  let visemeFade: VisemeFade | undefined;
   let mockSequence: MockVisemeSequence | undefined;
   let mockElapsedSeconds = 0;
   let postSpeechState: AvatarState = "idle";
@@ -363,19 +384,36 @@ export function createTalkingHeadAvatarController({
 
   const getAmbientPoseJoint = (name: string): AmbientPoseJoint | undefined => {
     const node = scene.getObjectByName(name);
-    return node ? { node, baseRotation: node.rotation.clone() } : undefined;
+    return node ? { node } : undefined;
+  };
+
+  const ambientJoints = (): AmbientPoseJoint[] =>
+    ambientPose
+      ? [ambientPose.hips, ambientPose.spine1, ambientPose.spine2].filter(
+          (joint): joint is AmbientPoseJoint => joint !== undefined,
+        )
+      : [];
+
+  // TalkingHead rewrites the pose bones each frame; only undo our offset if
+  // nothing has written the bone since, so its pose is never overridden.
+  const removeAmbientOffset = (joint: AmbientPoseJoint) => {
+    if (joint.written && joint.before && joint.node.quaternion.equals(joint.written)) {
+      joint.node.rotation.copy(joint.before);
+    }
+    joint.before = undefined;
+    joint.written = undefined;
+  };
+
+  const addAmbientOffset = (joint: AmbientPoseJoint, x: number, z: number) => {
+    joint.before = joint.node.rotation.clone();
+    joint.node.rotation.x += x;
+    joint.node.rotation.z += z;
+    joint.written = joint.node.quaternion.clone();
   };
 
   const restoreAmbientPose = () => {
-    if (!ambientPose?.applied) return;
-    for (const joint of [
-      ambientPose.hips,
-      ambientPose.spine1,
-      ambientPose.spine2,
-    ]) {
-      if (joint) joint.node.rotation.copy(joint.baseRotation);
-    }
-    ambientPose.applied = false;
+    for (const joint of ambientJoints()) removeAmbientOffset(joint);
+    if (ambientPose) ambientPose.weight = 0;
   };
 
   const captureAmbientPose = () => {
@@ -384,39 +422,38 @@ export function createTalkingHeadAvatarController({
       spine1: getAmbientPoseJoint("Spine1"),
       spine2: getAmbientPoseJoint("Spine2"),
       elapsedSeconds: 0,
-      applied: false,
+      weight: 0,
     };
   };
 
   const updateAmbientPose = (deltaSeconds: number) => {
     if (!ambientPose) return;
-    if (reducedMotion || state !== "idle" || activeGesture) {
-      restoreAmbientPose();
+    for (const joint of ambientJoints()) removeAmbientOffset(joint);
+    if (reducedMotion) {
+      ambientPose.weight = 0;
       return;
     }
+    const target = state === "idle" && !activeGesture ? 1 : 0;
+    const step = deltaSeconds / AMBIENT_FADE_SECONDS;
+    ambientPose.weight =
+      target > ambientPose.weight
+        ? Math.min(target, ambientPose.weight + step)
+        : Math.max(target, ambientPose.weight - step);
+    if (ambientPose.weight === 0) return;
     ambientPose.elapsedSeconds += deltaSeconds;
+    const weight = ambientPose.weight;
     const breath =
       Math.sin((ambientPose.elapsedSeconds * Math.PI * 2) / 4.6) * 0.006;
     const sway =
       Math.sin((ambientPose.elapsedSeconds * Math.PI * 2) / 18) * 0.008;
 
-    for (const joint of [
-      ambientPose.hips,
-      ambientPose.spine1,
-      ambientPose.spine2,
-    ]) {
-      if (joint) joint.node.rotation.copy(joint.baseRotation);
-    }
-    if (ambientPose.hips) {
-      ambientPose.hips.node.rotation.z += sway;
-    }
+    if (ambientPose.hips) addAmbientOffset(ambientPose.hips, 0, sway * weight);
     if (ambientPose.spine1) {
-      ambientPose.spine1.node.rotation.z -= sway * 0.35;
+      addAmbientOffset(ambientPose.spine1, 0, -sway * 0.35 * weight);
     }
     if (ambientPose.spine2) {
-      ambientPose.spine2.node.rotation.x += breath * verticalMotionScale;
+      addAmbientOffset(ambientPose.spine2, breath * verticalMotionScale * weight, 0);
     }
-    ambientPose.applied = true;
   };
 
   const completeGesture = () => {
@@ -485,7 +522,7 @@ export function createTalkingHeadAvatarController({
     ambientPose = undefined;
     mockSequence = undefined;
     releaseElapsedSeconds = undefined;
-    setVisemeWeights(silenceWeights(), 180);
+    setVisemeWeights(silenceWeights(), 0);
     const current = loaded;
     loaded = undefined;
     current?.dispose();
@@ -558,22 +595,43 @@ export function createTalkingHeadAvatarController({
     }
   };
 
+  // Visemes go to TalkingHead's `realtime` channel: its `setValue` path eases
+  // with acceleration from rest, which lags speech by a few hundred ms and
+  // overshoots after it ends. Our own sampling already interpolates.
+  const writeVisemeWeights = (weights: Readonly<Record<SpeechViseme, number>>) => {
+    appliedVisemeWeights = { ...weights };
+    const morphs = loaded?.instance.mtAvatar;
+    if (!morphs) return;
+    const hasMorph = (name: string) =>
+      Object.prototype.hasOwnProperty.call(morphs, name);
+    for (const [viseme, weight] of resolveVisemeWeights(weights, hasMorph)) {
+      const morph = morphs[viseme] as RealtimeMorph | undefined;
+      if (!morph) continue;
+      morph.realtime = weight;
+      morph.needsUpdate = true;
+    }
+  };
+
+  /** Sets viseme targets, immediately or eased over `durationMilliseconds`. */
   const setVisemeWeights = (
     nextWeights: Readonly<Record<SpeechViseme, number>>,
     durationMilliseconds: number,
   ) => {
     visemeWeights = { ...nextWeights };
-    const runtime = loaded?.instance;
-    if (!runtime) return;
-    const hasMorph = (name: string) =>
-      Object.prototype.hasOwnProperty.call(runtime.mtAvatar ?? {}, name);
-    for (const [viseme, weight] of resolveVisemeWeights(visemeWeights, hasMorph)) {
-      runtime.setValue(viseme, weight, durationMilliseconds);
+    if (durationMilliseconds > 0) {
+      visemeFade = {
+        from: { ...appliedVisemeWeights },
+        to: { ...nextWeights },
+        elapsedSeconds: 0,
+        durationSeconds: durationMilliseconds / 1000,
+      };
+      return;
     }
+    visemeFade = undefined;
+    writeVisemeWeights(nextWeights);
   };
 
   const beginInterruption = () => {
-    restoreAmbientPose();
     mockSequence = undefined;
     releaseElapsedSeconds = 0;
     releaseFromWeights = { ...visemeWeights };
@@ -587,7 +645,6 @@ export function createTalkingHeadAvatarController({
       beginInterruption();
       return;
     }
-    if (nextState !== "idle") restoreAmbientPose();
     if (activeGesture && nextState !== state) {
       cancelGesture(new Error("Avatar gesture was interrupted by a state change."));
     }
@@ -609,7 +666,6 @@ export function createTalkingHeadAvatarController({
       keyframes: sequence.keyframes.map((keyframe) => ({ ...keyframe })),
     };
     sampleMockVisemeSequence(snapshot, 0);
-    restoreAmbientPose();
     cancelGesture(new Error("Avatar gesture was interrupted by speech."));
     postSpeechState =
       state === "listening" || state === "interrupted" ? "listening" : "idle";
@@ -751,7 +807,6 @@ export function createTalkingHeadAvatarController({
       if (!definition) throw new Error(`Unknown avatar gesture "${gesture}".`);
       const runtime = requireRuntime();
       cancelGesture(new Error("Avatar gesture was superseded."));
-      restoreAmbientPose();
 
       return new Promise<void>((resolve, reject) => {
         const current: ActiveGesture = {
@@ -806,9 +861,17 @@ export function createTalkingHeadAvatarController({
       if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) {
         throw new RangeError("Avatar delta time must be a finite non-negative number.");
       }
-      loaded?.instance.animate(deltaSeconds * 1000);
-      updateAmbientPose(deltaSeconds);
-      const transitionMilliseconds = Math.min(80, deltaSeconds * 1000);
+      if (visemeFade) {
+        visemeFade.elapsedSeconds += deltaSeconds;
+        const progress = Math.min(
+          1,
+          visemeFade.elapsedSeconds / visemeFade.durationSeconds,
+        );
+        writeVisemeWeights(
+          interpolateWeights(visemeFade.from, visemeFade.to, progress),
+        );
+        if (progress >= 1) visemeFade = undefined;
+      }
       if (mockSequence) {
         mockElapsedSeconds = Math.min(
           mockSequence.durationSeconds,
@@ -816,13 +879,13 @@ export function createTalkingHeadAvatarController({
         );
         if (mockElapsedSeconds >= mockSequence.durationSeconds) {
           mockSequence = undefined;
-          setVisemeWeights(silenceWeights(), transitionMilliseconds);
+          setVisemeWeights(silenceWeights(), 0);
           state = postSpeechState;
           if (loaded) applyState(loaded.instance, state, avatarElement);
         } else {
           setVisemeWeights(
             sampleMockVisemeSequence(mockSequence, mockElapsedSeconds),
-            transitionMilliseconds,
+            0,
           );
         }
       }
@@ -832,15 +895,17 @@ export function createTalkingHeadAvatarController({
         const easedRelease = 1 - (1 - progress) ** 2;
         setVisemeWeights(
           interpolateWeights(releaseFromWeights, silenceWeights(), easedRelease),
-          transitionMilliseconds,
+          0,
         );
         if (progress >= 1) {
-          setVisemeWeights(silenceWeights(), transitionMilliseconds);
+          setVisemeWeights(silenceWeights(), 0);
           releaseElapsedSeconds = undefined;
           state = "listening";
           if (loaded) applyState(loaded.instance, state, avatarElement);
         }
       }
+      loaded?.instance.animate(deltaSeconds * 1000);
+      updateAmbientPose(deltaSeconds);
       if (activeGesture) {
         activeGesture.remainingSeconds -= deltaSeconds;
         if (activeGesture.remainingSeconds <= 0) completeGesture();

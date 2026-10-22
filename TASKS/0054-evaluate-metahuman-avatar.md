@@ -348,3 +348,9 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   T-shirt (garment FBX not exported), judging the Dutch viseme timing by eye
   and tuning `visemes.json`, Azure visemes in the live speech path, the
   evaluation write-up, and the licence.
+
+- Speech start and lip timing: ambient sway is now additive and fades over
+  0.6 s, so the body no longer snaps when speech starts or ends. Visemes use
+  TalkingHead's `realtime` channel; lip correlation for Dutch clip 01 went
+  from 0.71 to 0.86, with the mouth about 60 ms ahead of the audio. The
+  system voice stops on `onend`. See the tutorial's "Lip-sync timing".

@@ -421,6 +421,23 @@ scales these by framing: none in Face and Head, 35% in Head & shoulders and
 Bust, full in wider framings. Yaw, roll, eye movement and nod gestures are
 unaffected.
 
+Sodalis's ambient sway is additive: each frame it removes its previous
+offset and adds a new one on top of TalkingHead's current pose, and it fades
+in and out over 0.6 s. An earlier version overwrote the hip and spine bones
+with load-time rotations, which hid TalkingHead's pose until speech started
+and then made the body snap.
+
+### Lip-sync timing
+
+Visemes are written to TalkingHead's `realtime` morph channel, not through
+`setValue`. `setValue` uses acceleration-limited smoothing that lagged by
+hundreds of milliseconds and kept the mouth moving after the target dropped.
+Sodalis fades between viseme targets itself (80 ms by default). In a
+headless capture of Dutch clip 01, mouth openness correlated 0.86 with the
+Azure track (previously 0.71). The mouth now leads the audio by about 60 ms
+instead of building up slowly. The system voice returns to idle on the
+utterance's `end` event rather than after an estimated duration.
+
 ## Files
 
 | File | Purpose |

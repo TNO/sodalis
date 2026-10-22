@@ -8,7 +8,7 @@ import {
 } from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createTalkingHeadAvatarController } from "./TalkingHeadAvatarController.js";
-import { createAvatarUiTargetRegistry } from "../index.js";
+import { AVATAR_VISEMES, createAvatarUiTargetRegistry } from "../index.js";
 import type { AvatarAsset } from "../index.js";
 
 const testAsset: AvatarAsset = {
@@ -18,8 +18,21 @@ const testAsset: AvatarAsset = {
   profile: "sodalis-avatar-0.1",
 };
 
+interface TestMorph {
+  realtime: number | null;
+  needsUpdate: boolean;
+}
+
+/** TalkingHead's per-morph state, for the visemes an Oculus avatar has. */
+function visemeMorphs(names: readonly string[] = AVATAR_VISEMES): Record<string, TestMorph> {
+  return Object.fromEntries(
+    names.map((name) => [name, { realtime: null, needsUpdate: false }]),
+  );
+}
+
 function createRuntime() {
   return {
+    mtAvatar: visemeMorphs() as Record<string, unknown>,
     showAvatar: vi.fn().mockResolvedValue(undefined),
     animate: vi.fn(),
     setMood: vi.fn(),
@@ -251,45 +264,58 @@ describe("TalkingHead avatar controller", () => {
     expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
   });
 
-  it("suspends idle body motion while speaking and during explicit gestures", async () => {
+  it("layers idle sway on TalkingHead's current pose instead of a load-time snapshot", async () => {
+    const { scene, runtime, controller } = createHarness();
+    const { hips } = addIdleRig(scene);
+    await controller.load(testAsset);
+    // TalkingHead rewrites the pose bones on every animate().
+    runtime.animate.mockImplementation(() => {
+      hips.rotation.set(0, 0, 0.2);
+    });
+
+    controller.update(1);
+
+    expect(hips.rotation.z).not.toBe(0.2);
+    expect(Math.abs(hips.rotation.z - 0.2)).toBeLessThan(0.02);
+  });
+
+  it("fades idle body motion out while speaking and during gestures, without a jump", async () => {
     const { scene, controller } = createHarness();
     const { hips, spine2 } = addIdleRig(scene);
     const baseHipsRotation = hips.rotation.clone();
     const baseSpineRotation = spine2.rotation.clone();
     await controller.load(testAsset);
-    controller.update(1);
+    const swayOffset = () => Math.abs(hips.rotation.z - baseHipsRotation.z);
+    controller.update(4);
+    const idleOffset = swayOffset();
+    expect(idleOffset).toBeGreaterThan(0.001);
 
     controller.setState("speaking");
-
-    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
-    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+    expect(swayOffset()).toBe(idleOffset);
+    controller.update(0.016);
+    expect(swayOffset()).toBeGreaterThan(0);
+    expect(swayOffset()).toBeLessThan(idleOffset);
     controller.update(1);
     expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
     expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
+
     controller.setState("idle");
     controller.update(1);
     expect(spine2.rotation.x).not.toBe(baseSpineRotation.x);
 
     controller.startMockSpeech({
-      durationSeconds: 0.1,
+      durationSeconds: 2,
       keyframes: [
         { atSeconds: 0, viseme: "viseme_sil", weight: 1 },
-        { atSeconds: 0.1, viseme: "viseme_aa", weight: 1 },
+        { atSeconds: 2, viseme: "viseme_aa", weight: 1 },
       ],
     });
-
-    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
-    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
-    controller.update(0.1);
-    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
-    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
-
     controller.update(1);
+    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
+
+    controller.update(2);
     expect(spine2.rotation.x).not.toBe(baseSpineRotation.x);
     const gesture = controller.playGesture("acknowledge");
-    expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
-    expect(spine2.rotation.toArray()).toEqual(baseSpineRotation.toArray());
-
     controller.update(0.8);
     await gesture;
     expect(hips.rotation.toArray()).toEqual(baseHipsRotation.toArray());
@@ -459,16 +485,25 @@ describe("TalkingHead avatar controller", () => {
     ).toThrow('Avatar UI target "hidden" is not visible or registered.');
   });
 
-  it("applies one clamped Oculus viseme and releases the others", async () => {
+  it("eases one clamped Oculus viseme in and releases the others", async () => {
     const { runtime, controller } = createHarness();
     await controller.load(testAsset);
     runtime.setValue.mockClear();
+    const morph = (name: string) => runtime.mtAvatar[name] as TestMorph;
 
     controller.setViseme("viseme_aa", 1.4);
+    controller.update(0.04);
+    expect(morph("viseme_aa").realtime).toBeCloseTo(0.5);
+    controller.update(0.04);
 
-    expect(runtime.setValue).toHaveBeenCalledWith("viseme_aa", 1, 80);
-    expect(runtime.setValue).toHaveBeenCalledWith("viseme_sil", 0, 80);
-    expect(runtime.setValue).toHaveBeenCalledTimes(15);
+    expect(morph("viseme_aa").realtime).toBe(1);
+    expect(morph("viseme_sil").realtime).toBe(0);
+    expect(morph("viseme_PP").realtime).toBe(0);
+    expect(runtime.setValue).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^viseme_/),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("plays a nod through the semantic head-motion gesture", async () => {
@@ -506,22 +541,36 @@ describe("TalkingHead avatar controller", () => {
     expect(runtime.stopGesture).toHaveBeenCalledWith(250);
   });
 
-  it("plays interpolated mock visemes on the owner update loop", async () => {
+  it("drives mock visemes in the same frame, bypassing TalkingHead's smoothing", async () => {
     const { runtime, controller } = createHarness();
     await controller.load(testAsset);
-    runtime.setValue.mockClear();
+    const morph = (name: string) => runtime.mtAvatar[name] as TestMorph;
+    const seenByAnimate: (number | null)[] = [];
+    runtime.animate.mockImplementation(() => {
+      seenByAnimate.push(morph("viseme_aa").realtime);
+    });
     controller.startMockSpeech({
       durationSeconds: 1,
       keyframes: [
         { atSeconds: 0, viseme: "viseme_sil", weight: 1 },
-        { atSeconds: 1, viseme: "viseme_aa", weight: 1 },
+        { atSeconds: 0.5, viseme: "viseme_aa", weight: 1 },
+        { atSeconds: 1, viseme: "viseme_sil", weight: 1 },
       ],
     });
 
-    controller.update(0.5);
+    controller.update(0.25);
+    expect(morph("viseme_aa").realtime).toBe(0.5);
+    expect(morph("viseme_aa").needsUpdate).toBe(true);
+    expect(seenByAnimate.at(-1)).toBe(0.5);
 
-    expect(runtime.setValue).toHaveBeenCalledWith("viseme_sil", 0.5, 80);
-    expect(runtime.setValue).toHaveBeenCalledWith("viseme_aa", 0.5, 80);
+    controller.update(0.25);
+    expect(morph("viseme_aa").realtime).toBe(1);
+
+    controller.update(0.5);
+    expect(morph("viseme_aa").realtime).toBe(0);
+    expect(morph("viseme_sil").realtime).toBe(1);
+    controller.update(0.016);
+    expect(morph("viseme_aa").realtime).toBe(0);
   });
 
   it("drives detail visemes the avatar has and folds the rest into their core viseme", async () => {
@@ -533,24 +582,23 @@ describe("TalkingHead avatar controller", () => {
         { atSeconds: 1, viseme: "viseme_sil" as const, weight: 1 },
       ],
     };
-    const detailed = { ...createRuntime(), mtAvatar: { viseme_AX: {} } };
+    const detailed = {
+      ...createRuntime(),
+      mtAvatar: visemeMorphs([...AVATAR_VISEMES, "viseme_AX"]),
+    };
     const withDetail = createHarness(detailed);
     await withDetail.controller.load(testAsset);
     withDetail.controller.startMockSpeech(sequence);
     withDetail.controller.update(0.5);
-    expect(detailed.setValue).toHaveBeenCalledWith("viseme_AX", 0.8, 80);
-    expect(detailed.setValue).toHaveBeenLastCalledWith("viseme_AX", 0.8, 80);
+    expect(detailed.mtAvatar.viseme_AX?.realtime).toBe(0.8);
+    expect(detailed.mtAvatar.viseme_aa?.realtime).toBe(0);
 
     const plain = createHarness();
     await plain.controller.load(testAsset);
     plain.controller.startMockSpeech(sequence);
     plain.controller.update(0.5);
-    expect(plain.runtime.setValue).toHaveBeenCalledWith("viseme_aa", 0.8, 80);
-    expect(plain.runtime.setValue).not.toHaveBeenCalledWith(
-      "viseme_AX",
-      expect.anything(),
-      expect.anything(),
-    );
+    expect((plain.runtime.mtAvatar.viseme_aa as TestMorph).realtime).toBe(0.8);
+    expect(plain.runtime.mtAvatar).not.toHaveProperty("viseme_AX");
   });
 
   it("releases mock visemes smoothly and returns to listening on interruption", async () => {
@@ -565,9 +613,7 @@ describe("TalkingHead avatar controller", () => {
     });
     controller.update(0.2);
     const readAaWeight = () =>
-      runtime.setValue.mock.calls
-        .filter(([viseme]) => viseme === "viseme_aa")
-        .at(-1)?.[1] as number;
+      (runtime.mtAvatar.viseme_aa as TestMorph).realtime as number;
     const activeWeight = readAaWeight();
 
     controller.interrupt();
@@ -598,7 +644,7 @@ describe("TalkingHead avatar controller", () => {
     expect(runtime.makeEyeContact).toHaveBeenLastCalledWith(450);
     controller.update(0.5);
 
-    expect(runtime.setValue).toHaveBeenCalledWith("viseme_aa", 0.5, 80);
+    expect((runtime.mtAvatar.viseme_aa as TestMorph).realtime).toBe(0.5);
     controller.setReducedMotion(false);
     expect(runtime.opt.avatarIdleHeadMove).toBe(0.15);
     expect(runtime.opt.avatarSpeakingHeadMove).toBe(0.15);
