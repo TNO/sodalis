@@ -487,6 +487,35 @@ describe("TalkingHead avatar controller", () => {
     expect(runtime.setValue).toHaveBeenCalledWith("viseme_aa", 0.5, 80);
   });
 
+  it("drives detail visemes the avatar has and folds the rest into their core viseme", async () => {
+    const sequence = {
+      durationSeconds: 1,
+      keyframes: [
+        { atSeconds: 0, viseme: "viseme_sil" as const, weight: 1 },
+        { atSeconds: 0.5, viseme: "viseme_AX" as const, weight: 0.8 },
+        { atSeconds: 1, viseme: "viseme_sil" as const, weight: 1 },
+      ],
+    };
+    const detailed = { ...createRuntime(), mtAvatar: { viseme_AX: {} } };
+    const withDetail = createHarness(detailed);
+    await withDetail.controller.load(testAsset);
+    withDetail.controller.startMockSpeech(sequence);
+    withDetail.controller.update(0.5);
+    expect(detailed.setValue).toHaveBeenCalledWith("viseme_AX", 0.8, 80);
+    expect(detailed.setValue).toHaveBeenLastCalledWith("viseme_AX", 0.8, 80);
+
+    const plain = createHarness();
+    await plain.controller.load(testAsset);
+    plain.controller.startMockSpeech(sequence);
+    plain.controller.update(0.5);
+    expect(plain.runtime.setValue).toHaveBeenCalledWith("viseme_aa", 0.8, 80);
+    expect(plain.runtime.setValue).not.toHaveBeenCalledWith(
+      "viseme_AX",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
   it("releases mock visemes smoothly and returns to listening on interruption", async () => {
     const { runtime, controller } = createHarness();
     await controller.load(testAsset);

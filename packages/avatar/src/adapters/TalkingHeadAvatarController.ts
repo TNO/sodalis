@@ -3,7 +3,10 @@
 import { Euler as ThreeEuler, Quaternion } from "three";
 import type { Camera, Euler, Object3D, Scene } from "three";
 import {
+  AVATAR_DETAIL_VISEME_FALLBACK,
+  AVATAR_DETAIL_VISEMES,
   AVATAR_VISEMES,
+  SPEECH_VISEMES,
   normalizeAvatarAffect,
   validateAvatarAsset,
   type AvatarAffect,
@@ -18,6 +21,7 @@ import {
   type AvatarUiTargetRegistry,
   type AvatarState,
   type AvatarViseme,
+  type SpeechViseme,
 } from "../index.js";
 import {
   createMockVisemeSequence,
@@ -61,6 +65,8 @@ interface TalkingHeadRuntime {
   animate(deltaMilliseconds: number): void;
   setMood(mood: string): void;
   setValue(morph: string, value: number, durationMilliseconds?: number): void;
+  /** Morph targets the loaded model exposes, keyed by name. */
+  mtAvatar?: Record<string, unknown>;
   makeEyeContact(durationMilliseconds: number): void;
   lookAt(x: number, y: number, durationMilliseconds: number): void;
   lookAtCamera(durationMilliseconds: number): void;
@@ -206,26 +212,45 @@ function cancellationError(): Error {
   return new Error("Avatar loading was cancelled.");
 }
 
-function silenceWeights(): Record<AvatarViseme, number> {
+function silenceWeights(): Record<SpeechViseme, number> {
   return Object.fromEntries(
-    AVATAR_VISEMES.map((viseme) => [
+    SPEECH_VISEMES.map((viseme) => [
       viseme,
       viseme === "viseme_sil" ? 1 : 0,
     ]),
-  ) as Record<AvatarViseme, number>;
+  ) as Record<SpeechViseme, number>;
 }
 
 function interpolateWeights(
-  from: Readonly<Record<AvatarViseme, number>>,
-  to: Readonly<Record<AvatarViseme, number>>,
+  from: Readonly<Record<SpeechViseme, number>>,
+  to: Readonly<Record<SpeechViseme, number>>,
   progress: number,
-): Record<AvatarViseme, number> {
+): Record<SpeechViseme, number> {
   return Object.fromEntries(
-    AVATAR_VISEMES.map((viseme) => [
+    SPEECH_VISEMES.map((viseme) => [
       viseme,
       from[viseme] + (to[viseme] - from[viseme]) * progress,
     ]),
-  ) as Record<AvatarViseme, number>;
+  ) as Record<SpeechViseme, number>;
+}
+
+/** Folds detail visemes the avatar lacks into their core fallback viseme. */
+function resolveVisemeWeights(
+  weights: Readonly<Record<SpeechViseme, number>>,
+  hasMorph: (name: string) => boolean,
+): Map<SpeechViseme, number> {
+  const resolved = new Map<SpeechViseme, number>(
+    AVATAR_VISEMES.map((viseme) => [viseme, weights[viseme]]),
+  );
+  for (const viseme of AVATAR_DETAIL_VISEMES) {
+    if (hasMorph(viseme)) {
+      resolved.set(viseme, weights[viseme]);
+    } else {
+      const fallback = AVATAR_DETAIL_VISEME_FALLBACK[viseme];
+      resolved.set(fallback, Math.min(1, resolved.get(fallback)! + weights[viseme]));
+    }
+  }
+  return resolved;
 }
 
 const EXPRESSION_MORPHS = [
@@ -517,14 +542,16 @@ export function createTalkingHeadAvatarController({
   };
 
   const setVisemeWeights = (
-    nextWeights: Readonly<Record<AvatarViseme, number>>,
+    nextWeights: Readonly<Record<SpeechViseme, number>>,
     durationMilliseconds: number,
   ) => {
     visemeWeights = { ...nextWeights };
     const runtime = loaded?.instance;
     if (!runtime) return;
-    for (const viseme of AVATAR_VISEMES) {
-      runtime.setValue(viseme, visemeWeights[viseme], durationMilliseconds);
+    const hasMorph = (name: string) =>
+      Object.prototype.hasOwnProperty.call(runtime.mtAvatar ?? {}, name);
+    for (const [viseme, weight] of resolveVisemeWeights(visemeWeights, hasMorph)) {
+      runtime.setValue(viseme, weight, durationMilliseconds);
     }
   };
 

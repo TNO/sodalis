@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AVATAR_VISEMES } from "../index.js";
+import { SPEECH_VISEMES } from "../index.js";
 import { sampleMockVisemeSequence } from "./MockVisemeSequence.js";
 import { createTextVisemeSequence } from "./TextVisemeSequence.js";
 
@@ -20,7 +20,7 @@ describe("text viseme sequence", () => {
     });
     const spoken = sequence.keyframes.slice(1, -1);
     expect(spoken.map((frame) => frame.viseme)).toContain("viseme_PP");
-    expect(spoken.every((frame) => AVATAR_VISEMES.includes(frame.viseme))).toBe(
+    expect(spoken.every((frame) => SPEECH_VISEMES.includes(frame.viseme))).toBe(
       true,
     );
     expect(() => sampleMockVisemeSequence(sequence, 0.5)).not.toThrow();

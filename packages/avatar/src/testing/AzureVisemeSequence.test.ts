@@ -27,6 +27,32 @@ describe("Azure viseme sequence", () => {
     expect(() => sampleMockVisemeSequence(sequence, 0.2)).not.toThrow();
   });
 
+  it("gives merged Azure ids their own detail viseme or a diphthong glide", () => {
+    const sequence = createAzureVisemeSequence(
+      [
+        { id: 1, offsetMs: 100 },
+        { id: 8, offsetMs: 200 },
+        { id: 5, offsetMs: 300 },
+        { id: 12, offsetMs: 400 },
+        { id: 11, offsetMs: 500 },
+        { id: 0, offsetMs: 700 },
+      ],
+      800,
+    );
+
+    expect(sequence.keyframes.map((frame) => [frame.atSeconds, frame.viseme])).toEqual([
+      [0, "viseme_sil"],
+      [0.1, "viseme_AX"],
+      [0.2, "viseme_OW"],
+      [0.3, "viseme_ER"],
+      [0.4, "viseme_HH"],
+      [0.5, "viseme_aa"],
+      [0.6, "viseme_I"],
+      [0.7, "viseme_sil"],
+      [0.8, "viseme_sil"],
+    ]);
+  });
+
   it("keeps the last of events sharing an offset and drops events past the end", () => {
     const sequence = createAzureVisemeSequence(
       [

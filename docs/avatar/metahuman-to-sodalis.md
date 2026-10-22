@@ -171,7 +171,11 @@ Unreal version, but keep it out of git: it is derived from an Epic asset.
 `mouthClose` is derived from the lips-together pose; `tongueRollDown` has no
 pose in the asset. The 15 visemes come from our own
 [`visemes.json`](../../tools/avatar-authoring/metahuman/visemes.json), which
-combines rig controls by hand.
+combines rig controls by hand. It also defines four optional detail visemes
+for Azure's finer phoneme groups: `viseme_AX` (schwa), `viseme_OW` (closed
+rounded o), `viseme_ER` (r-coloured vowel) and `viseme_HH` (breathy h/g).
+Avatars without them still work: the runtime folds each one into its core
+viseme (AX→aa, OW→O, ER→RR, HH→kk).
 
 ### C2. Hair and brow colour textures
 
@@ -310,7 +314,9 @@ Check:
   estimated timing. For Dutch with real timing, record Azure clips with
   [`scripts/azure-visemes.py`](../../scripts/azure-visemes.py) (billed; get
   consent first). The stage then shows *Recorded Dutch*, which plays a clip
-  with Azure's viseme track mapped to the 15 visemes.
+  with Azure's viseme track mapped to the 15 visemes plus the 4 detail
+  visemes; the diphthongs (ids 9–11) glide between two shapes. Azure's ARKit
+  blend-shape output is not available for nl-NL (viseme ids only).
 
 ## Observations and troubleshooting
 

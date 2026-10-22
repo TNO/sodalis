@@ -1,5 +1,5 @@
 {
-  "_note": "Oculus visemes composed from MetaHuman rig controls (tuned on Anna; the control set is shared by all MetaHumans) (CTRL_expressions.*, '*' = all L/R or UL/UR/DL/DR sides). Evaluation-only, hand-authored weights.",
+  "_note": "Oculus visemes composed from MetaHuman rig controls (tuned on Anna; the control set is shared by all MetaHumans) (CTRL_expressions.*, '*' = all L/R or UL/UR/DL/DR sides). Evaluation-only, hand-authored weights. viseme_AX/OW/ER/HH are optional detail visemes (Azure ids 1, 8, 5, 12); runtimes without them fall back to aa/O/RR/kk.",
   "viseme_sil": {
     "mouthLipsTogether*": 0.35,
     "mouthLipsTighten*": 0.1,
@@ -90,5 +90,33 @@
     "mouthFunnel*": 0.4,
     "mouthLipsTowards*": 0.6,
     "mouthCornerNarrow*": 0.4
+  },
+  "viseme_AX": {
+    "jawOpen": 0.3,
+    "mouthLowerLipDepress*": 0.12,
+    "mouthStretch*": 0.12,
+    "mouthUpperLipRaise*": 0.08
+  },
+  "viseme_OW": {
+    "jawOpen": 0.22,
+    "mouthFunnel*": 0.7,
+    "mouthLipsPurse*": 0.6,
+    "mouthCornerNarrow*": 0.55,
+    "mouthLipsTowards*": 0.2
+  },
+  "viseme_ER": {
+    "jawOpen": 0.2,
+    "mouthFunnel*": 0.2,
+    "mouthCornerNarrow*": 0.2,
+    "tongueUp": 0.35,
+    "tongueIn": 0.35,
+    "mouthUpperLipRaise*": 0.1
+  },
+  "viseme_HH": {
+    "jawOpen": 0.24,
+    "tongueUp": 0.2,
+    "tongueIn": 0.3,
+    "mouthStretch*": 0.08,
+    "mouthUpperLipRaise*": 0.1
   }
 }

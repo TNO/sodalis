@@ -96,6 +96,34 @@ export const AVATAR_VISEMES = [
 
 export type AvatarViseme = (typeof AVATAR_VISEMES)[number];
 
+/**
+ * Optional finer mouth shapes for phoneme groups the 15 Oculus visemes merge
+ * (Azure viseme ids 1, 8, 5 and 12). Avatars without them fall back to the
+ * core viseme in `AVATAR_DETAIL_VISEME_FALLBACK`.
+ */
+export const AVATAR_DETAIL_VISEMES = [
+  "viseme_AX", // æ ə ʌ: relaxed, half-open
+  "viseme_OW", // o: close, rounded
+  "viseme_ER", // ɝ: r-coloured vowel
+  "viseme_HH", // h and Dutch g/ch: open, breathy
+] as const;
+
+export type AvatarDetailViseme = (typeof AVATAR_DETAIL_VISEMES)[number];
+
+export const AVATAR_DETAIL_VISEME_FALLBACK: Readonly<
+  Record<AvatarDetailViseme, AvatarViseme>
+> = {
+  viseme_AX: "viseme_aa",
+  viseme_OW: "viseme_O",
+  viseme_ER: "viseme_RR",
+  viseme_HH: "viseme_kk",
+};
+
+/** Every viseme a speech sequence may use: the core set plus detail visemes. */
+export const SPEECH_VISEMES = [...AVATAR_VISEMES, ...AVATAR_DETAIL_VISEMES] as const;
+
+export type SpeechViseme = (typeof SPEECH_VISEMES)[number];
+
 export const AVATAR_GESTURES = [
   "nod",
   "shake-head",
@@ -119,7 +147,7 @@ export type AvatarExpression = (typeof AVATAR_EXPRESSIONS)[number];
 
 export interface MockVisemeKeyframe {
   atSeconds: number;
-  viseme: AvatarViseme;
+  viseme: SpeechViseme;
   weight: number;
 }
 

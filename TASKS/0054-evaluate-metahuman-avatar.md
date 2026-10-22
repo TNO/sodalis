@@ -324,10 +324,17 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   billed characters. It writes MP3s, viseme ids with offsets, and word
   boundaries to the ignored `public/avatars/eval/speech-nl/` (2.6 MB, 13–56
   visemes per clip). `createAzureVisemeSequence` (`@sodalis/avatar/testing/azure`)
-  maps Azure's 22 ids to the 15 Oculus visemes; Dutch g/ch (id 12) maps to
-  `kk`. The stage's *Recorded Dutch* picker plays a clip and starts the track
+  maps Azure's 22 ids to the 15 Oculus visemes plus 4 detail visemes (below).
+  The stage's *Recorded Dutch* picker plays a clip and starts the track
   on the audio's `playing` event. The resource key works only through the
   regional endpoint (`westeurope`), not the custom domain.
+- Detail visemes: Azure's 22 ids are phoneme groups, so the 7 "missing" ones
+  are covered by 4 new shapes and 3 glides. `visemes.json` adds `viseme_AX`
+  (id 1), `viseme_OW` (8), `viseme_ER` (5) and `viseme_HH` (12, Dutch g/ch);
+  the diphthongs glide aa→U (9), O→I (10) and aa→I (11). Avatars without the
+  detail morphs fall back to aa/O/RR/kk at runtime. Anna's rebuilt GLB has 71
+  head targets and is 41.4 MB (was 39.4 MB). Azure blend shapes
+  (`FacialExpression`) return no frames for nl-NL, so they are not an option.
 - Open: tearline shell, baked ambient occlusion, 4K texture sources,
   T-shirt (garment FBX not exported), judging the Dutch viseme timing by eye
   and tuning `visemes.json`, Azure visemes in the live speech path, the

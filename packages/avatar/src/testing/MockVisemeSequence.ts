@@ -1,7 +1,8 @@
 import {
   AVATAR_VISEMES,
-  type AvatarViseme,
+  SPEECH_VISEMES,
   type MockVisemeSequence,
+  type SpeechViseme,
 } from "../index.js";
 
 const DEFAULT_DURATION_SECONDS = 2.4;
@@ -61,7 +62,7 @@ function validateSequence(sequence: MockVisemeSequence): void {
     if (
       !Number.isFinite(keyframe.atSeconds) ||
       keyframe.atSeconds <= previousTime ||
-      !AVATAR_VISEMES.includes(keyframe.viseme) ||
+      !SPEECH_VISEMES.includes(keyframe.viseme) ||
       !Number.isFinite(keyframe.weight) ||
       keyframe.weight < 0 ||
       keyframe.weight > 1
@@ -124,7 +125,7 @@ export function createMockVisemeSequence(
 export function sampleMockVisemeSequence(
   sequence: MockVisemeSequence,
   elapsedSeconds: number,
-): Readonly<Record<AvatarViseme, number>> {
+): Readonly<Record<SpeechViseme, number>> {
   validateSequence(sequence);
   if (!Number.isFinite(elapsedSeconds)) {
     throw new RangeError("Mock viseme time must be a finite number.");
@@ -140,8 +141,8 @@ export function sampleMockVisemeSequence(
   const progress =
     (time - from.atSeconds) / (to.atSeconds - from.atSeconds);
   const weights = Object.fromEntries(
-    AVATAR_VISEMES.map((viseme) => [viseme, 0]),
-  ) as Record<AvatarViseme, number>;
+    SPEECH_VISEMES.map((viseme) => [viseme, 0]),
+  ) as Record<SpeechViseme, number>;
   weights[from.viseme] += from.weight * (1 - progress);
   weights[to.viseme] += to.weight * progress;
   return weights;
