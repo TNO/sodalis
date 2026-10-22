@@ -113,3 +113,6 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   exports, Windows-to-Mac hand-off and common Unreal export failures. The
   dev-only avatar stage described there is still on `mpfb-avatar-pipeline`,
   not `main`.
+- 2026-10-22: Added GUI locations for first-time Unreal users: where the
+  Launcher, Plugins, Content Drawer, Creator categories, Outliner and export
+  dialogs are, and how to identify each required asset.
