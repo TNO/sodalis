@@ -45,10 +45,10 @@ The question is **using Anna as an avatar inside the released Sodalis app**,
 not offering `anna.glb` as a stock avatar for others to reuse. Anna's UE 5.8
 MetaHuman face/body, hair/brow cards, and three garments (top, jeans,
 sneakers) are in one converted GLB. The Unreal project has folders including
-`OA_TCrop*`, `Jeans` and `CasualSneakers`; these folder names do **not** prove
-the Fab product listing, seller, selected licence or applicable transaction
-date. The exact garment licence shown to the acquiring account has not been
-verified here. A listing offered under a Creative Commons or other
+`OA_TCrop*`, `Jeans` and `CasualSneakers`. The user identified the matching
+Epic Fab listings (see the listing check below), but folder names and
+listings do not prove the licence tier the acquiring account selected.
+A listing offered under a Creative Commons or other
 alternative licence may have different rights [3, §2(c)].
 
 ## Method and hardware
@@ -74,7 +74,35 @@ listing pages were available. No app release was built or distributed.
 | Does the <$1M figure grant redistribution rights? | No. UE seat exceptions concern corporate-group revenue; royalty thresholds concern product revenue, and §4(a)(i) separately addresses Non-Engine Products [1, §§3, 4, 6]. None grants a standalone Fab-content licence. |
 | Is showing an avatar alongside an LLM "training AI"? | Merely rendering it as the assistant's face does not on its face use the character/curves to train or test AI. Do not feed MetaHuman data or rendered output into ML training/evaluation without reviewing UE EULA §6(e) [1]. |
 
-## Analysis
+### Fab listing check (public listing data, 2026-10-22)
+
+Public listing data from Fab's listing endpoint, read through the same
+proxy as [3]. It shows what each listing offers, not what an account
+actually accepted.
+
+| Listing | Seller | Offered licence | Format, size | NoAI | Sodalis fit |
+| --- | --- | --- | --- | --- | --- |
+| [MetaHuman Jeans](https://www.fab.com/listings/07dc895c-7402-411c-a74a-e1c47b33ac68) (Anna) | Epic Games | Standard: Personal or Professional, both free | `.mhpkg`, 275 MB | Yes | In use |
+| [MetaHuman Tucked T Shirt Variants](https://www.fab.com/listings/839b9239-5ea4-40a0-90b3-076e0d9959f7) (Anna) | Epic Games | Standard: Personal or Professional, both free | `.mhpkg`, 1.76 GB, 5 variants | Yes | In use |
+| [MetaHuman Casual Sneakers](https://www.fab.com/listings/7e58d5c5-5666-4ab2-9c4e-011eeaba3c07) (Anna) | Epic Games | Standard: Personal or Professional, both free | `.mhpkg` | Yes | In use |
+| [MetaHuman Slim Jeans Variants](https://www.fab.com/listings/c5ed3971-03fd-4cec-804c-646422881fb3) | Epic Games | Standard: Personal or Professional, both free | `.mhpkg`, 1.23 GB, 3 variants | Yes | Same workflow |
+| [Skotukeda2](https://www.fab.com/listings/bf49f159-d975-4dbb-9d21-3c6fb8d061e7) | skotu keda | Standard: Personal or Professional, both free | `.mhpkg`, 413 MB, UE 5.7 | Yes | Editable MetaHuman: same workflow |
+| [Skotukeda3](https://www.fab.com/listings/a29e472c-3340-46cd-84ac-3bbc34239cd0) | skotu keda | Standard: Personal or Professional, both free | `.mhpkg`, 402 MB, UE 5.8 | Yes | Editable MetaHuman: same workflow |
+| [Skotukeda – Metahuman Character](https://www.fab.com/listings/5f2b0f38-6dd7-4dd8-999e-c97201344647) | skotu keda | Standard: Personal or Professional, both free | `.mhpkg`, 430 MB, UE 5.8 | Yes | Editable MetaHuman: same workflow |
+| [Editable Metahuman – Hannah](https://www.fab.com/listings/60c6be06-f649-4f38-965d-6b1fadbf7d56) | GreyGameStudio | Standard: Personal or Professional, both free | `.mhpkg`, 139 MB, UE 5.7–5.8 | Yes | Editable MetaHuman: same workflow |
+| [Modern Female Character](https://www.fab.com/listings/468f4d31-a500-430d-b832-736cc9896aa2) | Alpen wolf | Standard: Personal or Professional, both free | FBX, OBJ, `.blend`, UE, Unity; 4K textures | No | Poor: about 9k-triangle NPC; no face rig or ARKit/viseme morphs listed |
+
+Free does not mean CC0; all are Fab Standard Licences. Each `.mhpkg`
+garment contains the parametric wardrobe item, four LODs, materials and
+textures for **every** variant. That explains why a clothing pack can be
+larger than a character preset: Slim Jeans has three variants and Tucked
+T-Shirt five. A converted Sodalis GLB keeps only the chosen variant at the
+baked resolution. The third-party characters are presets for MetaHuman
+Creator: their faces, and any clothing they reference, are the seller's
+Content. They therefore add a seller licence on top of the open MetaHuman
+question below. NoAI Content may not be used in Generative AI datasets,
+development or training input [3, §6(b)(vii), §16(l)]. Rendering it in the
+app is not one of those uses.
 
 The apparent contradiction is resolved by separating **Project distribution**
 from **standalone content distribution**. Fab §4(c) explicitly permits
@@ -101,12 +129,16 @@ content under MIT without permission.
 
 ## Limitations
 
-- We have not seen the *actual Fab listing pages, transaction receipts or
-  licence selection* for Anna's top, jeans, sneakers or hair. Asset folder
-  names do not prove which licence was accepted or by whom. If the user saw
-  "Unreal default license", confirm whether that means the Epic Content
-  License, the Fab Standard License, or a listing-specific grant. Also
-  confirm the account/legal entity that acquired them [3, §§1(b), 2].
+- The user identified Anna's three garment listings, all offered by Epic
+  under the Fab Standard Licence (table above). We have not seen the
+  account's **receipts or selected tier**, nor the hair or groom source.
+  Personal tier eligibility depends on revenue of the acquirer and its
+  common-control entities [3, §2(a)].
+- The Standard Licence permits modifying Content [3, §3(a)], but forbids
+  attempts to "translate" or "derive ... data from the Content"
+  [3, §6(b)(i)]. Converting a garment to GLB is ordinary asset
+  modification on a plain reading. The clause is not specific enough to
+  rule that out entirely; include this in the Epic clarification.
 - The MetaHuman Content Addendum in the archived Epic Content License
   retains UE-Only wording [4], while the current MetaHuman docs address
   upgraded 5.6+ characters under the UE EULA [2]. We did not obtain an
@@ -123,12 +155,14 @@ content under MIT without permission.
 
 ## Open items
 
-1. Record the original Fab listing URL, seller, licence type/tier, account
-   and acquisition date for *each* garment and any separately acquired
-   groom/preset in Anna's GLB; check for UE-only or NoAI tags.
+1. Record the selected licence tier, acquiring account and acquisition
+   date for each listing above, plus any separately acquired groom or
+   preset. Prefer the Professional tier when free, as it avoids the Personal
+   revenue condition. Do the same for any third-party preset before use.
 2. Confirm with Epic or qualified counsel which terms govern characters
-   **newly authored in UE 5.8** and how the MetaHuman Addendum relates to
-   the in-editor Creator.
+   **newly authored in UE 5.8**, how the MetaHuman Addendum relates to the
+   in-editor Creator, and whether GLB export of Fab MetaHuman Content to a
+   non-Unreal web renderer is allowed under §6(b)(i).
 3. Choose the release distribution approach and write an end-user notice:
    Sodalis code remains MIT; licensed content is for use *only inside
    Sodalis*, not independent reuse or extraction, subject to its actual
