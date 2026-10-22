@@ -26,6 +26,7 @@ function createSceneHandle(): AvatarSceneHandle {
     update: vi.fn(),
     dispose: vi.fn(),
     setReducedMotion: vi.fn(),
+    setVerticalMotion: vi.fn(),
     startMockSpeech: vi.fn(),
     interrupt: vi.fn(),
   };

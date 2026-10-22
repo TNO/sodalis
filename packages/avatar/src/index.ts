@@ -299,6 +299,11 @@ export interface AvatarController {
 
 export interface AvatarBehaviorController extends AvatarController {
   setReducedMotion(reduced: boolean): void;
+  /**
+   * Scales incidental vertical head motion (idle pitch, breathing lift) from
+   * 0 (none) to 1 (full). Yaw, roll, eye movement and gestures are unaffected.
+   */
+  setVerticalMotion(scale: number): void;
   startMockSpeech(sequence?: MockVisemeSequence): void;
   interrupt(): void;
 }

@@ -161,8 +161,10 @@ describe("Sodalis avatar scene", () => {
       configurable: true,
       value: 2,
     });
+    const setVerticalMotion = vi.spyOn(scene.controller, "setVerticalMotion");
     scene.setFraming("head");
     expect(avatarCamera).toHaveProperty("fov", 20);
+    expect(setVerticalMotion).toHaveBeenLastCalledWith(0);
     scene.setQuality("low");
     expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1);
     scene.setQuality("medium");

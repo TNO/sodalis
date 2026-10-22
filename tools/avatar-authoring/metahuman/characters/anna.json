@@ -6,6 +6,10 @@
   "body_fbx": "~/Downloads/MHC_Anna/MHC_Anna_Body.FBX",
   "dna": "~/avatar-work/anna/dcc/head.dna",
   "maps": "~/avatar-work/anna/dcc-nomakeup/Maps",
+  "map_overrides": {
+    "_note": "Unreal's baked eye keeps the original iris colour and limbal ring; the DCC map is lighter. Made with extract_glb_texture.py from AnnaExportTest_v3.glb (MI_EyeL_Baked_Face).",
+    "Eyes_Color": "~/avatar-work/anna/maps-override/Eyes_Color.png"
+  },
   "recipes": ["../visemes.json", "~/avatar-work/anna/arkit_mapping.json"],
   "face": { "lash_alpha_gain": 1.8, "lid_follow": 0.35, "rest_lid_lift": 0.7 },
   "hair": {

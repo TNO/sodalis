@@ -335,6 +335,15 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   detail morphs fall back to aa/O/RR/kk at runtime. Anna's rebuilt GLB has 71
   head targets and is 41.4 MB (was 39.4 MB). Azure blend shapes
   (`FacialExpression`) return no frames for nl-NL, so they are not an option.
+- Eye colour: the DCC `Eyes_Color.png` is a lighter, turquoise generic iris.
+  The build now overrides it with Unreal's baked `MI_EyeL_Baked_Face`
+  texture (`extract_glb_texture.py`, `map_overrides`), giving her darker
+  hazel-green eyes with a limbal ring. GLB 41.4 MB.
+- Head bob: incidental pitch (mood animation, gaze, breathing) now scales
+  with framing: 0 in Face/Head, 0.35 in Head & shoulders/Bust, 1 otherwise.
+- Avatar Lab on `?stage` hides Presentation, Dock, Size and "Show avatar on
+  desktop": they only drive the desktop overlay (Presentation only scales
+  it by up to 14%), so they had no effect on the stage.
 - Open: tearline shell, baked ambient occlusion, 4K texture sources,
   T-shirt (garment FBX not exported), judging the Dutch viseme timing by eye
   and tuning `visemes.json`, Azure visemes in the live speech path, the

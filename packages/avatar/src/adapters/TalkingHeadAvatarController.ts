@@ -342,7 +342,24 @@ export function createTalkingHeadAvatarController({
   let reducedMotion = false;
   let expressionScale = 1;
   let headMotionScale = 1;
+  let verticalMotionScale = 1;
   let ambientPose: AmbientPose | undefined;
+
+  // TalkingHead passes these morphs through `limit` before posing the
+  // skeleton: `bodyRotateX`/`headRotateX` pitch the head, `chestInhale` lifts it.
+  const installVerticalMotionLimits = (runtime: TalkingHeadRuntime) => {
+    for (const name of ["bodyRotateX", "headRotateX", "chestInhale"]) {
+      const morph = runtime.mtAvatar?.[name] as
+        | { limit: ((value: number) => number) | null; needsUpdate: boolean }
+        | undefined;
+      if (!morph) continue;
+      morph.limit = (value) =>
+        name === "headRotateX" && activeGesture
+          ? value
+          : value * verticalMotionScale;
+      morph.needsUpdate = true;
+    }
+  };
 
   const getAmbientPoseJoint = (name: string): AmbientPoseJoint | undefined => {
     const node = scene.getObjectByName(name);
@@ -397,7 +414,7 @@ export function createTalkingHeadAvatarController({
       ambientPose.spine1.node.rotation.z -= sway * 0.35;
     }
     if (ambientPose.spine2) {
-      ambientPose.spine2.node.rotation.x += breath;
+      ambientPose.spine2.node.rotation.x += breath * verticalMotionScale;
     }
     ambientPose.applied = true;
   };
@@ -668,6 +685,7 @@ export function createTalkingHeadAvatarController({
             node.visible = false;
           }
           captureAmbientPose();
+          installVerticalMotionLimits(runtime);
           cancelPendingLoad = undefined;
           applyHeadMotionPreference(runtime);
           runtime.setMood("neutral");
@@ -836,6 +854,14 @@ export function createTalkingHeadAvatarController({
         cancelGesture(new Error("Avatar gesture was stopped by reduced motion."));
       }
       applyHeadMotionPreference(loaded?.instance);
+    },
+
+    setVerticalMotion(scale) {
+      if (!Number.isFinite(scale) || scale < 0 || scale > 1) {
+        throw new RangeError("Vertical motion scale must be between 0 and 1.");
+      }
+      verticalMotionScale = scale;
+      if (loaded) installVerticalMotionLimits(loaded.instance);
     },
 
     startMockSpeech,

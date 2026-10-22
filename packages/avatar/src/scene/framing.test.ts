@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AVATAR_FRAMINGS } from "../index.js";
-import { framingFieldOfView, framingSpan } from "./framing.js";
+import { framingFieldOfView, framingSpan, framingVerticalMotion } from "./framing.js";
 
 // Joint heights measured from the TalkingHead Brunette avatar.
 const brunette = {
@@ -64,5 +64,16 @@ describe("framingSpan", () => {
     expect(() => framingFieldOfView("upper-body" as never)).toThrow(
       RangeError,
     );
+  });
+});
+
+describe("framingVerticalMotion", () => {
+  it("removes head bob in face and head framings and reduces it in close body framings", () => {
+    expect(framingVerticalMotion("face")).toBe(0);
+    expect(framingVerticalMotion("head")).toBe(0);
+    expect(framingVerticalMotion("head-shoulders")).toBeCloseTo(0.35);
+    expect(framingVerticalMotion("bust")).toBeCloseTo(0.35);
+    expect(framingVerticalMotion("half-body")).toBe(1);
+    expect(framingVerticalMotion("full-body")).toBe(1);
   });
 });

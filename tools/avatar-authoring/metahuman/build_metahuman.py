@@ -146,7 +146,8 @@ def drop_slots(obj, slots):
 
 
 def image(name, color):
-    img = bpy.data.images.load(os.path.join(MAPS, name + ".png"))
+    path = CFG.get("map_overrides", {}).get(name) or os.path.join(MAPS, name + ".png")
+    img = bpy.data.images.load(path)
     img.colorspace_settings.name = "sRGB" if color else "Non-Color"
     return img
 
@@ -383,7 +384,10 @@ def load_config(path):
                 cfg[section][k] = resolve(cfg[section][k])
     if cfg.get("outfit"):
         cfg["outfit"]["glb"] = resolve(cfg["outfit"]["glb"])
-    missing = [p for p in [cfg["head_fbx"], cfg["body_fbx"], cfg["dna"], cfg["maps"], *cfg["recipes"]]
+    cfg["map_overrides"] = {k: resolve(v) for k, v in cfg.get("map_overrides", {}).items()
+                            if not k.startswith("_")}
+    missing = [p for p in [cfg["head_fbx"], cfg["body_fbx"], cfg["dna"], cfg["maps"], *cfg["recipes"],
+                           *cfg["map_overrides"].values()]
                if not os.path.exists(p)]
     if missing:
         raise FileNotFoundError(f"config {path}: missing {missing}")

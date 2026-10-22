@@ -114,13 +114,12 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
             "Developer controls use deterministic motion only; no audio service is connected.",
           ),
           m(".avatar-lab-grid", [
-            m("label.avatar-lab-field", [
+            presentation ? m("label.avatar-lab-field", [
               "Presentation",
               m(
                 "select",
                 {
                   value: presentationState?.mode ?? "ambient",
-                  disabled: !presentation,
                   onchange: (event: Event) => {
                     const mode = (event.currentTarget as HTMLSelectElement)
                       .value as AvatarPresentationMode;
@@ -131,14 +130,13 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
                   m("option", { value: mode }, mode),
                 ),
               ),
-            ]),
-            m("label.avatar-lab-field", [
+            ]) : null,
+            presentation ? m("label.avatar-lab-field", [
               "Dock",
               m(
                 "select",
                 {
                   value: presentationState?.dock ?? "right",
-                  disabled: !presentation,
                   onchange: (event: Event) => {
                     const dock = (event.currentTarget as HTMLSelectElement)
                       .value as AvatarDockPosition;
@@ -149,7 +147,7 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
                   m("option", { value: dock }, dock),
                 ),
               ),
-            ]),
+            ]) : null,
             m("label.avatar-lab-field", [
               "State",
               m(
@@ -263,10 +261,9 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
             }),
             " Reduce incidental motion",
           ]),
-          m("label.avatar-lab-motion", [
+          presentation ? m("label.avatar-lab-motion", [
             m("input[type=checkbox]", {
               checked: presentationState?.visible ?? true,
-              disabled: !presentation,
               onchange: (event: Event) => {
                 const visible = (
                   event.currentTarget as HTMLInputElement
@@ -279,8 +276,8 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
               },
             }),
             " Show avatar on desktop",
-          ]),
-          m("label.avatar-lab-field", [
+          ]) : null,
+          presentation ? m("label.avatar-lab-field", [
             `Size · ${(presentationState?.scale ?? 1).toFixed(2)}×`,
             m("input[type=range]", {
               min: 0.75,
@@ -288,7 +285,6 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
               step: 0.05,
               value: presentationState?.scale ?? 1,
               "aria-label": "Avatar presentation size",
-              disabled: !presentation,
               oninput: (event: Event) => {
                 const scale = Number(
                   (event.currentTarget as HTMLInputElement).value,
@@ -296,7 +292,7 @@ export function createAvatarLab(): m.Component<AvatarLabAttrs> {
                 runPresentation(() => presentation?.setScale(scale));
               },
             }),
-          ]),
+          ]) : null,
           m("label.avatar-lab-motion", [
             m("input[type=checkbox]", {
               checked: value.showGazeTarget,

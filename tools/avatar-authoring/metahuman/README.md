@@ -12,6 +12,9 @@ blender -b -noaudio --python-exit-code 1 \
   --config path/to/character.json --out avatar.glb [--blend avatar.blend]
 ```
 
+`extract_glb_texture.py` pulls a single texture, such as Unreal's baked iris,
+from a glTF export for use in `map_overrides`.
+
 `characters/anna.json` is an example config. Its paths point at local
 exports. Keep MetaHuman exports, DNA, textures, `arkit_mapping.json` and the
 generated GLB out of git (Unreal Engine EULA).

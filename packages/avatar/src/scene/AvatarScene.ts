@@ -20,6 +20,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import {
   framingFieldOfView,
   framingSpan,
+  framingVerticalMotion,
   type FramingLandmarks,
 } from "./framing.js";
 import { enhanceStageAvatar, fitShadowCamera } from "./stageRealism.js";
@@ -144,6 +145,7 @@ export function createAvatarScene(
       framingMetadata = asset.framing;
       if (asset.framing) framing = asset.framing.preferred;
       applyFraming(framing);
+      controller.setVerticalMotion(framingVerticalMotion(framing));
     },
     ...(options.createRuntime ? { createRuntime: options.createRuntime } : {}),
   });
@@ -279,6 +281,7 @@ export function createAvatarScene(
   const setFraming = (nextFraming: AvatarFramingName) => {
     framing = nextFraming;
     applyFraming(framing);
+    controller.setVerticalMotion(framingVerticalMotion(framing));
   };
 
   const setQuality = (nextQuality: AvatarQuality) => {

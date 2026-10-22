@@ -221,6 +221,23 @@ expanded.
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
 | `texture_cap` | no (2048) | Largest texture side; Sodalis recommends at most 2048 |
+| `map_overrides` | no | `{map name: PNG}` replacing a file in `maps`, e.g. `Eyes_Color` |
+
+### C5. Eye colour from Unreal (recommended)
+
+The DCC export's `Eyes_Color.png` is a generic, lighter iris without a limbal
+ring, so the avatar's eyes look unlike the character in Unreal. Unreal's
+glTF export (with baked materials) contains the real iris. Extract it,
+bake its texture transform into the image and cap it at 2048 px:
+
+```bash
+uv run -q --with pillow python tools/avatar-authoring/metahuman/extract_glb_texture.py \
+  --glb AnnaExportTest_v3.glb --material MI_EyeL_Baked_Face \
+  --out ~/avatar-work/anna/maps-override/Eyes_Color.png
+```
+
+Then point `map_overrides.Eyes_Color` at the result. The build uses one eye
+material for both eyes, so the left eye's texture is enough.
 
 To find the garment mesh names, open the glTF in Blender or read its JSON
 `meshes[].name` (Anna: `MHC_Anna_Outfits`, `_2`, `_3`).
@@ -398,6 +415,12 @@ poses. On a realistic body the `hip` pose looks exaggerated. Set
 `behavior.poseScale` (Anna: 0.35) in the avatar entry to blend the idle poses
 toward `straight`.
 
+Close framings also suppress up/down head motion: TalkingHead's mood
+animation and gaze randomly pitch the head, and breathing lifts it. Sodalis
+scales these by framing: none in Face and Head, 35% in Head & shoulders and
+Bust, full in wider framings. Yaw, roll, eye movement and nod gestures are
+unaffected.
+
 ## Files
 
 | File | Purpose |
@@ -409,6 +432,7 @@ toward `straight`.
 | `.../make_arkit_mapping.py` | T3D pose asset → `arkit_mapping.json` |
 | `.../bake_card_textures.py` | Hair/brow colour textures from the attribute atlas |
 | `.../extract_face_ao.py` | Face occlusion from Unreal's glTF |
+| `.../extract_glb_texture.py` | One material texture (e.g. the iris) from Unreal's glTF |
 | `.../hair.py`, `brows.py`, `add_metahuman_outfit.py` | Hair, brows, garments |
 | `.../build_openriglogic.sh`, `openriglogic-macos.patch` | OpenRigLogic build |
 | `tools/avatar-authoring/build_avatar.py` | Shared skeleton alignment, texture cap and GLB export |

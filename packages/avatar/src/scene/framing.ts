@@ -113,3 +113,23 @@ export function framingSpan(
   const [top, bottom, widthRatio] = spans[framing];
   return { top, bottom, width: (top - bottom) * widthRatio };
 }
+
+const VERTICAL_MOTION: Record<AvatarFramingName, number> = {
+  face: 0,
+  head: 0,
+  "head-shoulders": 0.35,
+  bust: 0.35,
+  "half-body": 1,
+  "three-quarter": 1,
+  "full-body": 1,
+};
+
+/**
+ * How much incidental up-and-down head motion (idle pitch, breathing lift) a
+ * framing keeps. Close framings magnify it into a distracting bob; yaw, roll,
+ * eye movement and explicit gestures are unaffected.
+ */
+export function framingVerticalMotion(framing: AvatarFramingName): number {
+  framingFieldOfView(framing);
+  return VERTICAL_MOTION[framing];
+}

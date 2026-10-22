@@ -152,6 +152,43 @@ describe("TalkingHead avatar controller", () => {
     expect(head.visible).toBe(true);
   });
 
+  it("scales incidental vertical head motion without touching yaw, roll or gestures", async () => {
+    const mt = (value: number) => ({ value, limit: null as null | ((v: number) => number), needsUpdate: false });
+    const runtime = Object.assign(createRuntime(), {
+      mtAvatar: {
+        bodyRotateX: mt(0.1),
+        headRotateX: mt(0.2),
+        chestInhale: mt(0.5),
+        bodyRotateY: mt(0.3),
+      },
+    });
+    const { scene, controller } = createHarness(runtime);
+    const { spine2 } = addIdleRig(scene);
+    const baseSpineRotation = spine2.rotation.clone();
+    await controller.load(testAsset);
+    const pitch = runtime.mtAvatar.bodyRotateX;
+
+    controller.setVerticalMotion(0.4);
+
+    expect(pitch.limit?.(0.1)).toBeCloseTo(0.04);
+    expect(pitch.needsUpdate).toBe(true);
+    expect(runtime.mtAvatar.headRotateX.limit?.(0.2)).toBeCloseTo(0.08);
+    expect(runtime.mtAvatar.chestInhale.limit?.(0.5)).toBeCloseTo(0.2);
+    expect(runtime.mtAvatar.bodyRotateY.limit).toBeNull();
+
+    controller.setVerticalMotion(0);
+    controller.update(1);
+    expect(pitch.limit?.(0.1)).toBe(0);
+    expect(spine2.rotation.x).toBe(baseSpineRotation.x);
+
+    void controller.playGesture("nod");
+    expect(runtime.mtAvatar.headRotateX.limit?.(0.2)).toBe(0.2);
+
+    controller.setVerticalMotion(1);
+    expect(pitch.limit?.(0.1)).toBe(0.1);
+    expect(() => controller.setVerticalMotion(1.5)).toThrow(RangeError);
+  });
+
   it("reports when a configured model node is missing", async () => {
     const { controller } = createHarness();
 
