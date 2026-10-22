@@ -113,3 +113,11 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   exports, Windows-to-Mac hand-off and common Unreal export failures. The
   dev-only avatar stage described there is still on `mpfb-avatar-pipeline`,
   not `main`.
+- 2026-10-22: User reports a substantial improvement in visual appearance
+  over the previous avatar. This is a qualitative assessment, not yet the
+  side-by-side screenshots or measured frame-rate comparison in Acceptance.
+  The royalty threshold and lack of AI training do not by themselves settle
+  rights to publish a GLB with acquired Epic/Fab content; see the
+  [MetaHuman and Fab licensing research note](../docs/evaluations/metahuman-fab-licensing.md).
+  Continue local evaluation; confirm asset provenance and distribution
+  terms before publishing the converted avatar.
