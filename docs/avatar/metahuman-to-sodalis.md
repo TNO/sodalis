@@ -191,11 +191,14 @@ use the right panel's search box.
    **UE Cine** to retain high-detail LOD0 meshes, then click
    **Assemble**. If choosing **UE Optimized**, verify the exported FBXs
    still contain LOD0 before building. The tested example used standard,
-   non-UAF output. Assembly produces `BP_<MHC>` and assembled meshes under
-   `/Game/MetaHumans/`. Assembly is distinct from **DCC Export**; in UE 5.8
-   DCC Export moved to the *Export* category. After later Creator edits,
-   assemble again before exporting from the project. Then choose
-   **File > Save All** in the main editor.
+   non-UAF output. Assembly creates a character Blueprint (`BP_...`) and
+   skeletal meshes; the MetaHuman Character asset itself can be elsewhere
+   in *Content*, and DCC Export alone does not create these assembled
+   assets. Note the output folder shown by Assembly rather than assuming
+   it matches the Character asset's folder. Assembly is distinct from
+   **DCC Export**; in UE 5.8 DCC Export moved to the *Export* category.
+   After later Creator edits, assemble again before exporting from the
+   project. Then choose **File > Save All** in the main editor.
 
 ### A2. Exports to make
 
@@ -217,13 +220,24 @@ Keep the ZIP or its extracted contents outside git.
 
 #### A2.2 Head and body FBX (required)
 
-1. Open the Content Drawer and go to *Content > MetaHumans > `<MHC>`*
-   (the folder name may omit `MHC_`). In the asset grid, use the **Filter**
-   button next to Search and tick **Skeletal Mesh** if the folder is busy.
-2. Hover candidates to find the assembled **face/head** and **body**
-   *Skeletal Mesh* assets. Do not choose `BP_<MHC>` (a Blueprint), a
-   Skeleton, a Physics Asset, or a Groom.
-3. Right-click the face mesh, choose **Asset Actions > Export…**, select
+1. First complete **Assembly** in A1. The DCC ZIP does not make the mesh
+   assets appear in the Content Browser. Open the Content Drawer, select
+   *Content* in its left tree and clear any text in the search field above
+   that tree (for example `Texture`) and the asset-grid Search field.
+   Remove any active type filters using the **Filter** button beside the
+   asset-grid Search field.
+2. Open the folder reported by Assembly (often under *Content >
+   MetaHumans*). If you cannot find it, search from *Content* for the new
+   `BP_` Blueprint with your character's name; right-click it and choose
+   **Show in Folder View** to locate the assembled output. If no Blueprint
+   appears, return to the Character asset (which may be directly under
+   *Content*) and check that Assembly finished successfully.
+3. In the assembled output, use the **Filter** button and choose
+   **Skeletal Mesh** if the folder is busy. Hover candidates to identify
+   the assembled **face/head** and **body** meshes; they may be in a
+   subfolder rather than beside the Blueprint. Do not choose the Blueprint,
+   a Skeleton, a Physics Asset, or a Groom.
+4. Right-click the face mesh, choose **Asset Actions > Export…**, select
    **FBX** as the file type, and save `<MHC>_Head.FBX`. Accept the default
    FBX export options unless they disable mesh LODs. Repeat for the body,
    saving `<MHC>_Body.FBX`.
@@ -265,8 +279,8 @@ data out of git.
    it, for example as `<name>_Export`. An **Empty** level has no lights; in
    *Lit* view the character may show only an outline while *Unlit* still
    shows it.
-2. In the Content Drawer, open *Content > MetaHumans > `<MHC>`* and drag
-   **`BP_<MHC>`** (the Blueprint, not the MetaHuman Character asset) into the
+2. In the Content Drawer, locate the assembled character Blueprint (`BP_...`)
+   as in A2.2, and drag it (not the MetaHuman Character asset) into the
    Viewport. In the **Outliner** (top-right), click only that actor; do not
    hold `Ctrl` or select lights or the floor. Choose **File > Save All**
    before exporting: GLTFExporter crashed once during the Anna evaluation.
