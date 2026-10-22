@@ -9,9 +9,9 @@ is in [the MetaHuman and Fab assessment](../evaluations/metahuman-fab-licensing.
 
 ## Private asset store
 
-The store is a private git repository (suggested name
-`TNO/sodalis-licensed-avatars`) or another access-controlled share. Grant
-access only to Sodalis collaborators (Fab EULA §5(a)). Its top level holds:
+The store is the private repository
+[TNO/sodalis-licensed-avatars](https://github.com/TNO/sodalis-licensed-avatars).
+Its top level holds:
 
 ```text
 NOTICE.md     # terms for every GLB below; copied into the build
@@ -27,10 +27,25 @@ each garment with its listing URL), and state:
 > reuse or redistribute it, or any part of it, separately from Sodalis.
 > Sodalis's MIT licence covers its source code, not this avatar.
 
+## Access
+
+Fab content may be shared on its own only with collaborators working on the
+project, for example through a private repository (Fab EULA §5(a)). So:
+
+- A maintainer adds each Sodalis collaborator to the store directly, with
+  **read** access (enough to clone); grant write only to people who add
+  avatars. Remove access when someone leaves the project.
+- Each collaborator clones with their own GitHub login. The build has no
+  download step and no token; never put a store token in CI, a fork, a
+  public workflow or a shared script.
+- External users and forks have no access. Their builds list only the open
+  avatars. They get licensed avatars only inside a Sodalis release built by
+  a collaborator.
+
 ## Using the avatars
 
 ```sh
-git clone <private-store-url> ../sodalis-licensed-avatars
+git clone https://github.com/TNO/sodalis-licensed-avatars ../sodalis-licensed-avatars
 pnpm avatars:licensed ../sodalis-licensed-avatars
 pnpm dev            # restart a running dev server to pick up new files
 ```

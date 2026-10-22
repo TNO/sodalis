@@ -171,6 +171,31 @@ First-party desktop apps can register scoped semantic actions and avatar
 targets with [`@sodalis/app-sdk`](packages/app-sdk/README.md); the bundled
 Sample Notes panel is an example.
 
+## Licensed avatars (collaborators)
+
+Some avatars, such as the MetaHuman Anna, may ship inside Sodalis builds but
+may not be published on their own. Their GLBs live in the private repository
+[TNO/sodalis-licensed-avatars](https://github.com/TNO/sodalis-licensed-avatars),
+never in this public one. Without them, Sodalis builds and runs with the open
+avatars only; forks work the same way.
+
+Sodalis collaborators get read access from a maintainer; ask one to add your
+GitHub account. Then, from the repository root:
+
+```sh
+git clone https://github.com/TNO/sodalis-licensed-avatars ../sodalis-licensed-avatars
+pnpm avatars:licensed ../sodalis-licensed-avatars
+pnpm dev     # or pnpm build; restart a running dev server
+```
+
+The script copies the GLBs and their `NOTICE.md` into the git-ignored
+`apps/desktop/public/avatars/licensed/`. Use them only inside Sodalis and
+share them only through the private repository: no public uploads, forks,
+CI artefacts or tokens. Release builds contain these files, so distribute
+them only as the Sodalis app. See
+[Licensed avatars](docs/avatar/licensed-avatars.md) for adding an avatar and
+the licence rules.
+
 ## Checks
 
 ```sh
