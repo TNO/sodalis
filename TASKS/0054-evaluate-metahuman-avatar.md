@@ -121,3 +121,13 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   [MetaHuman and Fab licensing research note](../docs/evaluations/metahuman-fab-licensing.md).
   Continue local evaluation; confirm asset provenance and distribution
   terms before publishing the converted avatar.
+- 2026-10-22: Anna's garments are Epic's Fab Standard-licensed MetaHuman
+  Jeans, Tucked T Shirt Variants and Casual Sneakers. The user accepts GLB
+  conversion as permitted modification. Because the repository is public,
+  added a licensed-avatar mechanism on main: GLBs live in a private asset
+  store, `pnpm avatars:licensed` copies them into the git-ignored
+  `apps/desktop/public/avatars/licensed/`, and catalogue entries with
+  `licensedFile` appear only in builds that have them
+  ([Licensed avatars](../docs/avatar/licensed-avatars.md)). Next: create the
+  private store with Anna's GLB and NOTICE, then rebase
+  `mpfb-avatar-pipeline` onto main and register Anna through it.

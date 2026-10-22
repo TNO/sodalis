@@ -154,3 +154,5 @@ vite.config.ts.timestamp-*
 .vite/
 # Evaluation-only avatars that must not be redistributed (TASKS/0054)
 apps/desktop/public/avatars/eval/
+# Licensed avatars: copied from the private asset store, bundled only in builds
+apps/desktop/public/avatars/licensed/

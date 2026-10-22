@@ -13,17 +13,16 @@ checkout. Replace these placeholders in commands and filenames.
 
 ![Anna in Sodalis, Bust framing](images/metahuman/anna-bust.jpg)
 
-> **Licence.** Keep converted avatars for local evaluation until the
-> provenance and distribution terms of each component are checked.
-> Unreal's EULA allows certain character models developed with Engine Code
-> to be distributed as Non-Engine Products; acquired MetaHuman and Fab
-> assets may have different restrictions. Do not commit MetaHuman exports,
-> DNA files, textures, Epic-derived ARKit mappings or the resulting GLB
-> without clearance. See the
+> **Licence.** Never commit MetaHuman exports, DNA files, textures,
+> Epic-derived ARKit mappings or the resulting GLB to this public
+> repository. Fab content may ship inside Sodalis builds but not on its
+> own, so finished avatars go into the private asset store described in
+> [Licensed avatars](licensed-avatars.md), after each component's licence
+> is recorded. See the
 > [licensing assessment](../evaluations/metahuman-fab-licensing.md).
-> The repository ignores `apps/desktop/public/avatars/eval/` for that
-> reason. The scripts in `tools/avatar-authoring/metahuman/` are ours and
-> contain no Epic content.
+> The repository also ignores `apps/desktop/public/avatars/eval/` for
+> local evaluation. The scripts in `tools/avatar-authoring/metahuman/` are
+> ours and contain no Epic content.
 
 ## Next-character checklist
 
@@ -453,6 +452,11 @@ VITE_SODALIS_DEFAULT_AVATAR=<registered-id>
 
 The override applies to development builds only; an unknown id falls back to
 the first catalogue entry.
+
+**Shipping the avatar.** When the evaluation is done, add the GLB and its
+licence terms to the private asset store and register a catalogue entry
+with `licensedFile`, as described in [Licensed avatars](licensed-avatars.md).
+It then appears in the normal avatar choice of builds that copied it in.
 
 Check:
 

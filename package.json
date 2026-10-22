@@ -12,8 +12,9 @@
     "stack:down": "tsx scripts/dev-stack.ts down",
     "stack:config": "tsx scripts/dev-stack.ts config",
     "stack:smoke": "tsx scripts/smoke-stack.ts",
+    "avatars:licensed": "tsx scripts/licensed-avatars.ts",
     "build": "pnpm --recursive build",
-    "test": "vitest run scripts/stack-config.test.ts scripts/llm-compare.test.ts scripts/tts-intelligibility.test.ts scripts/tts-live-check.test.ts scripts/stt-live-captions.test.ts && pnpm --filter @sodalis/desktop-host test && pnpm --filter @sodalis/avatar test && pnpm --filter @sodalis/speech test && pnpm --filter @sodalis/assistant test && pnpm --filter @sodalis/app-sdk test && pnpm --filter @sodalis/memory test && pnpm --filter @sodalis/server test && pnpm --filter @sodalis/desktop test",
+    "test": "vitest run scripts/stack-config.test.ts scripts/llm-compare.test.ts scripts/tts-intelligibility.test.ts scripts/tts-live-check.test.ts scripts/stt-live-captions.test.ts scripts/licensed-avatars.test.ts && pnpm --filter @sodalis/desktop-host test && pnpm --filter @sodalis/avatar test && pnpm --filter @sodalis/speech test && pnpm --filter @sodalis/assistant test && pnpm --filter @sodalis/app-sdk test && pnpm --filter @sodalis/memory test && pnpm --filter @sodalis/server test && pnpm --filter @sodalis/desktop test",
     "typecheck": "pnpm --recursive typecheck"
   },
   "devDependencies": {

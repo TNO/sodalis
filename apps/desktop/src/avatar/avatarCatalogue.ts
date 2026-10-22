@@ -10,6 +10,24 @@ export interface AvatarAttribution {
 export interface AvatarCatalogueEntry {
   asset: AvatarAsset;
   attribution: AvatarAttribution;
+  /**
+   * GLB file name for an avatar whose licence forbids publishing it in this
+   * repository. The entry is listed only in builds that found the file in
+   * the git-ignored public/avatars/licensed/ folder (see docs/avatar/licensed-avatars.md).
+   */
+  licensedFile?: string;
+}
+
+export const LICENSED_AVATAR_PATH = `${import.meta.env.BASE_URL}avatars/licensed/`;
+
+export function availableAvatars(
+  entries: readonly AvatarCatalogueEntry[],
+  licensedFiles: readonly string[],
+): AvatarCatalogueEntry[] {
+  return entries.filter(
+    (entry) =>
+      entry.licensedFile === undefined || licensedFiles.includes(entry.licensedFile),
+  );
 }
 
 const developmentBehavior = import.meta.env.DEV
@@ -53,10 +71,10 @@ const MALE_THUISZORG: AvatarCatalogueEntry = {
   },
 };
 
-export const AVATAR_CATALOGUE: readonly AvatarCatalogueEntry[] = [
-  MALE_THUISZORG,
-  BRUNETTE,
-];
+export const AVATAR_CATALOGUE: readonly AvatarCatalogueEntry[] = availableAvatars(
+  [MALE_THUISZORG, BRUNETTE],
+  __SODALIS_LICENSED_AVATARS__,
+);
 
 export const DEFAULT_AVATAR_ID = MALE_THUISZORG.asset.id;
 

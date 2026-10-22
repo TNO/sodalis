@@ -28,7 +28,17 @@ clause gives recipients a standalone, reusable licence to Anna or her clothes.
 **For Sodalis, the conclusion is conditional, not an unconditional release
 approval.** A Fab Standard-licensed outfit incorporated into a distributed
 Sodalis app appears to fit Fab §4(c); publishing the GLB by itself, including
-in a public repository, is different (§5(a)). The *current* Anna evaluation
+in a public repository, is different (§5(a)).
+
+**Decision (2026-10-22).** The project owner reads GLB conversion as
+permitted modification rather than "translation" or deriving data under
+§6(b)(i), and accepts Anna's components as usable content. Because
+TNO/sodalis is public, licensed GLBs are kept in a private asset store for
+collaborators and bundled only into Sodalis builds, together with a
+use-within-Sodalis-only notice ([Licensed avatars](../avatar/licensed-avatars.md)).
+The MetaHuman Addendum question below remains an accepted, open risk.
+
+The *current* Anna evaluation
 file is local in the git-ignored `apps/desktop/public/avatars/eval/` directory
 on the `mpfb-avatar-pipeline` branch, not part of the published app on main.
 If included in a future web build, that `public/` path would serve the
