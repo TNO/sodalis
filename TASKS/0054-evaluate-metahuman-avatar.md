@@ -107,3 +107,9 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   workflow and Unreal settings:
   [docs/avatar/metahuman-to-sodalis.md](../docs/avatar/metahuman-to-sodalis.md).
   Tools: `tools/avatar-authoring/metahuman/`.
+- 2026-10-22: Expanded the linked tutorial into a reusable, character-neutral
+  Unreal-to-Blender checklist. Anna's asset names and colours are examples;
+  the guide now covers first-time setup, rigging/assembly order, the required
+  exports, Windows-to-Mac hand-off and common Unreal export failures. The
+  dev-only avatar stage described there is still on `mpfb-avatar-pipeline`,
+  not `main`.
