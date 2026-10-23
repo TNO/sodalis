@@ -22,6 +22,11 @@ it, so **Dutch text normalisation is a prerequisite** (see
 A [female-voice rerun](#female-voice-rerun-measured-same-session) using
 the only permissive nl_NL female Piper source (MLS, CC BY 4.0) gave a
 less accurate Piper voice, while its Pocket clone stayed accurate.
+In a [KittenTTS 2 trial](#kittentts-2-measured-licence-accepted-by-the-user-for-researchsodalis),
+Kitten produced the most accurate Dutch, but it is not interactive (RTF of
+about 1.3–1.8 with no streaming). The user accepts its non-permissive
+licence for research and Sodalis; commercial use would need a separate
+licence.
 
 **Audio8 TTS Preview 0.6B ONNX INT4 was also trialed.** The [base checkpoint](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b)
 and [conversion](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6B-ONNX-INT4)
@@ -298,6 +303,157 @@ There is no permissive, from-scratch **nl_NL** Piper voice with a confirmed
 female speaker that is cleaner than this. A licensed female Dutch reference
 recording would be the next step for Pocket.
 
+### KittenTTS 2 (measured; licence accepted by the user for research/Sodalis)
+
+[KittenTTS 2](https://huggingface.co/KittenML/kitten-tts-2) is a 1.7B
+speech LM that emits S3 codec tokens. Those tokens are decoded at 24 kHz by
+the MIT [Chatterbox-turbo](https://huggingface.co/ResembleAI/chatterbox-turbo)
+`s3gen_meanflow` decoder. The model card lists 115 voices in 16 languages,
+including Dutch, and says to pass `normalize=False` for non-English text
+because the normaliser is tuned for English.
+
+**Licence decision.** The user has decided that the
+[Stellon Labs Community License](https://huggingface.co/KittenML/kitten-tts-2/blob/main/LICENSE.md)
+("Last Updated: July 5, 2024") is acceptable for Sodalis and research. The
+terms that matter, quoted from the licence:
+
+- Purpose (preamble): free access is preserved "for people or organizations
+  generating annual revenue of less than US $1,000,000 … and having received
+  less than US $1,000,000 in total funding".
+- §II, Research and non-commercial use: a "non-exclusive, worldwide,
+  non-transferable, non-sublicensable, **revocable** and royalty-free
+  limited license" to "use, reproduce, distribute, and create Derivative
+  Works". This section has no revenue cap.
+- §III, Commercial use: "You must register with Stellon Labs". If "You or
+  Your Affiliate(s) … generate more than USD $1,000,000 in annual revenue …
+  regardless of whether that revenue is generated directly or indirectly
+  from the Stellon Labs Materials … or have received more than USD
+  $1,000,000 in total cumulative funding (including equity, debt,
+  convertible instruments, and grants …), any licenses granted to You under
+  this Agreement shall terminate". A new licence is then at Stellon Labs'
+  "sole discretion". Recipients of "an integrated end user product" are
+  exempt from §III.
+- §IV(a), Distribution and attribution: anyone who distributes the
+  materials, a derivative, "or a product or service that uses any portion of
+  them" must:
+  1. provide a copy of the Agreement;
+  2. keep a "Notice" text file containing "This Stellon Labs Model is
+     licensed under the Stellon Labs Community License, Copyright © Stellon
+     Labs Inc. All Rights Reserved"; and
+  3. display "Powered by KittenML" on a related website, UI, blog post,
+     about page or product documentation.
+- §IV(b), Use restrictions:
+  - Use must follow the documentation and an AUP that is "available by
+    contacting us", so it is not public.
+  - No model output may be used "to create or improve any foundational
+    generative AI model".
+  - No output may be used "to train, distill, or otherwise transfer the
+    capabilities" to another model, except fine-tunes or LoRAs.
+
+**Implications for Sodalis.**
+
+- Sodalis's research use fits §II.
+- TNO, with its affiliates and grants, almost certainly exceeds both $1M
+  thresholds. Any commercial deployment would therefore need a separate,
+  discretionary Stellon licence.
+- A public Sodalis release or Docker image that bundles or auto-downloads
+  the weights must ship the licence, a NOTICE file and "Powered by KittenML".
+- Downstream users inherit the revocable, non-OSI terms. KittenTTS 2 is
+  **not permissive** and cannot be described as such in the repository.
+- The code is permissive: the `kittenml` package is Apache-2.0, the
+  pyannote speaker model is MIT, and the decoder is MIT.
+- The provenance and rights of the named reference voices are not
+  documented.
+- Grep found no Perth watermark call in `kittenml/kittentts2`, so the output
+  appears to be unwatermarked.
+
+**Setup.**
+
+| Item | Value |
+| --- | --- |
+| Runtime | `kittenml[mlx]==0.9.6` (Python 3.11) |
+| LM | MLX on the GPU, packed ternary weights |
+| Decoder and speaker model | torch MPS |
+| Weights | Pinned at `1f00fee`, ~1.0 GB (910 MB LM, 56 MB voices) |
+| Decoder file | `s3gen_meanflow.safetensors`, 1.06 GB, pinned at `749d1c1` |
+| Total download | ~2.1 GB |
+| Sampling | Seed 42 |
+| Dutch normaliser | `normalize=False` |
+| English normaliser | `normalize=True` |
+
+Setup failures and quirks:
+
+- `hf download --include` skipped `config.json`, so it had to be fetched
+  explicitly.
+- The decoder downloads from the `main` branch of a third-party repository
+  unless a pre-populated `cache_dir` is passed.
+
+**Voices.** The publisher does not state gender or accent. Gender below is
+estimated from median F0. The scripts look Netherlands Dutch, but nl_NL
+versus nl_BE was **not verified by listening**.
+
+| Voice | Median F0 | Likely gender |
+| --- | ---: | --- |
+| `DutchWeatherPresenter` (chosen) | 214 Hz | Female |
+| `DutchBaker` | 203 Hz | Female |
+| `DutchGrandpaStory` | 133 Hz | Male |
+| `Maeve` (English, "warm storyteller", chosen) | 233 Hz | Female |
+
+**Timings.** One pass, recorded under the same machine load as the female
+rerun (Defender, Ollama and oMLX resident; load average ~11). The model
+loaded in 10 s from a warm cache, or 65 s on first load. Chunking happens
+at about 380 characters, so every prompt was a single chunk and **first
+audio equals total time**. There is no intra-chunk streaming.
+
+| Engine / voice / prompt | First audio = total | Audio | RTF | Peak RSS |
+| --- | ---: | ---: | ---: | ---: |
+| Weather presenter / nl-short | 5.52 s | 3.88 s | 1.42 | 2.49 GiB |
+| Weather presenter / nl-long | 19.50 s | 15.64 s | 1.25 | 2.54 GiB |
+| Weather presenter / nl-long-normalized | 21.89 s | 16.28 s | 1.34 | 2.59 GiB |
+| Maeve / en-short | 6.83 s | 3.96 s | 1.73 | 2.68 GiB |
+| Maeve / en-long | 28.40 s | 15.64 s | 1.82 | 2.70 GiB |
+| Baker / nl-short | 11.46 s | 4.28 s | 2.68 | 2.49 GiB |
+| Baker / nl-long | 24.07 s | 17.24 s | 1.40 | 2.54 GiB |
+| Baker / nl-long-normalized | 35.62 s | 18.24 s | 1.95 | 2.59 GiB |
+
+- Peak RSS excludes Metal/MPS allocations.
+- Profiling the short prompt showed the autoregressive LM takes 3.6–4.5 s
+  (~25 tokens/s, 94–104 tokens), while the decoder takes 0.6–1.4 s.
+- Even on an idle machine, the LM rate keeps it near real time, and the
+  whole reply must be generated before playback. That is one to two orders
+  of magnitude slower than Piper or Pocket here.
+- The card says the C++ `kitten-tts-2-cpp` GGUF path is faster on CPU; it
+  was not tried.
+
+**Whisper transcripts** (large-v3-turbo):
+
+| Sample | Transcript |
+| --- | --- |
+| `kitten-nl-short.wav` | Exact match to the prompt |
+| `kitten-nl-long.wav` | Exact, including "Stationsstraat **24**" from raw digits |
+| `kitten-nl-long-normalized.wav` | Exact ("Stationsstraat 24") |
+| `kitten-baker-nl-short.wav` | Exact match to the prompt |
+| `kitten-baker-nl-long.wav` | "… **Stationstraat 44** …" from raw "24"; otherwise correct |
+| `kitten-baker-nl-long-normalized.wav` | Exact match to the prompt |
+| `kitten-en-short.wav` | Correct ("9:30") |
+| `kitten-en-long.wav` | Correct, including "24 Station Street" |
+
+Conclusions:
+
+- KittenTTS 2 gave the **most accurate Dutch transcripts of any engine
+  tested**. The weather presenter even read the raw "24" correctly, but
+  Baker read it as "44", so text normalisation is still required.
+- It is **not interactive**: 5–28 s per reply with no streaming, against
+  sub-second times for Pocket.
+- Its licence is non-permissive and revocable, and commercial use above $1M
+  revenue or funding is excluded.
+
+Use it as a quality reference or an offline/pre-rendered option, not as
+Sodalis's live voice, unless the C++ path or an idle machine is shown to
+reach RTF < 0.3. The results JSON files are
+`~/tts-trials/kitten-results.json` and `~/tts-trials/kitten-baker-results.json`.
+The audio is in `~/tts-trials/samples/kitten-*.wav`.
+
 ## Results
 
 ### Popularity and eligibility snapshot
@@ -316,7 +472,7 @@ research date (not an independently reproducible fixed-time snapshot).
 | [MOSS-TTS Local Transformer v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) | 114,703 / 74 | 2026-06-18 | Both explicitly listed; **Apache-2.0** card and separately [Apache-2.0 audio tokenizer](https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-v2) | 48 kHz stereo, large tokenizer; setup pins CUDA PyTorch and uses remote code; no verified MLX/Metal runtime or Mac speed | Conditional, lower priority |
 | [Audio8 TTS Preview 0.6B](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b) | 4,586 / 417 | 2026-08-19 | Both among 11 recommended; **Apache-2.0** code and weights with NOTICE | [Publisher ONNX INT4](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6B-ONNX-INT4) (760 / 55; 2026-08-02) tested on macOS arm64 CPU, ~1.1–1.2 GiB synthesis RSS claimed on M2; see measured M4 figures above | Trialed; too slow to complete these replies |
 | [Pocket TTS GGUF](https://huggingface.co/Serveurperso/pocket-tts-GGUF) | 2,309 / 2 | 2026-09-27 | Separate Dutch and English packs; original **CC BY 4.0**, runtime **MIT**; gated terms accepted for this account, voice rights vary | Community [`pockettts.cpp`](https://github.com/ServeurpersoCom/pockettts.cpp) with Metal, Q8 Dutch pack 138 MB, HTTP PCM streaming; see measured M4 figures above | Trialed; first quality-listening candidate |
-| [KittenTTS 2](https://huggingface.co/KittenML/kitten-tts-2) | 46,417 / 168 | 2026-10-22 | Both; weights under **Stellon Labs Community License**, which ends free commercial use at the specified revenue/funding limits; loader Apache-2.0 | Publisher reports CPU/Apple Silicon speed but no unrestricted weight grant | **Exclude** despite freshness |
+| [KittenTTS 2](https://huggingface.co/KittenML/kitten-tts-2) | 46,417 / 168 | 2026-10-22 | Both; weights under **Stellon Labs Community License**, which ends free commercial use at the specified revenue/funding limits; loader Apache-2.0 | Publisher reports CPU/Apple Silicon speed but no unrestricted weight grant; measured locally: best Dutch accuracy, RTF 1.3–1.8 | **Research only** (user-accepted); not permissive, commercial use needs a Stellon licence |
 | [Audio8 0.1B ONNX INT8](https://huggingface.co/Edge0/audio8-TTS-0.1B-ONNX-INT8) | 810 / 76 | 2026-08-28 | Conversion claims both and **Apache-2.0**, but [source 0.1B weights](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.1b) are **Audio8 Community License**, with a $2m revenue cap; original card does **not** list Dutch | Conversion says macOS arm64 tested, ~0.6 GB loaded; no Dutch quality evidence | **Exclude** pending explicit upstream relicense and Dutch validation |
 | [Qwen3-TTS CustomVoice](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) | 1,938,636 / 2,163 | 2026-01-29 | Apache-2.0, but card's 10 supported languages **omit Dutch** | Claimed 97 ms latency cannot establish Dutch support | **Exclude** despite HF filter match |
 | [MOSS-TTS Nano 100M](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Nano-100M) | 114,273 / 244 | 2026-04-13 | Card's 20-language list **omits Dutch** despite search metadata | CPU/streaming claims not relevant without Dutch support | **Exclude** |
@@ -450,6 +606,12 @@ TTS endpoint.
    amounts, abbreviations) in front of non-espeak engines and re-test
    Pocket with it. Source a consented, permissively licensed female nl_NL
    reference recording if the MLS-derived reference is not warm enough.
+6. Rerun the timings for all engines with Ollama, oMLX and Defender idle.
+   For KittenTTS 2:
+   - try the C++ GGUF path and the `student_w4` decoder;
+   - have the user confirm the voices' gender and accent (nl_NL or nl_BE)
+     by listening; and
+   - obtain the AUP and the voice provenance before any public release.
 
 ## Primary sources
 
@@ -472,3 +634,6 @@ TTS endpoint.
 - [Higgs TTS 3 license](https://huggingface.co/bosonai/higgs-tts-3-4b/blob/main/LICENSE),
   [Voxtral TTS license](https://huggingface.co/mistralai/Voxtral-4B-TTS-2603),
   and [KittenTTS 2 weight license](https://huggingface.co/KittenML/kitten-tts-2/blob/main/LICENSE.md).
+- [KittenTTS 2 model card](https://huggingface.co/KittenML/kitten-tts-2),
+  [kittenml package (Apache-2.0)](https://pypi.org/project/kittenml/),
+  and [Chatterbox-turbo decoder card (MIT)](https://huggingface.co/ResembleAI/chatterbox-turbo).
