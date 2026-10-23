@@ -37,13 +37,13 @@ cloud checks. Updated 2026-10-23.
   Parakeet V3 and Whisper models. This uses the same model family, not the
   same running Sodalis service; verify the model version and attribution in
   its installed release.
-- **Mac-native TTS: prototype an AVSpeechSynthesizer host adapter** and list
-  the voices actually installed on the user's Mac. This avoids distributing
-  model weights and uses Dutch/English system voices where available, but
-  voice quality, PCM-buffer integration, and licensing/redistribution are
-  OS-dependent and unmeasured. Keep Piper `nl_NL-ronnie-medium` as the
-  measured portable fallback only if its GPL-3.0-or-later engine is
-  acceptable; its voice weights are separately licensed CC0.
+- **Mac-native TTS: trial Audio8 TTS Preview 0.6B ONNX INT4 first** following
+  the [newer Dutch TTS model comparison](dutch-tts-hugging-face.md). It has
+  Apache-2.0 code/weights and a documented macOS arm64 CPU service; its
+  Dutch voice quality and latency remain unmeasured. Apple system voices
+  are an OS-only alternative, not a demonstrated quality improvement.
+  Keep Piper `nl_NL-ronnie-medium` as the measured portable fallback only
+  if its GPL-3.0-or-later engine is acceptable; Ronnie weights are CC0.
 - **Do not select Voxtral 4B TTS for this permissive-license project.** The
   model inherits CC BY-NC 4.0 from its reference voices, and the documented
   vLLM-Omni deployment needs a GPU with at least 16 GB. Its Dutch and
@@ -65,7 +65,11 @@ measured provider results:
 - [Dutch TTS providers](tts-providers.md), measurements through 2026-10-16.
 
 No application code was changed. No models were downloaded and no cloud
-provider was contacted for this research.
+provider was contacted for this research. A subsequent review of the
+Hugging Face Dutch TTS listing is recorded separately in
+[Dutch TTS models on Hugging Face for a Mac host](dutch-tts-hugging-face.md);
+the TTS shortlist below reflects the original 2026-10-23 scope and does
+not rank the newer candidates.
 
 ## Method and hardware
 
@@ -106,6 +110,11 @@ cancellation endpoints.
 
 ### TTS shortlist
 
+This was the initial shortlist before the [Hugging Face model
+follow-up](dutch-tts-hugging-face.md). In particular, the Apple voice
+prototype below is **not** the top recommendation for improving Dutch voice
+quality; trial Audio8 0.6B ONNX first while keeping Piper as a control.
+
 | Rank / option | Dutch and English evidence | Mac execution and integration | License and redistribution |
 | --- | --- | --- | --- |
 | **1. macOS AVSpeechSynthesizer** | Apple exposes installed voices through `AVSpeechSynthesisVoice.speechVoices()`. Apple feature availability includes Dutch speech and English locales, but the exact voices available to AVFoundation depend on the target OS and installed voice downloads. No Sodalis listening test was run. | Native macOS API; `write(_:toBufferCallback:)` generates speech and supplies audio buffers. A first-party Sodalis adapter must still validate sample format, conversion, cancellation, and request isolation. | Proprietary Apple OS/API and voices. The project can depend on the user's macOS installation without bundling Apple voice assets; do not redistribute them. |
@@ -116,9 +125,9 @@ cancellation endpoints.
 The existing measured alternative engines do not displace Piper for portable
 conversation: the TTS evaluation found CPU Chatterbox, Parler, and Fish too
 slow or unsuitable; F5-TTS lacked a verified Dutch checkpoint; and the
-tested Voxtral TTS model used non-commercial weights. The Mac-native Apple
-voice path is therefore the most promising Mac-only service to prototype,
-not a quality winner established by measurement.
+tested Voxtral TTS model used non-commercial weights. The Mac-native Apple voice path remains a possible OS-only fallback, not a
+quality winner established by measurement. The newer Audio8 and Pocket
+candidates are analyzed in the linked follow-up.
 
 ## Analysis
 

@@ -6,6 +6,7 @@ Subsystem: speech
 Depends on: 0030, 0034
 
 Related: [Mac-native STT and TTS options](../docs/evaluations/macos-speech-options.md).
+Follow-up research: [Dutch TTS models on Hugging Face for a Mac host](../docs/evaluations/dutch-tts-hugging-face.md).
 
 ## Context
 
