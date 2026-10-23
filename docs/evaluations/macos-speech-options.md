@@ -1,7 +1,8 @@
 # Mac-native STT and TTS options
 
-Status: research complete; no new local benchmarks, model downloads, or live
-cloud checks. Updated 2026-10-23.
+Status: original desk research complete with no model downloads or live
+cloud checks. The separate [Dutch TTS follow-up](dutch-tts-hugging-face.md)
+now includes local Mac trials. Updated 2026-10-23.
 
 ## Summary and recommendation
 
@@ -37,13 +38,16 @@ cloud checks. Updated 2026-10-23.
   Parakeet V3 and Whisper models. This uses the same model family, not the
   same running Sodalis service; verify the model version and attribution in
   its installed release.
-- **Mac-native TTS: trial Audio8 TTS Preview 0.6B ONNX INT4 first** following
-  the [newer Dutch TTS model comparison](dutch-tts-hugging-face.md). It has
-  Apache-2.0 code/weights and a documented macOS arm64 CPU service; its
-  Dutch voice quality and latency remain unmeasured. Apple system voices
-  are an OS-only alternative, not a demonstrated quality improvement.
+- **Mac-native TTS: listen to Pocket TTS Dutch Q8/Metal next**, per the
+  [measured Dutch TTS follow-up](dutch-tts-hugging-face.md). On an M4 Max,
+  its short/long Dutch prompts completed in 0.17/0.46 s, but quality has
+  not been graded; CC BY weights require attribution and access to the
+  gated upstream model. Audio8 0.6B ONNX INT4 has Apache-2.0 code/weights,
+  but its CPU trial took 7.54/72.65 s on the same prompts. Apple system
+  voices are an OS-only alternative, not a demonstrated quality improvement.
   Keep Piper `nl_NL-ronnie-medium` as the measured portable fallback only
-  if its GPL-3.0-or-later engine is acceptable; Ronnie weights are CC0.
+  if its GPL-3.0-or-later engine is acceptable; Ronnie's model card names
+  a CC0 source dataset.
 - **Do not select Voxtral 4B TTS for this permissive-license project.** The
   model inherits CC BY-NC 4.0 from its reference voices, and the documented
   vLLM-Omni deployment needs a GPU with at least 16 GB. Its Dutch and
@@ -65,8 +69,8 @@ measured provider results:
 - [Dutch TTS providers](tts-providers.md), measurements through 2026-10-16.
 
 No application code was changed. No models were downloaded and no cloud
-provider was contacted for this research. A subsequent review of the
-Hugging Face Dutch TTS listing is recorded separately in
+provider was contacted for the original desk-research phase. A subsequent
+review and local trial of the Hugging Face Dutch TTS listing is recorded in
 [Dutch TTS models on Hugging Face for a Mac host](dutch-tts-hugging-face.md);
 the TTS shortlist below reflects the original 2026-10-23 scope and does
 not rank the newer candidates.
@@ -113,7 +117,8 @@ cancellation endpoints.
 This was the initial shortlist before the [Hugging Face model
 follow-up](dutch-tts-hugging-face.md). In particular, the Apple voice
 prototype below is **not** the top recommendation for improving Dutch voice
-quality; trial Audio8 0.6B ONNX first while keeping Piper as a control.
+quality. The newer measured speed comparison instead prioritizes Pocket
+for a listening trial, with Piper as the control.
 
 | Rank / option | Dutch and English evidence | Mac execution and integration | License and redistribution |
 | --- | --- | --- | --- |

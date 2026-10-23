@@ -1,32 +1,31 @@
 # Dutch TTS models on Hugging Face for a Mac host
 
-Status: desk research complete, 2026-10-23; **no new synthesis or listening
-measurements**. A model's Dutch tag, downloads, likes, or recent upload is not
-evidence of Dutch voice quality or practical speed.
+Status: desk research and a **local four-prompt Mac speed trial** complete,
+2026-10-23. Listening and intelligibility scores are still outstanding. A
+model's Dutch tag, downloads, likes, or recent upload is not evidence of
+Dutch voice quality or practical speed.
 
 ## Summary and recommendation
 
-**First local trial: Audio8 TTS Preview 0.6B, specifically the publisher's
-ONNX INT4 conversion.** The [base checkpoint](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b)
+**For the next listening trial, start with Pocket TTS Dutch Q8 GGUF/Metal,
+but keep Piper as the speed and rights baseline.** With this HF account's
+upstream gate approved, Pocket generated the fixed Dutch short/long prompts
+in 0.17/0.46 s on an M4 Max, compared with 0.06/0.23 s for Piper Ronnie.
+The Pocket weights are CC BY 4.0, gated upstream, and carry prohibited-use
+terms; its MIT runtime does not make the weights or bundled voices MIT.
+We used **no bundled voice pack**: both Pocket and Audio8 were conditioned
+on a locally generated Piper reference. No one has yet graded the sound.
+
+**Audio8 TTS Preview 0.6B ONNX INT4 was also trialed.** The [base checkpoint](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b)
 and [conversion](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6B-ONNX-INT4)
 explicitly support Dutch and English, claim Apache-2.0 code and weights, and
 document a macOS arm64 **CPU** runtime with an HTTP service, streaming PCM,
-and cancellation endpoint. On the publisher's M2/16 GB machine the service
-used about 1.0 GiB loaded and 1.1–1.2 GiB during synthesis. **Neither Dutch
-intelligibility/naturalness nor first-audio/total latency on the Mac was
-measured**; its quality benchmarks omit Dutch and apply to the unquantized
-checkpoint. Compare the actual quantized output against Sodalis's measured
-Piper Ronnie baseline before choosing it for the product.
-
-**Second trial if a Metal backend is important: Pocket TTS Dutch via
-`pockettts.cpp` and its corresponding Dutch GGUF pack**, subject to reviewing
-the gated upstream model terms and the specific voice's provenance.
-Its C++ runtime documents Metal, a streaming PCM HTTP response, and
-distinct Dutch and English packs. Kyutai reports ~200 ms first audio and
-6x real-time on an M4 MacBook Air **for Pocket TTS generally, not for this
-third-party Dutch conversion**. Dutch quality/speed and the rights in the
-packaged voice states need independent validation. Do not treat an MIT
-runtime as licensing the CC-BY-4.0 weights or every reference voice.
+and a cancellation endpoint. Here its Dutch short/long responses took **7.54/72.65 s**
+to complete, despite first PCM arriving in ~0.6 s; English was slower. It
+does **not** meet conversational completion speed on these prompts. The
+publisher's ~1.1–1.2 GiB M2 peak and English quality scores are claims for
+different conditions, not substitutes for these M4 Max timings or a Dutch
+listening score.
 
 **Retain Piper Ronnie as Sodalis's measured local control**, not a proven
 quality winner; it scored 5/10 in the existing single-listener Dutch review
@@ -53,7 +52,8 @@ could give Sodalis better **Dutch and English** speech at usable
 short-reply latency on a Mac, while permitting unrestricted open-source
 project use. A Mac-native process can serve audio to the Compose speech
 backend; a model need not run in a Linux container. No voice cloning is
-required. Redistribution of a reference voice or model is a distinct
+required for the product, though these two trial engines used the licensed
+synthetic references described below. Redistribution of a reference voice or model is a distinct
 decision from user-initiated download.
 
 ## Method and hardware
@@ -69,12 +69,116 @@ The HF `nl`/`tts` search includes models that explicitly omit Dutch in
 their cards; those are marked ineligible below. Where a repository redirects to a
 new owner, the current canonical owner is used.
 
-No models or audio files were downloaded. No local model, Mac runtime, API,
-cloud inference, or subjective listening test was run for this follow-up.
-The only prior measured hardware here is from the [Sodalis baseline](tts-providers.md):
+The original desk-research phase downloaded no models or audio and ran no
+inference. The subsequent local trial is recorded below; **no cloud
+inference** was run. The earlier measurements in the [Sodalis baseline](tts-providers.md)
+were on
 M4 Max/128 GiB for a different MLX Voxtral TTS model and Piper, and an
 i7-1355U laptop CPU for Piper, Chatterbox, and Parler. Those timings are
 not measurements of these new models.
+
+### Local Mac trial, 2026-10-23 (measured, not publisher claims)
+
+Hardware: Apple M4 Max (`Mac16,5`), 128 GiB unified memory. Three local
+engines ran **one at a time**, with one warm-up per voice; table rows are
+single subsequent runs (not medians or a controlled quality study).
+The *same four texts* were submitted to each engine:
+
+| Prompt | Exact text |
+| --- | --- |
+| Dutch short | Goedemorgen, uw afspraak is morgen om half tien. |
+| Dutch long | Goedemorgen, ik heb uw afspraak voor donderdag om half tien bevestigd. Het adres is Stationsstraat 24 in Utrecht. Laat het gerust weten als u liever een ander tijdstip kiest; dan bekijken we samen de mogelijkheden. |
+| English short | Good morning, your appointment is tomorrow at nine thirty. |
+| English long | Good morning, I have confirmed your appointment for Thursday at nine thirty. The address is 24 Station Street in Utrecht. Please let me know if another time would suit you better, and we can look at the available options together. |
+
+For Audio8, a local Piper Ronnie/Kristin output of a **separate** matching
+reference sentence and its exact transcript registered one synthetic voice
+per language. Pocket cloned the same synthetic references directly rather
+than fetching its predefined voice GGUFs, whose individual source rights
+vary. Piper used `nl_NL-ronnie-medium` and `en_US-kristin-medium` (the
+Ronnie card identifies CC0 training data; Kristin identifies public-domain
+LibriVox recordings). This controls reference provenance, **not** perceived
+voice quality: conditioning on Piper may influence the two newer models.
+No real person's voice was cloned and no reference was sent to a remote
+inference service.
+
+First PCM measures request-to-first nonempty audio bytes (not the HTTP
+headers); Piper's native iterator returns a sentence chunk, Audio8 uses its
+NDJSON PCM stream, and Pocket its raw PCM HTTP stream. Total includes local
+request overhead (Piper runs in-process); RTF = total synthesis seconds /
+output audio seconds, lower is faster. Peak is sampled **process RSS** on
+macOS, not a measurement of Metal GPU allocations or total unified memory.
+Pocket's low RSS must not be interpreted as its total GPU-memory demand.
+
+| Engine / prompt | First PCM | Total | Output | RTF | Peak process RSS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Piper Ronnie / Dutch short | 51 ms | 0.06 s | 4.10 s | 0.014 | 0.31 GiB |
+| Piper Ronnie / Dutch long | 66 ms | 0.23 s | 17.02 s | 0.014 | 0.37 GiB |
+| Piper Kristin / English short | 54 ms | 0.06 s | 3.75 s | 0.016 | 0.26 GiB |
+| Piper Kristin / English long | 63 ms | 0.19 s | 12.90 s | 0.015 | 0.27 GiB |
+| Audio8 0.6B INT4 CPU / Dutch short | 582 ms | 7.54 s | 3.67 s | 2.054 | 2.32 GiB |
+| Audio8 0.6B INT4 CPU / Dutch long | 640 ms | 72.65 s | 16.25 s | 4.470 | 3.58 GiB |
+| Audio8 0.6B INT4 CPU / English short | 601 ms | 8.80 s | 3.53 s | 2.493 | 2.99 GiB |
+| Audio8 0.6B INT4 CPU / English long | 830 ms | 108.72 s | 15.84 s | 6.865 | 3.06 GiB |
+| Pocket Dutch Q8/Metal / Dutch short | 61 ms | 0.17 s | 4.00 s | 0.042 | 0.26 GiB |
+| Pocket Dutch Q8/Metal / Dutch long | 13 ms | 0.46 s | 16.72 s | 0.027 | 0.27 GiB |
+| Pocket English Q8/Metal / English short | 20 ms | 0.14 s | 3.36 s | 0.043 | 0.24 GiB |
+| Pocket English Q8/Metal / English long | 14 ms | 0.35 s | 13.28 s | 0.026 | 0.26 GiB |
+
+The full combined rows, including excluded warm-ups, are in local JSON
+`~/tts-trials/{piper-nl,piper-en,audio8,pocket-nl,pocket-en}-results.json`.
+These files and all weights/audio are **outside git**. The twelve scored WAVs
+for listening are:
+
+| Engine | Dutch short / long | English short / long |
+| --- | --- | --- |
+| Piper | `~/tts-trials/samples/piper-nl-short.wav`, `~/tts-trials/samples/piper-nl-long.wav` | `~/tts-trials/samples/piper-en-short.wav`, `~/tts-trials/samples/piper-en-long.wav` |
+| Audio8 | `~/tts-trials/samples/audio8-nl-short.wav`, `~/tts-trials/samples/audio8-nl-long.wav` | `~/tts-trials/samples/audio8-en-short.wav`, `~/tts-trials/samples/audio8-en-long.wav` |
+| Pocket | `~/tts-trials/samples/pocket-nl-short.wav`, `~/tts-trials/samples/pocket-nl-long.wav` | `~/tts-trials/samples/pocket-en-short.wav`, `~/tts-trials/samples/pocket-en-long.wav` |
+
+All twelve WAVs have valid mono sample rates/durations (Piper 22,050 Hz,
+Audio8 44,100 Hz, Pocket 24,000 Hz); signal level was checked for the
+Dutch samples. These checks do **not** establish spoken-text correctness,
+naturalness, or absence of hallucinations.
+
+**Model size and setup.** The pinned Audio8 conversion
+`818569c6b832118ad68d61bbd873abe250fcd68a` occupies ~968 MB
+including its optional registration encoder; its runtime checkout was
+`07e40f5`, Apache-2.0. The Piper voice ONNX files are 62.95 MB (Ronnie)
+and 63.53 MB (Kristin), from the MIT-tagged voice repository at `v1.0.0`;
+the installed `piper-tts==1.8.0` runtime declares GPL-3.0-or-later (keep it a separate
+process if distribution is considered). Pocket's conversion
+`b5a0115aee9658c110d747debb03edd548c4b9c7` is 138.50 MB for
+each language's Q8 pack; C++ runtime `fab7972` is MIT with an MIT ggml
+submodule. Its upstream weights at
+`db04f0e653473e5c7333c69686ac92b7460b0c1d` are CC BY 4.0,
+plus the upstream gated prohibited-use notice; model attribution applies.
+No bundled Pocket voices were downloaded or redistributed.
+
+Reproduction setup: clone the pinned Audio8 runtime outside git, install
+`onnx_runtime/requirements.txt` plus `tokenizers==0.22.2` in Python 3.11,
+download the pinned ONNX repository including `.onnx`, `.data`, manifests,
+tokenizer and registration encoder, run `arktts_runtime.service:app` with
+`ARKTTS_MODEL_DIR`/`ARKTTS_VOICES_DIR` and `ARKTTS_THREADS=5` on localhost,
+register the local reference WAV and exact transcript at
+`/api/voices/register`, then request `/api/tts/stream`. Install Piper
+1.8.0 in a separate Python 3.11 venv and use `PiperVoice.synthesize`.
+For Pocket, after HF approval of `kyutai/pocket-tts` on the **user's**
+account, build the pinned C++ runtime with `-DGGML_METAL=ON`, download
+the pinned Dutch and `english_2026-09` Q8 packs, start `tts-server` with
+`--device MTL0` on localhost **separately per language**, register the
+local WAV at `/v1/audio/voices`, and stream PCM from `/v1/audio/speech`.
+The service log verified `Backend: MTL0` / `Apple M4 Max`; Audio8 health
+reported `CPUExecutionProvider` for all three ONNX sessions. The exact
+temporary harness and reference WAVs remain under `~/tts-trials/`.
+
+Setup issues: the authenticated Pocket account initially returned
+`requires approval` for upstream files; the user requested/accepted
+access, then the Dutch tokenizer became downloadable. No terms were
+accepted by the agent. `hf download --include` with explicit filenames
+omitted Audio8's small `.onnx` graph files despite downloading their
+`.data` blobs; the graph files were fetched explicitly before startup.
+Pocket's CMake reported missing OpenMP but built and ran with Metal.
 
 ## Results
 
@@ -92,8 +196,8 @@ research date (not an independently reproducible fixed-time snapshot).
 | [Voxtral 4B TTS](https://huggingface.co/mistralai/Voxtral-4B-TTS-2603) | 1,569 / 942 | 2026-03-31 | Both; **CC BY-NC 4.0** due to reference voices | Publisher's 70 ms figure is on an NVIDIA H200, not a Mac | **Exclude**, including [GGUF conversion](https://huggingface.co/cstr/voxtral-4b-tts-GGUF) (1,431 / 5; 2026-08-02) |
 | [Parler-TTS Mini Multilingual v1.1](https://huggingface.co/parler-tts/parler-tts-mini-multilingual-v1.1) | 5,651 / 60 | 2024-12-04 | Both; **Apache-2.0** model; Dutch `Mark` voice | Sodalis measured **152 s median** over five short replies on laptop CPU; Mac GPU/MPS unmeasured | Eligible, not interactive on measured CPU |
 | [MOSS-TTS Local Transformer v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5) | 114,703 / 74 | 2026-06-18 | Both explicitly listed; **Apache-2.0** card and separately [Apache-2.0 audio tokenizer](https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-v2) | 48 kHz stereo, large tokenizer; setup pins CUDA PyTorch and uses remote code; no verified MLX/Metal runtime or Mac speed | Conditional, lower priority |
-| [Audio8 TTS Preview 0.6B](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b) | 4,586 / 417 | 2026-08-19 | Both among 11 recommended; **Apache-2.0** code and weights with NOTICE | [Publisher ONNX INT4](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6B-ONNX-INT4) (760 / 55; 2026-08-02) tested on macOS arm64 CPU, ~1.1–1.2 GiB synthesis RSS; no reported end-to-end Dutch latency | **First trial** |
-| [Pocket TTS GGUF](https://huggingface.co/Serveurperso/pocket-tts-GGUF) | 2,309 / 2 | 2026-09-27 | Separate Dutch and English packs; original **CC BY 4.0**, runtime **MIT**; check gated upstream terms and voice rights | Community [`pockettts.cpp`](https://github.com/ServeurpersoCom/pockettts.cpp) documents Apple Metal, Q8 Dutch pack 138 MB plus 170 MB voices (6-layer), HTTP PCM streaming. No Dutch Mac latency | **Second trial, conditional** |
+| [Audio8 TTS Preview 0.6B](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b) | 4,586 / 417 | 2026-08-19 | Both among 11 recommended; **Apache-2.0** code and weights with NOTICE | [Publisher ONNX INT4](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6B-ONNX-INT4) (760 / 55; 2026-08-02) tested on macOS arm64 CPU, ~1.1–1.2 GiB synthesis RSS claimed on M2; see measured M4 figures above | Trialed; too slow to complete these replies |
+| [Pocket TTS GGUF](https://huggingface.co/Serveurperso/pocket-tts-GGUF) | 2,309 / 2 | 2026-09-27 | Separate Dutch and English packs; original **CC BY 4.0**, runtime **MIT**; gated terms accepted for this account, voice rights vary | Community [`pockettts.cpp`](https://github.com/ServeurpersoCom/pockettts.cpp) with Metal, Q8 Dutch pack 138 MB, HTTP PCM streaming; see measured M4 figures above | Trialed; first quality-listening candidate |
 | [KittenTTS 2](https://huggingface.co/KittenML/kitten-tts-2) | 46,417 / 168 | 2026-10-22 | Both; weights under **Stellon Labs Community License**, which ends free commercial use at the specified revenue/funding limits; loader Apache-2.0 | Publisher reports CPU/Apple Silicon speed but no unrestricted weight grant | **Exclude** despite freshness |
 | [Audio8 0.1B ONNX INT8](https://huggingface.co/Edge0/audio8-TTS-0.1B-ONNX-INT8) | 810 / 76 | 2026-08-28 | Conversion claims both and **Apache-2.0**, but [source 0.1B weights](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.1b) are **Audio8 Community License**, with a $2m revenue cap; original card does **not** list Dutch | Conversion says macOS arm64 tested, ~0.6 GB loaded; no Dutch quality evidence | **Exclude** pending explicit upstream relicense and Dutch validation |
 | [Qwen3-TTS CustomVoice](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) | 1,938,636 / 2,163 | 2026-01-29 | Apache-2.0, but card's 10 supported languages **omit Dutch** | Claimed 97 ms latency cannot establish Dutch support | **Exclude** despite HF filter match |
@@ -115,13 +219,15 @@ redistribution. Popularity does not imply the model runs on Metal.
   Seed-TTS WER 1.506% and English CV3 WER 3.128%; neither table gives Dutch
   WER. A recognizer's WER measures intelligibility, not pleasantness or
   latency. ONNX INT4 can change generation; there is no quantitative
-  0.6B INT4 Dutch listening comparison or first-audio timing. The ONNX
+  0.6B INT4 Dutch listening comparison. Locally measured first-audio and
+  completion timings appear above; the ONNX
   runtime documents `/api/tts` (WAV), `/api/tts/stream` (newline-delimited
   JSON with base64 44.1 kHz PCM chunks), and `/api/tts/cancel`.
 - **Pocket TTS:** Kyutai reports roughly 200 ms first chunk and 6x faster
   than real time on M4 MacBook Air using two CPU cores, but the original
   model card's main takeaways do not name Dutch (a third-party GGUF project
-  supplies the Dutch pack). It lists separate voice origins with CC0,
+  supplies the Dutch pack). Our measured GGUF/Metal results above are not
+  measurements of Kyutai's Python runtime. It lists separate voice origins with CC0,
   CC BY 4.0, and CC BY-NC 4.0; **do not indiscriminately redistribute
   predefined voices**. The GGUF server's `response_format: "pcm"` is raw
   s16le as generated; its `"wav"` returns a complete file.
@@ -139,25 +245,29 @@ redistribution. Popularity does not imply the model runs on Metal.
 
 ## Analysis
 
-**Rank for a Mac quality/speed trial (subject to license):**
+**Next-stage priority, informed by the local speed trial (subject to license
+and listening):**
 
-1. Audio8 **0.6B** ONNX INT4: strongest combination of explicit Dutch,
-   Apache code and source weights, documented arm64 runtime, modest memory,
-   actual local PCM streaming and cancellation endpoints. It runs on CPU
-   only; the existence of an Apple Mac test does **not** imply Metal speed.
-2. Pocket TTS **Dutch** GGUF: compelling fast/Metal architecture and
-   small footprint, but a third-party conversion, gated upstream model,
-   mixed voice-reference licenses, and no verified Dutch Mac latency.
-3. Chatterbox Multilingual V3: MIT code/weights and encouraging prior
+1. Pocket TTS **Dutch** GGUF Q8/Metal: fastest new candidate on this Mac,
+   with a user-approved HF gate, CC BY weights plus prohibited-use terms,
+   and ungraded Dutch/English output. Do not bundle its mixed-rights
+   predefined voices; preserve attribution and assess quality first.
+2. Piper Ronnie: measured faster still, with the known 5/10 listener
+   baseline; its GPL runtime is a separate product-distribution decision.
+3. Audio8 **0.6B** ONNX INT4: Apache code and weights, documented arm64
+   service/PCM/cancellation, but slow completion and high RSS in this trial.
+   The first chunk arrives quickly enough to audition, not to recommend
+   interactive synthesis on this CPU setup.
+4. Chatterbox Multilingual V3: MIT code/weights and encouraging prior
    Dutch listening, but no usable CPU latency and MPS performance unknown.
-4. MOSS Local Transformer v1.5: eligible Apache model and tokenizer with
+5. MOSS Local Transformer v1.5: eligible Apache model and tokenizer with
    Dutch and English, but much larger and a CUDA-centric documented path.
-5. Parler-TTS: eligible and Dutch-intelligible in the prior test, but the
+6. Parler-TTS: eligible and Dutch-intelligible in the prior test, but the
    measured laptop CPU latency is unacceptable for conversation.
 
-This is a **trial priority**, not a proven ranking by perceived voice
-quality. Neither Audio8 nor Pocket has been listened to by the Sodalis
-owner. Keep Piper in the deployment until a candidate wins a matched
+This is a **speed-informed listening priority**, not a ranking by perceived
+voice quality. Neither Audio8 nor Pocket has been listened to or scored by
+the Sodalis owner. Keep Piper in the deployment until a candidate wins a matched
 Dutch/English corpus review and meets the latency/cancellation bar.
 
 An adapter should accept Sodalis's server-side text and voice selection,
@@ -175,31 +285,36 @@ TTS endpoint.
 
 ## Limitations
 
-- No audio generated, model files fetched, installation, latency benchmark,
-  native Mac listening comparison, or licensing opinion from counsel. Only
-  model metadata, docs, and license text were read.
+- Four fixed bilingual prompts per engine, one measured run each; no
+  blind listening, local STT/word-error scoring, repeated-run distribution,
+  cancellation/concurrency checks, or licensing opinion from counsel.
+  Reported synthesis speed is not a Dutch intelligibility or quality score.
 - HF counters and cards are mutable. A `language:nl` tag can disagree with
   the model card (Qwen3-TTS, MOSS Nano, Audio8 0.1B original), and a later
   conversion can advertise a different license from its source weights.
 - Published English/Chinese WER, GPU results, and prior-model timings do
-  not establish Dutch naturalness or Mac first-audio speed.
+  not establish Dutch naturalness; use this trial's first-PCM figures
+  only for this hardware, runtime revision, and reference.
 - Voice cloning requires permission from the recorded speaker and
   verification of the particular reference recording's license; a
   permissive model weight license alone does not grant voice rights.
-- Pocket's gated upstream terms and restrictive use language require
-  review before considering it a permissive **distribution** candidate.
-  CC BY 4.0 itself requires attribution and is not an OSI software license.
+- Pocket's upstream gate was accepted by the user for this account, not
+  by the agent. The gated prohibited-use terms need review before
+  **distribution**; another user may require separate approval. CC BY 4.0
+  requires attribution and is not an OSI software license.
 - Audio8 0.6B ONNX is a publisher conversion, but its license statement
   should still be checked at a pinned revision with the exact codec,
   tokenizer and bundled reference assets before any redistribution.
 
 ## Open items
 
-1. On the intended Mac, compare Audio8 0.6B ONNX INT4, Pocket Dutch
-   6-/24-layer GGUF (if terms allow), and Piper Ronnie using the same
-   50-sentence Dutch corpus plus English replies and a consented fixed
-   voice. Record warm/cold first PCM, completion, RTF, peak RAM, playback
-   quality, pronunciation of numbers/names, and repeated-run stability.
+1. Have the owner listen to the twelve saved samples *blindly* and rate
+   Dutch/English naturalness, pronunciation, voice stability and
+   missing/extra words. Then repeat on the 50-sentence Dutch corpus,
+   including names/numbers, with repeated warm/cold measurements and a
+   permissively sourced reference that does not anchor the contenders to
+   Piper's timbre. Consider Pocket's 24-layer variant only if Q8 quality
+   falls short; its speed/rights still need checking.
 2. Score the *actual* quantized output with Parakeet round-trip WER (the
    existing automatic gates: median synthesis <=1.5 s and Dutch WER <=10%)
    and a blind, same-sentence human listening review. Compare Mac hardware
@@ -209,9 +324,10 @@ TTS endpoint.
    under concurrent requests, hot restart, and serialization. Confirm
    error signaling rather than success-shaped empty audio.
 4. Pin and review the selected model, conversion, decoder/codec, voice
-   source, NOTICE, and any third-party runtime licenses. For Pocket, resolve
-   upstream gating and choose a voice reference licensed without NC
-   restrictions; otherwise leave it evaluation-only.
+   source, NOTICE, and any third-party runtime licenses. For Pocket, ensure
+   each downloader has upstream approval, preserve the CC BY attribution,
+   and select a voice reference without NC restrictions; otherwise leave
+   it evaluation-only.
 
 ## Primary sources
 
