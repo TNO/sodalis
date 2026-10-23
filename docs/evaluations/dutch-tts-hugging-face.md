@@ -14,7 +14,14 @@ in 0.17/0.46 s on an M4 Max, compared with 0.06/0.23 s for Piper Ronnie.
 The Pocket weights are CC BY 4.0, gated upstream, and carry prohibited-use
 terms; its MIT runtime does not make the weights or bundled voices MIT.
 We used **no bundled voice pack**: both Pocket and Audio8 were conditioned
-on a locally generated Piper reference. No one has yet graded the sound.
+on a locally generated Piper reference. In one informal listen, the user
+preferred Pocket slightly over Piper. However, Pocket and Audio8 garbled
+the raw digits "24", which Whisper confirmed. Writing the number out fixed
+it, so **Dutch text normalisation is a prerequisite** (see
+[the number normalisation finding](#number-normalisation-is-required-before-non-espeak-tts-measured)).
+A [female-voice rerun](#female-voice-rerun-measured-same-session) using
+the only permissive nl_NL female Piper source (MLS, CC BY 4.0) gave a
+less accurate Piper voice, while its Pocket clone stayed accurate.
 
 **Audio8 TTS Preview 0.6B ONNX INT4 was also trialed.** The [base checkpoint](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b)
 and [conversion](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6B-ONNX-INT4)
@@ -180,6 +187,117 @@ omitted Audio8's small `.onnx` graph files despite downloading their
 `.data` blobs; the graph files were fetched explicitly before startup.
 Pocket's CMake reported missing OpenMP but built and ran with Metal.
 
+### Number normalisation is required before non-espeak TTS (measured)
+
+In a single-listener check, the user preferred `pocket-nl` slightly over
+Piper but heard "24" mispronounced in `pocket-nl-long`. Each sample was
+transcribed locally with `whisper-cli -m ggml-large-v3-turbo-q8_0.bin -l
+nl` (Whisper large-v3-turbo Q8). Piper uses espeak-ng phonemisation, which
+expands digits into Dutch words. Pocket's
+C++ frontend (`src/text-prep.h` at `fab7972`, a port of upstream
+`text_chunking.py`) only replaces characters per pack, fixes punctuation,
+case, and padding, and splits chunks. It treats digits only to avoid
+splitting decimals and has **no number, date, or time expansion**. Audio8
+received the same raw text. Rerunning with "24" written as `vierentwintig`
+("half tien" unchanged), with the same seed 42 and the same Ronnie
+reference, fixed both:
+
+| Sample | Whisper transcript of the address phrase |
+| --- | --- |
+| `piper-nl-long.wav` (raw digits) | "stationsstraat 24" |
+| `pocket-nl-long.wav` (raw digits) | "stationsstraat **wauwer**" |
+| `audio8-nl-long.wav` (raw digits) | "Stassenstraat **64**" |
+| `pocket-nl-long-normalized.wav` | "stationsstraat 24" |
+| `audio8-nl-long-normalized.wav` | "Stassenstraat 24" |
+
+Whisper writes the spoken "vierentwintig" back as "24", so this confirms
+that the number is said correctly, but not how natural it sounds. The
+English Pocket model read "24 Station Street" correctly from digits in
+both trials, so this failure is specific to the Dutch pack. **Any Sodalis
+path to Pocket, Audio8, or another non-espeak engine must normalise Dutch
+numbers, dates, times, and amounts into words before synthesis.** The
+same applies to abbreviations. Keep Piper's espeak path as a
+reference, and add test prompts with house numbers, times, dates, and
+amounts to the next listening round. Both normalised samples are under
+`~/tts-trials/samples/`. Their timings come from a later session (see
+below), so they are not compared with the table above.
+
+### Female-voice rerun (measured, same session)
+
+The user asked for a warmer female voice. Candidate Piper voice licences
+were checked on each model card and dataset:
+
+| Voice | Locale | Training data licence | Lineage / restriction | Used |
+| --- | --- | --- | --- | --- |
+| `nl_NL-mls-medium`, speaker id 10 (MLS speaker 12500) | nl_NL | MLS / OpenSLR 94, **CC BY 4.0** (attribution required: "Multilingual LibriSpeech", Pratap et al. 2020, and the LibriVox reader) | Trained from scratch | **Yes (Dutch)** |
+| `en_US-ljspeech-medium` | en_US | LJ Speech, **public domain** | Trained from scratch | **Yes (English)** |
+| `nl_BE-nathalie-medium` | nl_BE (Flemish) | CC0 | Fine-tuned from `lessac`, whose Blizzard 2013 data is under a **research licence** | No: Flemish, inherits restriction |
+| `nl_NL-mls_5809-low`, `nl_NL-mls_7432-low` | nl_NL | CC BY 4.0 | Fine-tuned from `ryan` (RyanSpeech, **CC BY-NC-SA 4.0**) | No: NC lineage |
+| `en_US-hfc_female-medium` | en_US | Hi-Fi-CAPTAIN, **CC BY-NC-SA 4.0** | n/a | No |
+| `en_US-kristin-medium` (existing English baseline) | en_US | Public domain (LibriVox) | Trained from scratch | Already female |
+
+MLS gender metadata (`metainfo.txt`) is shipped only inside the 23–86 GB
+`mls_dutch` archives and was not downloaded. Instead, all 52 speakers
+spoke the Dutch short prompt
+(`~/tts-trials/samples/mls-candidates/mls-<id>-<mls speaker>.wav`) and
+were screened by median F0 (35 were ≥ 165 Hz, a female range) and spectral
+centroid as a rough warmth proxy, then by Whisper accuracy.
+**The agent could not listen**, so "warmest" is a proxy-based provisional
+choice; the user should audition the candidate folder.
+
+Finding: `nl_NL-mls-medium` appends babble after the final word of the
+short prompt in **every** female speaker tested. "half tien." became, for
+example, "half ik ze zit" or "half twee", including with zero noise
+scales. Mid-sentence "half tien" and "24" were correct in the long prompt.
+Speaker 10 had the cleanest long transcript, but its words
+("Adresse stationstraat", "tijdstuk") remain less accurate than Ronnie.
+
+Timings were taken on the same M4 Max, but Pocket ran about 4–5× slower
+than in the first session. Rerunning the original Ronnie reference in the
+**same session** gave Dutch-long RTF 0.125 (vs 0.027 earlier) and
+English-long 0.119. The difference is therefore machine state, not the
+voice. Compare only within this table:
+
+| Engine / prompt | First PCM | Total | Output | RTF | Peak RSS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Piper MLS spk 10 / Dutch short | 48 ms | 0.05 s | 3.44 s | 0.016 | 0.26 GiB |
+| Piper MLS spk 10 / Dutch long | 67 ms | 0.21 s | 13.82 s | 0.015 | 0.28 GiB |
+| Piper MLS spk 10 / Dutch long, normalised | 72 ms | 0.29 s | 13.62 s | 0.021 | 0.29 GiB |
+| Piper LJSpeech / English short | 66 ms | 0.07 s | 3.52 s | 0.021 | 0.25 GiB |
+| Piper LJSpeech / English long | 88 ms | 0.27 s | 13.34 s | 0.020 | 0.27 GiB |
+| Pocket Dutch Q8/Metal, female ref / Dutch short | 60 ms | 0.47 s | 2.96 s | 0.160 | 0.27 GiB |
+| Pocket Dutch Q8/Metal, female ref / Dutch long | 59 ms | 1.84 s | 13.92 s | 0.132 | 0.27 GiB |
+| Pocket Dutch Q8/Metal, female ref / Dutch long, normalised | 41 ms | 1.58 s | 13.28 s | 0.119 | 0.27 GiB |
+| Pocket English Q8/Metal, female ref / English short | 40 ms | 0.46 s | 3.44 s | 0.134 | 0.24 GiB |
+| Pocket English Q8/Metal, female ref / English long | 64 ms | 1.89 s | 14.40 s | 0.131 | 0.25 GiB |
+
+The Dutch Pocket rows are from a second pass on the same server (the
+first pass was within 0.01 RTF); English is one pass after a warm-up.
+Piper output is not deterministic between runs. Pocket's female reference is a Piper output (`piper-female-{nl,en}-reference.wav`)
+from the same chosen voices, so its rights follow those voices.
+Whisper transcripts:
+
+| Sample | Transcript (abridged where identical to the prompt) |
+| --- | --- |
+| `piper-female-nl-short.wav` | "Goedemorgen uw afspraak is morgen om half **ik ze zit**." |
+| `piper-female-nl-long.wav` | "… **Adresse stationstraat** 24 … **geheust** … **tijdstuk** …" |
+| `piper-female-nl-long-normalized.wav` | "… Zijn adres is **Thijsjonstraat** 24 … **tijdstik** …" |
+| `pocket-female-nl-short.wav` | "Goedemorgen, uw afspraak is morgen om half tien." |
+| `pocket-female-nl-long.wav` | "… Het adres is stationsstraat **Haal** in Utrecht …" |
+| `pocket-female-nl-long-normalized.wav` | "… stationsstraat 24 … **Altijd** gerust weten …" |
+| `piper-female-en-short.wav` / `pocket-female-en-short.wav` | Correct ("9.30" / "9:30") |
+| `piper-female-en-long.wav` / `pocket-female-en-long.wav` | Correct, including "24 Station Street" |
+
+Conclusion: the female MLS Piper voice is less intelligible than Ronnie.
+Using it only as a short reference, Pocket kept the female timbre and
+produced better Dutch text accuracy than Piper. Raw digits failed again
+and were fixed by normalisation. One word in the normalised Pocket sample
+("Laat het" heard as "Altijd") shows that single seeds still vary.
+Results JSON is `~/tts-trials/{piper,pocket}-female-{nl,en}-results.json`.
+There is no permissive, from-scratch **nl_NL** Piper voice with a confirmed
+female speaker that is cleaner than this. A licensed female Dutch reference
+recording would be the next step for Pocket.
+
 ## Results
 
 ### Popularity and eligibility snapshot
@@ -328,6 +446,10 @@ TTS endpoint.
    each downloader has upstream approval, preserve the CC BY attribution,
    and select a voice reference without NC restrictions; otherwise leave
    it evaluation-only.
+5. Add a Dutch text normaliser (numbers, house numbers, times, dates,
+   amounts, abbreviations) in front of non-espeak engines and re-test
+   Pocket with it. Source a consented, permissively licensed female nl_NL
+   reference recording if the MLS-derived reference is not warm enough.
 
 ## Primary sources
 
