@@ -20,7 +20,8 @@
     "@sodalis/memory": "workspace:*",
     "@sodalis/speech": "workspace:*",
     "hono": "^4.11.7",
-    "microsoft-cognitiveservices-speech-sdk": "1.52.0"
+    "microsoft-cognitiveservices-speech-sdk": "1.52.0",
+    "to-words": "^7.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.4",

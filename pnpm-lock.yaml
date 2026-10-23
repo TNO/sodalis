@@ -232,6 +232,9 @@ importers:
       microsoft-cognitiveservices-speech-sdk:
         specifier: 1.52.0
         version: 1.52.0
+      to-words:
+        specifier: ^7.4.0
+        version: 7.4.0
     devDependencies:
       '@types/node':
         specifier: ^24.10.4
@@ -1298,6 +1301,11 @@ packages:
     resolution: {integrity: sha512-QwBER5KMR86IIjpIiO7H/Z3IMJPsZ1A6RKPAqzTTgOyUQUSt9FdnKcqhTaJmkY6HVrgouZHZR0ncK5QxvmnQeg==}
     hasBin: true
 
+  to-words@7.4.0:
+    resolution: {integrity: sha512-BJqkz42GmR4to/nQqlpIlADm8nVE+y+/UWLDhhe41LE5Yc/7+F6dOukLOT7RvLKJnc6ApyS0rswLAl5gjvKTng==}
+    engines: {node: '>=20.0.0'}
+    hasBin: true
+
   tough-cookie@6.0.2:
     resolution: {integrity: sha512-exgYmnmL/sJpR3upZfXG5PoatXQii55xAiXGXzY+sROLZ/Y+SLcp9PgJNI9Vz37HpQ74WvDcLT8eqm+kV3FzrA==}
     engines: {node: '>=16'}
@@ -2307,6 +2315,8 @@ snapshots:
   tldts@7.4.16:
     dependencies:
       tldts-core: 7.4.16
+
+  to-words@7.4.0: {}
 
   tough-cookie@6.0.2:
     dependencies:

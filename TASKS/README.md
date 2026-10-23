@@ -133,7 +133,7 @@ repair build on the local STT seam before playback captions consume the
 result.
 
 - [x] 0056 Cleaning Markdown before speech
-- [ ] 0057 Normalizing Dutch and English speech text *(needs 0056)*
+- [x] 0057 Normalizing Dutch and English speech text *(needs 0056)*
 - [ ] 0058 Chunking speech by sentence *(needs 0056)*
 - [ ] 0059 Adding the local Pocket TTS provider *(needs 0057, 0058)*
 - [ ] 0060 Preprocessing reference voices *(needs 0059)*
