@@ -95,6 +95,19 @@ CC BY 4.0; retain attribution to MLS/LibriVox. The WAV remains under
 model's separate license and use restrictions; do not redistribute its
 weights.
 
+To prepare a reference WAV locally, install FFmpeg with the `adeclick` filter
+and run:
+
+```sh
+pnpm --filter @sodalis/server preprocess:voice-reference -- \
+  /path/to/source-audio /path/to/prepared-reference.wav
+```
+
+The pipeline high-passes at 80 Hz, low-passes at 11 kHz, declicks, applies
+`loudnorm=I=-20:TP=-2:LRA=7`, and writes mono 24 kHz signed 16-bit PCM WAV.
+The output path must be separate from the input; FFmpeg is not allowed to
+overwrite an existing output.
+
 For the Compose speech service, set `TTS_PROVIDER=pocket-http`,
 `POCKET_TTS_URL=http://host.docker.internal:8094`,
 `POCKET_TTS_API_KEY` to a strong random bearer key, and

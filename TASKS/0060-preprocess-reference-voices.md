@@ -1,6 +1,6 @@
 # 0060 Preprocessing reference voices
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: speech
 Depends on: 0059
@@ -25,3 +25,7 @@ that produces mono 24 kHz PCM suitable for the local runtime.
 ## Agent Notes
 
 - 2026-10-23 Copilot: Task split from the requested reusable TTS feature set.
+- 2026-10-23 Copilot: Added a server-local FFmpeg CLI with validated paths,
+  speech-band filtering, `adeclick`, loudness normalization, and mono 24 kHz
+  PCM WAV output. Kept the implementation independent of the unlicensed
+  tts-mlx source; generated reference audio remains outside git.
