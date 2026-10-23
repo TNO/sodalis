@@ -6,6 +6,7 @@ Subsystem: speech
 Depends on: 0030, 0034
 
 Final analysis: [docs/evaluations/stt-providers.md](../docs/evaluations/stt-providers.md).
+Related: [Mac-native STT and TTS options](../docs/evaluations/macos-speech-options.md).
 Follow-up: [0042 Improving live STT captions](0042-live-stt-captions.md).
 
 ## Context
