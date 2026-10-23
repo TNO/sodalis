@@ -71,6 +71,90 @@ async function createSession(
 }
 
 describe("speech recognition API", () => {
+  it("returns source-word timings only for providers that support alignment", async () => {
+    const transcribeWithWordTimestamps = vi.fn(async (_request, sourceText: string) => ({
+      text: "Hello, world.",
+      wordTimestamps: [
+        { word: sourceText.split(" ")[0]!, start: 0, end: 0.4 },
+        { word: "world", start: 0.5, end: 0.9 },
+      ],
+    }));
+    const engine = {
+      transcribe: vi.fn(async () => ({ text: "Hello, world." })),
+      transcribeWithWordTimestamps,
+    };
+    const app = createSpeechApp(engine);
+    const form = new FormData();
+    form.set("sourceText", "Hello world");
+    form.set("language", "en-US");
+    form.set(
+      "audio",
+      new Blob([new Uint8Array([1, 2])], { type: "audio/wav" }),
+      "reply.wav",
+    );
+
+    const response = await app.request("/api/speech/stt/align", {
+      method: "POST",
+      body: form,
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      text: "Hello, world.",
+      wordTimestamps: [
+        { word: "Hello", start: 0, end: 0.4 },
+        { word: "world", start: 0.5, end: 0.9 },
+      ],
+    });
+    expect(transcribeWithWordTimestamps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mimeType: "audio/wav",
+        language: "en-US",
+        audio: new Uint8Array([1, 2]),
+      }),
+      "Hello world",
+    );
+  });
+
+  it("keeps text-only providers unchanged and rejects malformed alignment requests", async () => {
+    const engine = createEngine();
+    const app = createSpeechApp(engine);
+    const unsupported = await app.request("/api/speech/stt/align", {
+      method: "POST",
+    });
+    const timestampEngine = {
+      transcribe: vi.fn(async () => ({ text: "text only" })),
+      transcribeWithWordTimestamps: vi.fn(async () => ({
+        text: "text only",
+        wordTimestamps: [],
+      })),
+    };
+    const timestampApp = createSpeechApp(timestampEngine);
+    const wrongContentType = await timestampApp.request(
+      "/api/speech/stt/align",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      },
+    );
+    const malformedForm = new FormData();
+    malformedForm.set("language", "nl-NL");
+    const missingSourceText = await timestampApp.request(
+      "/api/speech/stt/align",
+      {
+        method: "POST",
+        body: malformedForm,
+      },
+    );
+    const session = await createSession(app);
+
+    expect(unsupported.status).toBe(503);
+    expect(wrongContentType.status).toBe(415);
+    expect(missingSourceText.status).toBe(400);
+    expect(session.status).toBe(201);
+  });
+
   it("reports speech health and readiness independently", async () => {
     const app = createSpeechApp(createEngine());
     expect((await (await app.request("/healthz")).json())).toEqual({

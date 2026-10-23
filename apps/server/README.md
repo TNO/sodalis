@@ -58,6 +58,14 @@ minimum speech-segment duration gate (see `SpeechInputControllerOptions.minSegme
 in `packages/speech/src/SpeechInputController.ts`), which keep short noise
 blips from ever reaching Whisper.
 
+The local-only `POST /api/speech/stt/align` endpoint accepts multipart fields
+`sourceText`, `language`, and `audio`. With whisper.cpp selected it requests
+`verbose_json` word timestamps and aligns them to source words by normalized
+content, interpolating missing source words between adjacent timestamps.
+Timestamps are seconds from the start of the supplied audio. Providers without
+word-level timing support return an explicit `503` from this endpoint; the
+existing text-only STT session API is unchanged.
+
 The requested Whistle comparison used two synthetic Dutch utterances. Whistle
 misheard “Anne” as “alle” once and changed “afspraak” to “afspraken” once.
 Whisper.cpp with `ggml-base.bin` also misheard “Anne” (“aan de”) and differed

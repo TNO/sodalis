@@ -1,6 +1,9 @@
 import { Hono, type Context } from "hono";
 import type { SpeechRequest } from "@sodalis/speech";
-import type { SpeechRecognitionEngine } from "./WhisperCppHttpEngine.js";
+import type {
+  SpeechRecognitionEngine,
+  WordTimestampSpeechRecognitionEngine,
+} from "./WhisperCppHttpEngine.js";
 import {
   isStreamingEngine,
   type StreamingRecognitionSession,
@@ -51,6 +54,7 @@ const STREAM_IDLE_TIMEOUT_MS = 30 * 1000;
 const MAX_TTS_REQUESTS = 2;
 const MAX_TTS_TEXT_LENGTH = 5000;
 const MAX_TTS_REQUEST_BYTES = 16 * 1024;
+const MAX_ALIGNMENT_REQUEST_OVERHEAD = 24 * 1024;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const LANGUAGE_PATTERN = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 const ALLOWED_AUDIO_TYPES = new Set([
@@ -78,6 +82,12 @@ function collectAudio(session: RecognitionSession): Uint8Array {
     offset += chunk.byteLength;
   }
   return audio;
+}
+
+function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
 }
 
 class BodyLimitError extends Error {}
@@ -118,6 +128,15 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Speech recognition failed.";
 }
 
+function supportsWordTimestamps(
+  engine: SpeechRecognitionEngine | StreamingSpeechRecognitionEngine,
+): engine is WordTimestampSpeechRecognitionEngine {
+  return (
+    "transcribeWithWordTimestamps" in engine &&
+    typeof engine.transcribeWithWordTimestamps === "function"
+  );
+}
+
 export function createSpeechApp(
   engine: SpeechRecognitionEngine | StreamingSpeechRecognitionEngine,
   options: SpeechAppOptions = {},
@@ -150,6 +169,87 @@ export function createSpeechApp(
   app.get("/readyz", (context) =>
     context.json({ status: "ready", service: "speech" }),
   );
+
+  app.post("/api/speech/stt/align", async (context) => {
+    if (!supportsWordTimestamps(engine)) {
+      return jsonError(
+        context,
+        "Word timestamps are unavailable from the selected speech provider.",
+        503,
+      );
+    }
+    const contentType = context.req.header("content-type") ?? "";
+    if (!contentType.toLowerCase().startsWith("multipart/form-data;")) {
+      return jsonError(context, "Request content type must be multipart/form-data.", 415);
+    }
+    let body: Uint8Array;
+    try {
+      body = await readBoundedBody(
+        context.req.raw,
+        maxAudioBytes + MAX_ALIGNMENT_REQUEST_OVERHEAD,
+        "Alignment request exceeds the size limit.",
+      );
+    } catch (error) {
+      if (error instanceof BodyLimitError) {
+        return jsonError(context, error.message, 413);
+      }
+      throw error;
+    }
+    let form: FormData;
+    try {
+      form = await new Request(context.req.url, {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body: copyToArrayBuffer(body),
+      }).formData();
+    } catch {
+      return jsonError(context, "Alignment request must be valid multipart data.", 400);
+    }
+    const sourceText = form.get("sourceText");
+    const language = form.get("language");
+    const audio = form.get("audio");
+    if (
+      typeof sourceText !== "string" ||
+      !sourceText.trim() ||
+      sourceText.length > MAX_TTS_TEXT_LENGTH
+    ) {
+      return jsonError(context, `Source text must contain 1–${MAX_TTS_TEXT_LENGTH} characters.`, 400);
+    }
+    if (
+      typeof language !== "string" ||
+      !LANGUAGE_PATTERN.test(language) ||
+      !["nl-nl", "en-us"].includes(language.toLowerCase())
+    ) {
+      return jsonError(context, "Language must be nl-NL or en-US.", 400);
+    }
+    if (!(audio instanceof File) || !audio.size) {
+      return jsonError(context, "A non-empty audio file is required.", 400);
+    }
+    if (audio.size > maxAudioBytes) {
+      return jsonError(context, "Speech audio exceeds the size limit.", 413);
+    }
+    const mimeType = audio.type.split(";")[0]?.trim().toLowerCase();
+    if (!mimeType || !ALLOWED_AUDIO_TYPES.has(mimeType)) {
+      return jsonError(context, "Unsupported audio media type.", 415);
+    }
+    try {
+      const result = await engine.transcribeWithWordTimestamps(
+        {
+          audio: new Uint8Array(await audio.arrayBuffer()),
+          mimeType,
+          language,
+          signal: context.req.raw.signal,
+        },
+        sourceText,
+      );
+      return context.json({
+        text: result.text,
+        wordTimestamps: result.wordTimestamps,
+      });
+    } catch (error) {
+      return jsonError(context, errorMessage(error), 502);
+    }
+  });
 
   const closeSession = (id: string, session: RecognitionSession) => {
     clearTimeout(session.idleTimer);

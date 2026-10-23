@@ -1,6 +1,6 @@
 # 0061 Aligning transcript words to audio
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: speech
 Depends on: 0024
@@ -29,3 +29,8 @@ new Python dependency.
 ## Agent Notes
 
 - 2026-10-23 Copilot: Task split from the requested reusable TTS feature set.
+- 2026-10-23 Copilot: Added a local whisper.cpp verbose-JSON alignment path,
+  content-based word matching with deterministic interpolation, and a bounded
+  multipart API. Existing providers and STT session routes remain text-only;
+  unsupported providers return an explicit 503. Implemented the alignment
+  algorithm independently rather than copying tts-mlx.
