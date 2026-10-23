@@ -89,6 +89,14 @@ Sodalis integration. The selection is recorded in
   Reference WAVs remain outside git. Do not begin integration until the
   listed listening, WER, cancellation and gated-weight/redistribution checks
   are complete.
+- 2026-10-23 Copilot: Ran VibeVoice-Realtime-0.5B locally as a
+  research-only listening trial, at the user's explicit acceptance of the
+  card's research-only terms. It is **not eligible for Sodalis**. It read
+  the raw "24" correctly but ran at RTF 2.4–4.3 on MPS, and no audible
+  disclaimer appeared. Pocket remains the selection. Details are in the
+  Hugging Face evaluation. Setup gotcha: its preset loader needs
+  `torch==2.7.1`, because torch 2.14 rejects the presets under
+  `weights_only=True`.
 - Chatterbox and Azure AI Speech are evaluation targets; integrate when they
   meet the provider contract and platform constraints.
 - Added Fish Speech and F5-TTS for review, not as selected engines. Licensing
