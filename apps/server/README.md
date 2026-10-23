@@ -91,7 +91,9 @@ pnpm dev:speech
 The endpoint streams mono, signed 16-bit little-endian PCM at 22,050 Hz. The
 desktop's “Read aloud” control plays the response and drives approximate,
 amplitude-based mouth movement; Piper's CLI does not provide phoneme or viseme
-timing. `STT_PROVIDER` defaults to `parakeet-tdt` (requires `PARAKEET_TDT_URL`);
+timing. The Sodalis TTS route removes Markdown formatting from replies before
+passing their readable text to the selected engine. `STT_PROVIDER` defaults to
+`parakeet-tdt` (requires `PARAKEET_TDT_URL`);
 other choices are `whisper-cpp` (`WHISPER_CPP_URL`), `whistle`
 (`WHISTLE_URL`), and opt-in cloud `azure` (`AZURE_STT_ENDPOINT`,
 `AZURE_STT_KEY`; Azure Speech real-time recognition, never selected

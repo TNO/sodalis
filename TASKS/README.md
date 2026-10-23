@@ -123,3 +123,20 @@ tasks 0045–0048 deliver version 1 and tasks 0049–0053 are follow-ups.
 
 - [x] 0041 Fixing STT transcription accuracy and silence hallucination *(needs 0023, 0024)*
 - [ ] 0042 Improving live STT captions *(needs 0035)*
+
+## TTS processing and Pocket TTS
+
+Tasks 0056–0058 prepare text and audio delivery for long responses. Pocket
+TTS stays an explicitly selected host-local provider; its runtime and model
+weights are external and must never be bundled. Word timing and transcript
+repair build on the local STT seam before playback captions consume the
+result.
+
+- [x] 0056 Cleaning Markdown before speech
+- [ ] 0057 Normalizing Dutch and English speech text *(needs 0056)*
+- [ ] 0058 Chunking speech by sentence *(needs 0056)*
+- [ ] 0059 Adding the local Pocket TTS provider *(needs 0057, 0058)*
+- [ ] 0060 Preprocessing reference voices *(needs 0059)*
+- [ ] 0061 Aligning transcript words to audio *(needs 0024)*
+- [ ] 0062 Repairing transcript tails and onset timing *(needs 0061)*
+- [ ] 0063 Adding speech captions and playback fallback *(needs 0058, 0061, 0062)*

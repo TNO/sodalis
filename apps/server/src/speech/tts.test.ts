@@ -121,6 +121,46 @@ describe("speech synthesis API", () => {
     );
   });
 
+  it("sends Markdown-cleaned text to the configured engine", async () => {
+    const synthesize = vi.fn(async function* () {
+      yield new Uint8Array([1, 0]);
+    });
+    const app = createSpeechApp(sttEngine, { ttsEngine: { synthesize } });
+    const response = await app.request("/api/speech/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...request,
+        text: [
+          "# Welkom",
+          "",
+          "- Lees [deze link](https://example.test) en ![foto](foto.png).",
+          "- Gebruik `dit` en **vetgedrukte** tekst.",
+          "> Met *nadruk*.",
+          "```text",
+          "code blijft leesbaar",
+          "```",
+        ].join("\n"),
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await response.arrayBuffer();
+    expect(synthesize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: [
+          "Welkom",
+          "",
+          "Lees deze link en foto.",
+          "Gebruik dit en vetgedrukte tekst.",
+          "Met nadruk.",
+          "code blijft leesbaar",
+        ].join("\n"),
+      }),
+      expect.any(AbortSignal),
+    );
+  });
+
   it("aborts the engine when the client cancels the audio stream", async () => {
     let observedSignal: AbortSignal | undefined;
     let markSynthesisWaiting: (() => void) | undefined;

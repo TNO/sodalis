@@ -11,6 +11,7 @@ import {
   PIPER_VOICE_ID,
   type SpeechSynthesisEngine,
 } from "./PiperTtsEngine.js";
+import { markdownToSpeech } from "./markdownToSpeech.js";
 
 interface RecognitionSession {
   readonly language: string;
@@ -448,7 +449,7 @@ export function createSpeechApp(
     const speechRequest: SpeechRequest = {
       sessionId,
       speechId,
-      text,
+      text: markdownToSpeech(text),
       language,
       ...(voice ? { voice } : {}),
     };
