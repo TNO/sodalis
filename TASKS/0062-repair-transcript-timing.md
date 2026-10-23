@@ -1,6 +1,6 @@
 # 0062 Repairing transcript tails and onset timing
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: speech
 Depends on: 0061
@@ -29,3 +29,8 @@ actual speech starts. Repair transcript timing against the audio.
 ## Agent Notes
 
 - 2026-10-23 Copilot: Task split from the requested reusable TTS feature set.
+- 2026-10-23 Copilot: Added content-based transcript-tail trimming and local
+  FFmpeg `silencedetect` onset correction with safe timestamp clamping.
+  No-silence, all-silence, cancellation, malformed output, and FFmpeg failure
+  are handled explicitly. The repair logic was reimplemented without copying
+  source from either referenced project.

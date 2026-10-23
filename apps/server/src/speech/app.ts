@@ -22,6 +22,12 @@ import {
   DEFAULT_TTS_CHUNK_PAUSE_MS,
   splitSpeechText,
 } from "./speechChunking.js";
+import {
+  detectSpeechOnset,
+  shiftWordTimestamps,
+  type SpeechOnsetDetector,
+} from "./speechTimingRepair.js";
+import { trimUnsupportedTranscriptTail } from "./speechWordAlignment.js";
 
 interface RecognitionSession {
   readonly language: string;
@@ -44,6 +50,7 @@ export interface SpeechAppOptions {
   readonly ttsEngine?: SpeechSynthesisEngine;
   readonly maxTtsChunkCharacters?: number;
   readonly ttsChunkPauseMs?: number;
+  readonly detectSpeechOnset?: SpeechOnsetDetector;
 }
 
 const DEFAULT_MAX_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -69,7 +76,7 @@ const ALLOWED_AUDIO_TYPES = new Set([
 function jsonError(
   context: Context,
   message: string,
-  status: 400 | 404 | 409 | 413 | 415 | 503 | 502,
+  status: 400 | 404 | 409 | 413 | 415 | 422 | 503 | 502,
 ) {
   return context.json({ error: message }, status);
 }
@@ -160,6 +167,7 @@ export function createSpeechApp(
   const ttsChunkPauseMs = clampSpeechChunkPauseMs(
     options.ttsChunkPauseMs ?? DEFAULT_TTS_CHUNK_PAUSE_MS,
   );
+  const onsetDetector = options.detectSpeechOnset ?? detectSpeechOnset;
   const sessions = new Map<string, RecognitionSession>();
   let activeTtsRequests = 0;
   const app = new Hono();
@@ -233,9 +241,18 @@ export function createSpeechApp(
       return jsonError(context, "Unsupported audio media type.", 415);
     }
     try {
+      const audioBytes = new Uint8Array(await audio.arrayBuffer());
+      const onset = await onsetDetector(
+        audioBytes,
+        mimeType,
+        context.req.raw.signal,
+      );
+      if (onset.status === "all-silence") {
+        return jsonError(context, "Audio contains no speech.", 422);
+      }
       const result = await engine.transcribeWithWordTimestamps(
         {
-          audio: new Uint8Array(await audio.arrayBuffer()),
+          audio: audioBytes,
           mimeType,
           language,
           signal: context.req.raw.signal,
@@ -243,8 +260,11 @@ export function createSpeechApp(
         sourceText,
       );
       return context.json({
-        text: result.text,
-        wordTimestamps: result.wordTimestamps,
+        text: trimUnsupportedTranscriptTail(sourceText, result.text),
+        wordTimestamps: shiftWordTimestamps(
+          result.wordTimestamps,
+          onset.onsetSeconds,
+        ),
       });
     } catch (error) {
       return jsonError(context, errorMessage(error), 502);

@@ -7,9 +7,6 @@ export interface SpeechWordTimestamp {
 interface WordToken {
   readonly word: string;
   readonly normalized: string;
-}
-
-interface TimedWordToken extends WordToken {
   readonly start: number;
   readonly end: number;
 }
@@ -20,10 +17,16 @@ const DEFAULT_WORD_DURATION_SECONDS = 0.25;
 const MAX_ALIGNMENT_CELLS = 4_000_000;
 
 function tokenize(text: string): WordToken[] {
-  return [...text.matchAll(WORD_PATTERN)].map(([word]) => ({
-    word,
-    normalized: word.normalize("NFKC").toLocaleLowerCase("nl-NL"),
-  }));
+  return [...text.matchAll(WORD_PATTERN)].map((match) => {
+    const word = match[0];
+    const start = match.index;
+    return {
+      word,
+      normalized: word.normalize("NFKC").toLocaleLowerCase("nl-NL"),
+      start,
+      end: start + word.length,
+    };
+  });
 }
 
 function flattenRecognizedWords(
@@ -60,8 +63,8 @@ function flattenRecognizedWords(
 
 function alignTokenIndices(
   source: readonly WordToken[],
-  recognized: readonly TimedWordToken[],
-): Array<SpeechWordTimestamp | undefined> {
+  recognized: readonly WordToken[],
+): Array<number | undefined> {
   const stride = recognized.length + 1;
   const cellCount = (source.length + 1) * stride;
   if (cellCount > MAX_ALIGNMENT_CELLS) {
@@ -82,16 +85,12 @@ function alignTokenIndices(
     }
   }
 
-  const alignment = new Array<SpeechWordTimestamp | undefined>(source.length);
+  const alignment = new Array<number | undefined>(source.length);
   let row = 0;
   let column = 0;
   while (row < source.length && column < recognized.length) {
     if (source[row]!.normalized === recognized[column]!.normalized) {
-      alignment[row] = {
-        word: source[row]!.word,
-        start: recognized[column]!.start,
-        end: recognized[column]!.end,
-      };
+      alignment[row] = column;
       row += 1;
       column += 1;
     } else if (
@@ -133,8 +132,15 @@ export function alignSpeechWords(
     throw new RangeError("Audio duration cannot be shorter than word timestamps.");
   }
   const alignment = alignTokenIndices(sourceWords, recognizedWords).map(
-    (timestamp, index) =>
-      timestamp ? { ...timestamp, word: sourceWords[index]!.word } : undefined,
+    (recognizedIndex, sourceIndex) => {
+      if (recognizedIndex === undefined) return undefined;
+      const timestamp = recognizedWords[recognizedIndex]!;
+      return {
+        word: sourceWords[sourceIndex]!.word,
+        start: timestamp.start,
+        end: timestamp.end,
+      };
+    },
   );
   const averageWordDuration = recognizedTimestamps.length
     ? Math.max(
@@ -181,4 +187,31 @@ export function alignSpeechWords(
     }
   }
   return alignment as SpeechWordTimestamp[];
+}
+
+export function trimUnsupportedTranscriptTail(
+  sourceText: string,
+  transcript: string,
+): string {
+  const sourceWords = tokenize(sourceText);
+  const recognizedWords = tokenize(transcript);
+  if (!sourceWords.length || !recognizedWords.length) return transcript.trimEnd();
+  const alignment = alignTokenIndices(sourceWords, recognizedWords);
+  const lastMatchedIndex = alignment.reduce<number>(
+    (last, recognizedIndex) =>
+      recognizedIndex === undefined ? last : Math.max(last, recognizedIndex),
+    -1,
+  );
+  if (lastMatchedIndex === undefined || lastMatchedIndex < 0) {
+    return transcript.trimEnd();
+  }
+
+  let end = recognizedWords[lastMatchedIndex]!.end;
+  while (
+    end < transcript.length &&
+    /[\p{P}\p{S}]/u.test(transcript[end]!)
+  ) {
+    end += 1;
+  }
+  return transcript.slice(0, end).trimEnd();
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSpeechApp } from "./app.js";
-import type { SpeechRecognitionEngine } from "./WhisperCppHttpEngine.js";
+import type {
+  SpeechRecognitionEngine,
+  WordTimestampSpeechRecognitionEngine,
+} from "./WhisperCppHttpEngine.js";
 import type { StreamingSpeechRecognitionEngine } from "./StreamingRecognition.js";
 import {
   AzureRealtimeSttEngine,
@@ -83,7 +86,12 @@ describe("speech recognition API", () => {
       transcribe: vi.fn(async () => ({ text: "Hello, world." })),
       transcribeWithWordTimestamps,
     };
-    const app = createSpeechApp(engine);
+    const app = createSpeechApp(engine, {
+      detectSpeechOnset: async () => ({
+        status: "no-silence",
+        onsetSeconds: 0,
+      }),
+    });
     const form = new FormData();
     form.set("sourceText", "Hello world");
     form.set("language", "en-US");
@@ -122,7 +130,7 @@ describe("speech recognition API", () => {
     const unsupported = await app.request("/api/speech/stt/align", {
       method: "POST",
     });
-    const timestampEngine = {
+    const timestampEngine: WordTimestampSpeechRecognitionEngine = {
       transcribe: vi.fn(async () => ({ text: "text only" })),
       transcribeWithWordTimestamps: vi.fn(async () => ({
         text: "text only",
@@ -153,6 +161,32 @@ describe("speech recognition API", () => {
     expect(wrongContentType.status).toBe(415);
     expect(missingSourceText.status).toBe(400);
     expect(session.status).toBe(201);
+  });
+
+  it("rejects all-silence alignment before invoking the recognizer", async () => {
+    const transcribeWithWordTimestamps = vi.fn(async () => ({
+      text: "",
+      wordTimestamps: [],
+    }));
+    const engine: WordTimestampSpeechRecognitionEngine = {
+      transcribe: vi.fn(async () => ({ text: "" })),
+      transcribeWithWordTimestamps,
+    };
+    const app = createSpeechApp(engine, {
+      detectSpeechOnset: async () => ({ status: "all-silence" }),
+    });
+    const form = new FormData();
+    form.set("sourceText", "Hello");
+    form.set("language", "en-US");
+    form.set("audio", new Blob([new Uint8Array([1])], { type: "audio/wav" }), "silent.wav");
+
+    const response = await app.request("/api/speech/stt/align", {
+      method: "POST",
+      body: form,
+    });
+
+    expect(response.status).toBe(422);
+    expect(transcribeWithWordTimestamps).not.toHaveBeenCalled();
   });
 
   it("reports speech health and readiness independently", async () => {
