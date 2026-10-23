@@ -3,7 +3,7 @@ import {
   clampSpeechChunkPauseMs,
   clampSpeechChunkSize,
   splitSpeechText,
-} from "./speechChunking.js";
+} from "@sodalis/speech";
 
 describe("speech chunking", () => {
   it("keeps closing quotes with their sentence and prefers sentence boundaries", () => {

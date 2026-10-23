@@ -21,7 +21,7 @@ import {
   DEFAULT_TTS_CHUNK_CHARACTERS,
   DEFAULT_TTS_CHUNK_PAUSE_MS,
   splitSpeechText,
-} from "./speechChunking.js";
+} from "@sodalis/speech";
 import {
   detectSpeechOnset,
   shiftWordTimestamps,

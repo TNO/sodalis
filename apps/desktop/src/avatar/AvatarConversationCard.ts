@@ -14,8 +14,10 @@ interface AvatarConversationCardAttrs {
   cloudSpeechRecognizer?: string;
   speechError?: string;
   speechOutputError?: string;
+  speechCaptionError?: string;
   userTranscript?: string;
   assistantText?: string;
+  activeSpeechWordIndex?: number;
   speechOutputActive?: boolean;
   speechPlaying?: boolean;
   conversationState?: ConversationState;
@@ -31,6 +33,34 @@ interface AvatarConversationCardAttrs {
   onSend?: (text: string) => Promise<void>;
   onConversationError?: (error: Error) => void;
   onClose: () => void;
+}
+
+function renderCaption(text: string, activeWordIndex?: number): m.Children {
+  const content: m.Children = [];
+  const expression = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu;
+  let previousEnd = 0;
+  let wordIndex = 0;
+  for (const match of text.matchAll(expression)) {
+    const start = match.index;
+    const word = match[0];
+    if (start > previousEnd) content.push(text.slice(previousEnd, start));
+    content.push(
+      m(
+        "span.avatar-conversation-caption-word",
+        activeWordIndex === wordIndex
+          ? {
+              class: "avatar-conversation-caption-word-active",
+              "aria-current": "true",
+            }
+          : {},
+        word,
+      ),
+    );
+    previousEnd = start + word.length;
+    wordIndex += 1;
+  }
+  if (previousEnd < text.length) content.push(text.slice(previousEnd));
+  return content;
 }
 
 export const AvatarConversationCard =
@@ -218,8 +248,17 @@ export const AvatarConversationCard =
               m("p.avatar-conversation-speaker", "Sodalis"),
               m(
                 "p.avatar-conversation-caption",
-                vnode.attrs.assistantText ?? caption,
+                renderCaption(
+                  vnode.attrs.assistantText ?? caption,
+                  vnode.attrs.activeSpeechWordIndex,
+                ),
               ),
+              vnode.attrs.speechCaptionError
+                ? m(
+                    "p.avatar-conversation-caption-status[role=status]",
+                    `Word highlighting unavailable: ${vnode.attrs.speechCaptionError}`,
+                  )
+                : null,
             ]),
             m(
               "p.avatar-conversation-status[role=status][aria-live=polite]",

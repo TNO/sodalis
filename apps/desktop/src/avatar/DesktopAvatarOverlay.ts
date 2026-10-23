@@ -150,9 +150,11 @@ export const DesktopAvatarOverlay =
     let microphoneWasActive = false;
     let speechOutputActive = false;
     let speechIsPlaying = false;
+    let activeSpeechWordIndex: number | undefined;
     let speechActivityMessage: string | undefined;
     let speechError: string | undefined;
     let speechOutputError: string | undefined;
+    let speechCaptionError: string | undefined;
     let conversationError: string | undefined;
     let conversationState: ConversationState = "idle";
     let conversationInterruptible = true;
@@ -183,6 +185,11 @@ export const DesktopAvatarOverlay =
         }
       },
     });
+    const fallbackTtsApiBaseUrl =
+      import.meta.env.VITE_SODALIS_TTS_FALLBACK_API_URL?.trim();
+    const fallbackTextToSpeechProviders = fallbackTtsApiBaseUrl
+      ? [new ServerTextToSpeechProvider({ baseUrl: fallbackTtsApiBaseUrl })]
+      : [];
     const llmProvider = new ServerLlmProvider({
       baseUrl: speechApiBaseUrl,
       onLatency(metric) {
@@ -451,16 +458,31 @@ export const DesktopAvatarOverlay =
     const createSpeechPlayback = (): SpeechPlaybackController =>
       createSpeechPlaybackController({
         provider: textToSpeechProvider,
+        fallbackProviders: fallbackTextToSpeechProviders,
+        alignAudio: (text, language, audio, signal) =>
+          speechToTextProvider.alignAudio(text, language, audio, signal),
         getAvatarController: () => avatarScene?.controller,
         isListening: () => microphoneWasActive,
         onOutputChange(active) {
           speechOutputActive = active;
+          if (active) {
+            activeSpeechWordIndex = undefined;
+            speechCaptionError = undefined;
+          }
           syncActiveSpeechOutput();
           if (layer) m.redraw();
         },
         onStateChange(speaking, request) {
           speechIsPlaying = speaking;
           conversation?.notifyPlaybackState(request.speechId, speaking);
+          if (layer) m.redraw();
+        },
+        onWordChange(wordIndex) {
+          activeSpeechWordIndex = wordIndex;
+          if (layer) m.redraw();
+        },
+        onAlignmentError(error) {
+          speechCaptionError = error.message;
           if (layer) m.redraw();
         },
         onCancelGeneration() {
@@ -473,6 +495,7 @@ export const DesktopAvatarOverlay =
         throw new Error("Speech playback is unavailable.");
       }
       speechOutputError = undefined;
+      speechCaptionError = undefined;
       const request: SpeechRequest = {
         sessionId: createSpeechRequestId("desktop"),
         speechId: createSpeechRequestId("speech"),
@@ -932,11 +955,13 @@ export const DesktopAvatarOverlay =
                   cloudSpeechRecognizer,
                   speechError,
                   speechOutputError,
+                  speechCaptionError,
                   conversationError,
                   conversationState,
                   pendingConfirmation,
                   userTranscript,
                   assistantText,
+                  activeSpeechWordIndex,
                   speechOutputActive,
                   speechPlaying: speechIsPlaying,
                   onSpeechError: reportSpeechError,

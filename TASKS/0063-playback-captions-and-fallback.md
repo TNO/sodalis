@@ -1,6 +1,6 @@
 # 0063 Adding speech captions and playback fallback
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: frontend
 Depends on: 0058, 0061, 0062
@@ -31,3 +31,12 @@ spoken word using aligned timestamps.
 ## Agent Notes
 
 - 2026-10-23 Copilot: Task split from the requested reusable TTS feature set.
+- 2026-10-23 Copilot: Reused shared sentence chunking in desktop and server;
+  alignment is performed per chunk so longer replies can start and be
+  interrupted between chunks.
+- 2026-10-23 Copilot: Playback fallback is opt-in through
+  `VITE_SODALIS_TTS_FALLBACK_API_URL`; unconfigured browser/cloud voices are
+  never selected. Word-alignment failures leave audio playback intact and are
+  shown separately from TTS errors.
+- 2026-10-23 Copilot: Reimplemented source fallback and active-word highlighting
+  from the behavioral ideas in zin (Apache-2.0); no code was copied.

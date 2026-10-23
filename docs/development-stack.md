@@ -129,6 +129,16 @@ streaming behavior is not advertised as a capability until the discrepancy
 between its documented PCM response and observed Pocket trial behavior is
 resolved.
 
+The desktop uses the configured Sodalis speech API for playback and requests
+word alignment through `/api/speech/stt/align`. Word highlighting requires a
+configured timestamp-capable local STT engine (currently whisper.cpp); if
+alignment is unavailable, audio still plays and the caption remains visible
+without highlighting. If a second speech API is intentionally configured, set
+`VITE_SODALIS_TTS_FALLBACK_API_URL` to its API base (for example,
+`http://localhost:3001/api`) in the desktop build environment. It is tried only
+after the primary TTS API fails; it is unset by default, and Sodalis never
+silently switches to a browser or cloud voice.
+
 For the default stack, download both Piper voice files into these ignored
 paths. Only download a multilingual Whisper.cpp model if you explicitly
 select `STT_PROVIDER=whisper-cpp`:

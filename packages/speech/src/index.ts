@@ -150,6 +150,16 @@ export {
   type ServerTextToSpeechLatency,
   type ServerTextToSpeechProviderOptions,
 } from "./ServerTextToSpeechProvider.js";
+export {
+  clampSpeechChunkPauseMs,
+  clampSpeechChunkSize,
+  DEFAULT_TTS_CHUNK_CHARACTERS,
+  DEFAULT_TTS_CHUNK_PAUSE_MS,
+  MAX_TTS_CHUNK_CHARACTERS,
+  MAX_TTS_CHUNK_PAUSE_MS,
+  MIN_TTS_CHUNK_CHARACTERS,
+  splitSpeechText,
+} from "./speechChunking.js";
 
 export type SpeechId = string;
 
@@ -169,6 +179,12 @@ export interface SpeechRequest {
   readonly language: string;
   readonly voice?: string;
   readonly style?: string;
+}
+
+export interface SpeechWordTimestamp {
+  readonly word: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 export type SpeechOutputPayload =
