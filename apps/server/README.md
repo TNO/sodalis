@@ -102,6 +102,10 @@ implicitly; requires `ffmpeg` on `PATH` when run natively).
 matching `.onnx.json`). The speech service fails startup for missing settings
 or unknown provider IDs rather than falling back. Either role can instead
 select `mock`, a deterministic fixture with no engine dependencies.
+TTS text is split sentence-first into chunks before synthesis, with long
+sentences split at clauses and whitespace. `TTS_CHUNK_MAX_CHARACTERS` defaults
+to 320 and is clamped to 80–1,000; `TTS_CHUNK_PAUSE_MS` defaults to 120 ms of
+inserted silence and is clamped to 0–1,000 ms.
 `TTS_PROVIDER=piper-http` uses an explicitly configured `PIPER_HTTP_URL`;
 that Piper HTTP service must return standard 22,050 Hz mono PCM16 WAV for a
 JSON `{"text": "..."}` request to `/synthesize`. STT's Whisper.cpp URL can likewise point to

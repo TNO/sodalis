@@ -78,6 +78,10 @@ describe("speech synthesis API", () => {
       ...request,
       voice: "nl_NL-pim-medium",
     });
+    const emptyAfterCleanup = await post({
+      ...request,
+      text: "**",
+    });
     const invalidSpeechId = await post({
       ...request,
       speechId: "../old",
@@ -93,6 +97,7 @@ describe("speech synthesis API", () => {
 
     expect(unsupportedLanguage.status).toBe(400);
     expect(unsupportedVoice.status).toBe(400);
+    expect(emptyAfterCleanup.status).toBe(400);
     expect(invalidSpeechId.status).toBe(400);
     expect(missingEngine.status).toBe(503);
     expect(synthesize).not.toHaveBeenCalled();
@@ -159,6 +164,42 @@ describe("speech synthesis API", () => {
       }),
       expect.any(AbortSignal),
     );
+  });
+
+  it("synthesizes long replies sequentially and inserts a PCM pause between chunks", async () => {
+    const spokenTexts: string[] = [];
+    const engine: SpeechSynthesisEngine = {
+      async *synthesize(speech) {
+        spokenTexts.push(speech.text);
+        yield new Uint8Array([1, 0]);
+      },
+    };
+    const pauseMs = 10;
+    const app = createSpeechApp(sttEngine, {
+      ttsEngine: engine,
+      maxTtsChunkCharacters: 80,
+      ttsChunkPauseMs: pauseMs,
+    });
+    const response = await app.request("/api/speech/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...request,
+        text: [
+          "This first sentence has enough words to make a substantial spoken chunk.",
+          "This second sentence also has enough words to require a separate spoken chunk.",
+        ].join(" "),
+      }),
+    });
+    const audio = new Uint8Array(await response.arrayBuffer());
+
+    expect(response.status).toBe(200);
+    expect(spokenTexts).toEqual([
+      "This first sentence has enough words to make a substantial spoken chunk.",
+      "This second sentence also has enough words to require a separate spoken chunk.",
+    ]);
+    const silenceByteLength = Math.round((22050 * pauseMs) / 1000) * 2;
+    expect(audio.byteLength).toBe(4 + silenceByteLength);
   });
 
   it("aborts the engine when the client cancels the audio stream", async () => {

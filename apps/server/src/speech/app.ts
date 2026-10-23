@@ -12,6 +12,13 @@ import {
   type SpeechSynthesisEngine,
 } from "./PiperTtsEngine.js";
 import { markdownToSpeech } from "./markdownToSpeech.js";
+import {
+  clampSpeechChunkPauseMs,
+  clampSpeechChunkSize,
+  DEFAULT_TTS_CHUNK_CHARACTERS,
+  DEFAULT_TTS_CHUNK_PAUSE_MS,
+  splitSpeechText,
+} from "./speechChunking.js";
 
 interface RecognitionSession {
   readonly language: string;
@@ -32,6 +39,8 @@ export interface SpeechAppOptions {
   readonly sessionTtlMs?: number;
   readonly now?: () => number;
   readonly ttsEngine?: SpeechSynthesisEngine;
+  readonly maxTtsChunkCharacters?: number;
+  readonly ttsChunkPauseMs?: number;
 }
 
 const DEFAULT_MAX_AUDIO_BYTES = 16 * 1024 * 1024;
@@ -126,6 +135,12 @@ export function createSpeechApp(
   const maxSessions = options.maxSessions ?? DEFAULT_MAX_SESSIONS;
   const sessionTtlMs = options.sessionTtlMs ?? DEFAULT_SESSION_TTL_MS;
   const now = options.now ?? Date.now;
+  const maxTtsChunkCharacters = clampSpeechChunkSize(
+    options.maxTtsChunkCharacters ?? DEFAULT_TTS_CHUNK_CHARACTERS,
+  );
+  const ttsChunkPauseMs = clampSpeechChunkPauseMs(
+    options.ttsChunkPauseMs ?? DEFAULT_TTS_CHUNK_PAUSE_MS,
+  );
   const sessions = new Map<string, RecognitionSession>();
   let activeTtsRequests = 0;
   const app = new Hono();
@@ -446,10 +461,15 @@ export function createSpeechApp(
       return jsonError(context, "Speech server is at TTS capacity.", 503);
     }
 
+    const cleanedText = markdownToSpeech(text);
+    if (!cleanedText) {
+      return jsonError(context, "Speech text must not be empty after cleanup.", 400);
+    }
+    const chunks = splitSpeechText(cleanedText, maxTtsChunkCharacters);
     const speechRequest: SpeechRequest = {
       sessionId,
       speechId,
-      text: markdownToSpeech(text),
+      text: cleanedText,
       language,
       ...(voice ? { voice } : {}),
     };
@@ -467,12 +487,19 @@ export function createSpeechApp(
     const body = new ReadableStream<Uint8Array>({
       async start(streamController) {
         try {
-          for await (const chunk of engine.synthesize(
-            speechRequest,
-            abortController.signal,
-          )) {
+          for (const [index, textChunk] of chunks.entries()) {
             abortController.signal.throwIfAborted();
-            if (chunk.byteLength) streamController.enqueue(chunk);
+            if (index > 0 && ttsChunkPauseMs > 0) {
+              const silenceSamples = Math.round((22_050 * ttsChunkPauseMs) / 1000);
+              streamController.enqueue(new Uint8Array(silenceSamples * 2));
+            }
+            for await (const audioChunk of engine.synthesize(
+              { ...speechRequest, text: textChunk },
+              abortController.signal,
+            )) {
+              abortController.signal.throwIfAborted();
+              if (audioChunk.byteLength) streamController.enqueue(audioChunk);
+            }
           }
           if (!abortController.signal.aborted) streamController.close();
         } catch (error) {
