@@ -43,8 +43,52 @@ without changing the Sodalis browser contract.
 - The final, consolidated analysis is in
   `docs/evaluations/tts-providers.md` (see `docs/evaluations/README.md`).
 
+## Current decision (2026-10-23)
+
+The user selected Pocket TTS for now, but explicitly asked not to begin
+Sodalis integration. The selection is recorded in
+`docs/evaluations/dutch-tts-hugging-face.md#current-selection-user-directed-2026-10-23`.
+
+- Engine: `pockettts.cpp` Q8 GGUF/Metal (`MTL0`), runtime revision
+  `fab79722efc72f79d062de7a3a4472fc430a385d`; Dutch and English Q8 pack
+  conversion revision `b5a0115aee9658c110d747debb03edd548c4b9c7`, from
+  upstream weights revision `db04f0e653473e5c7333c69686ac92b7460b0c1d`.
+- Dutch voice: Pocket clones `~/tts-trials/samples/piper-female-nl-reference.wav`,
+  generated using Piper `nl_NL-mls-medium`, speaker id 10 (MLS speaker
+  12500). Its dataset is MLS/OpenSLR 94, CC BY 4.0; attribution to
+  "Multilingual LibriSpeech", Pratap et al. 2020, and the LibriVox reader is
+  required.
+- English pair was also used: Pocket's English Q8 pack clones
+  `~/tts-trials/samples/piper-female-en-reference.wav`, generated with
+  `en_US-ljspeech-medium` (LJ Speech, public domain).
+- References are outside git. To regenerate, use Piper 1.8.0 and
+  `~/tts-trials/models/piper/`. Dutch voice/settings: `nl_NL-mls-medium`,
+  `SynthesisConfig(speaker_id=10)`, text `Hallo, ik spreek vandaag een paar
+  zinnen in het Nederlands voor deze stemtest.` English:
+  `en_US-ljspeech-medium`, default synthesis config, text `Hello, I am
+  reading a few English sentences today for this voice test.` Neither Piper
+  call set a seed; Piper exposes no seed parameter in this harness, so
+  byte-identical regeneration is not guaranteed.
+- The selected normalized Pocket sample used reference voice
+  `piper-female-nl-reference`, Dutch Q8 pack and seed `42`. Its exact input
+  text is recorded in the linked evaluation.
+- Requirement before Pocket: normalize Dutch numbers (including house
+  numbers), dates and times into spoken forms.
+- Before integration: complete blind listening, Parakeet WER on the fixed
+  prompts and Dutch corpus, verify in-flight cancellation through the public
+  route, and review gated Pocket weight terms and Docker redistribution
+  requirements. Do not bundle or redistribute Pocket weights before review.
+
 ## Agent Notes
 
+- 2026-10-23 Copilot: User selected Pocket TTS Q8 GGUF/Metal with the female
+  Dutch reference sample, and requested that no Sodalis integration start
+  yet. Recorded the engine/weight revisions, Dutch and English reference
+  voices/licences, regeneration recipe, normalization requirement and
+  pre-integration checks above and in the linked Hugging Face evaluation.
+  Reference WAVs remain outside git. Do not begin integration until the
+  listed listening, WER, cancellation and gated-weight/redistribution checks
+  are complete.
 - Chatterbox and Azure AI Speech are evaluation targets; integrate when they
   meet the provider contract and platform constraints.
 - Added Fish Speech and F5-TTS for review, not as selected engines. Licensing

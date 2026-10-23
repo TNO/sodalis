@@ -7,17 +7,22 @@ Dutch voice quality or practical speed.
 
 ## Summary and recommendation
 
-**For the next listening trial, start with Pocket TTS Dutch Q8 GGUF/Metal,
-but keep Piper as the speed and rights baseline.** With this HF account's
-upstream gate approved, Pocket generated the fixed Dutch short/long prompts
-in 0.17/0.46 s on an M4 Max, compared with 0.06/0.23 s for Piper Ronnie.
-The Pocket weights are CC BY 4.0, gated upstream, and carry prohibited-use
-terms; its MIT runtime does not make the weights or bundled voices MIT.
-We used **no bundled voice pack**: both Pocket and Audio8 were conditioned
-on a locally generated Piper reference. In one informal listen, the user
-preferred Pocket slightly over Piper. However, Pocket and Audio8 garbled
-the raw digits "24", which Whisper confirmed. Writing the number out fixed
-it, so **Dutch text normalisation is a prerequisite** (see
+**User decision (2026-10-23): settle on Pocket TTS for now, using the
+female Dutch voice in `~/tts-trials/samples/pocket-female-nl-long-normalized.wav`.**
+This is an evaluation choice only; **do not integrate it into Sodalis yet**.
+The selected engine is pockettts.cpp Q8 GGUF/Metal. Its exact runtime,
+weight and voice-reference revisions and regeneration recipe are recorded
+in [the current selection](#current-selection-user-directed-2026-10-23).
+With this HF account's upstream gate approved, Pocket generated the fixed
+Dutch short/long prompts in 0.17/0.46 s on an M4 Max, compared with
+0.06/0.23 s for Piper Ronnie. The Pocket weights are CC BY 4.0, gated
+upstream, and carry prohibited-use terms; its MIT runtime does not make the
+weights or bundled voices MIT. We used **no bundled voice pack**: both Pocket
+and Audio8 were conditioned on a locally generated Piper reference. In one
+informal listen, the user preferred Pocket slightly over Piper. However,
+Pocket and Audio8 garbled the raw digits "24", which Whisper confirmed.
+Writing the number out fixed it, so **Dutch number, date and time
+normalisation is required before synthesis** (see
 [the number normalisation finding](#number-normalisation-is-required-before-non-espeak-tts-measured)).
 A [female-voice rerun](#female-voice-rerun-measured-same-session) using
 the only permissive nl_NL female Piper source (MLS, CC BY 4.0) gave a
@@ -27,6 +32,54 @@ Kitten produced the most accurate Dutch, but it is not interactive (RTF of
 about 1.3–1.8 with no streaming). The user accepts its non-permissive
 licence for research and Sodalis; commercial use would need a separate
 licence.
+
+### Current selection (user-directed, 2026-10-23)
+
+| Component | Selection |
+| --- | --- |
+| Engine | `pockettts.cpp` Q8 GGUF with Metal (`MTL0`), runtime revision `fab79722efc72f79d062de7a3a4472fc430a385d` |
+| GGUF packs | Dutch and English conversion repository revision `b5a0115aee9658c110d747debb03edd548c4b9c7`; upstream Pocket TTS weights revision `db04f0e653473e5c7333c69686ac92b7460b0c1d` |
+| Dutch voice | Pocket cloning the local `piper-female-nl-reference.wav`, made with `nl_NL-mls-medium`, speaker id 10 (MLS speaker 12500); MLS/OpenSLR 94, CC BY 4.0 |
+| English voice | Pocket cloning the local `piper-female-en-reference.wav`, made with `en_US-ljspeech-medium`; LJ Speech is public domain |
+| Selected sample | `~/tts-trials/samples/pocket-female-nl-long-normalized.wav` |
+
+The English pair was also trialed with the corresponding Pocket English Q8
+pack and Piper reference. Both reference WAVs remain outside git. Regenerate
+them with Piper 1.8.0 and the saved models at `~/tts-trials/models/piper/`:
+
+| Reference file | Piper voice and settings | Exact text | Seed |
+| --- | --- | --- | --- |
+| `piper-female-nl-reference.wav` | `nl_NL-mls-medium`, `SynthesisConfig(speaker_id=10)` (MLS speaker 12500) | `Hallo, ik spreek vandaag een paar zinnen in het Nederlands voor deze stemtest.` | None was set; the Piper call has no seed parameter |
+| `piper-female-en-reference.wav` | `en_US-ljspeech-medium`, default synthesis config | `Hello, I am reading a few English sentences today for this voice test.` | None was set; the Piper call has no seed parameter |
+
+The Dutch source requires CC BY 4.0 attribution to "Multilingual
+LibriSpeech", Pratap et al. 2020, and the LibriVox reader. The English
+LJ Speech source is public domain. The captured reference WAVs are the
+canonical references; Piper synthesis was not seeded, so the recipe does
+not promise byte-identical regeneration.
+
+The selected Pocket sample is reproduced with the Dutch Q8 pack, reference
+name `piper-female-nl-reference`, seed `42`, and this exact normalized text:
+
+> Goedemorgen, ik heb uw afspraak voor donderdag om half tien bevestigd. Het
+> adres is Stationsstraat vierentwintig in Utrecht. Laat het gerust weten als
+> u liever een ander tijdstip kiest; dan bekijken we samen de mogelijkheden.
+
+Run a Dutch text-normalisation pass **before Pocket synthesis**, expanding
+numbers (including house numbers), dates and times to spoken Dutch. Do not
+pass raw numeric/date/time forms to Pocket by default.
+
+Before any Sodalis integration, complete all of these:
+
+- Blind listening against Piper and the other shortlisted candidates,
+  including the chosen reference voice and normalized Dutch sample.
+- Parakeet round-trip WER on the fixed prompts and the 50-sentence Dutch
+  corpus, including number/date/time cases.
+- Verify that cancellation stops in-flight Pocket generation through the
+  public Sodalis TTS route.
+- Review the gated upstream Pocket weight terms and the exact
+  redistribution requirements for a public Docker image. Do not bundle or
+  redistribute the weights until both are cleared.
 
 **Audio8 TTS Preview 0.6B ONNX INT4 was also trialed.** The [base checkpoint](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6b)
 and [conversion](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.6B-ONNX-INT4)
