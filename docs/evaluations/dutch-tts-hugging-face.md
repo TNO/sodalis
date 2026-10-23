@@ -37,6 +37,22 @@ run with the user's consent, read the raw "24" correctly. However, it ran at
 RTF 2.4–4.3 on MPS, about 36× slower than the selected Pocket voice, and it
 is **not eligible for Sodalis**. No audible AI disclaimer appeared in its
 output.
+A [quick trial of cached candidates](#quick-trial-of-cached-candidates-omnivoice-parkiet-chatterbox-v3-moss-measured-2026-10-23)
+cloned the same reference with OmniVoice (MLX), Parkiet (Dia, MPS) and
+Chatterbox Multilingual V3 (MPS). All three produced accurate Dutch,
+including the raw "24", but none streams. OmniVoice was the fastest at
+RTF 0.5–1.4, against 5–16 for the others. Only Chatterbox is MIT. MOSS-TTS
+v1.5 was not run because its 7.1 GB tokenizer was not cached. **Pocket
+remains the selection.**
+
+**Local files (2026-10-23).** The user has since deleted the local runtimes
+and weights for Audio8, KittenTTS, VibeVoice-Realtime, OmniVoice, Parkiet
+and Chatterbox. Where this document names `~/tts-trials/runtime/…`,
+`~/tts-trials/models/…` or Hugging Face cache folders for those engines,
+the paths record what was used and **no longer exist locally**. The
+findings are unaffected. The sample WAVs, results JSON files and harness
+scripts under `~/tts-trials/` were kept. The Pocket and Piper models,
+`pockettts.cpp` and `piper-venv` remain in place.
 
 ### Current selection (user-directed, 2026-10-23)
 
@@ -240,7 +256,8 @@ the pinned Dutch and `english_2026-09` Q8 packs, start `tts-server` with
 local WAV at `/v1/audio/voices`, and stream PCM from `/v1/audio/speech`.
 The service log verified `Backend: MTL0` / `Apple M4 Max`; Audio8 health
 reported `CPUExecutionProvider` for all three ONNX sessions. The exact
-temporary harness and reference WAVs remain under `~/tts-trials/`.
+temporary harness and reference WAVs remain under `~/tts-trials/`; the
+Audio8 runtime checkout and ONNX weights have since been deleted locally.
 
 Setup issues: the authenticated Pocket account initially returned
 `requires approval` for upstream files; the user requested/accepted
@@ -510,7 +527,8 @@ Use it as a quality reference or an offline/pre-rendered option, not as
 Sodalis's live voice, unless the C++ path or an idle machine is shown to
 reach RTF < 0.3. The results JSON files are
 `~/tts-trials/kitten-results.json` and `~/tts-trials/kitten-baker-results.json`.
-The audio is in `~/tts-trials/samples/kitten-*.wav`.
+The audio is in `~/tts-trials/samples/kitten-*.wav`. The KittenTTS runtime
+and weights have since been deleted locally; the samples and JSON remain.
 
 ### VibeVoice-Realtime-0.5B (research-only trial; not eligible for Sodalis)
 
@@ -560,9 +578,9 @@ not make VibeVoice eligible for Sodalis.
 
 Setup, all outside git:
 
-- Code at `~/tts-trials/runtime/vibevoice`, Python 3.11 venv with
+- Code at `~/tts-trials/runtime/vibevoice` (since deleted), Python 3.11 venv with
   `pip install -e '.[streamingtts]'` (pins transformers 4.51.3).
-- Weights at `~/tts-trials/models/vibevoice`: `model.safetensors`
+- Weights at `~/tts-trials/models/vibevoice` (since deleted): `model.safetensors`
   2,035,332,888 bytes (fp32), plus `config.json` and
   `preprocessor_config.json`. The processor also loads the
   `Qwen/Qwen2.5-0.5B` tokenizer (Apache-2.0) from the HF cache.
@@ -634,6 +652,112 @@ The raw results are in `~/tts-trials/vibevoice-results.json`.
   out of scope, and the preset voices have no documented provenance.
 - Research listening only. Pocket TTS remains the selection.
 
+### Quick trial of cached candidates: OmniVoice, Parkiet, Chatterbox V3, MOSS (measured, 2026-10-23)
+
+The user asked for a quick Dutch trial of four models already in
+`~/.cache/huggingface/hub`, keeping Pocket as the selection unless one
+clearly beats it. No cached weights were re-downloaded. Each Python runtime
+was installed in a temporary venv and **deleted after its run**, because
+none beat Pocket.
+
+**Licences (checked before running)**
+
+| Model (revision) | Code | Weights and other assets | Outcome |
+| --- | --- | --- | --- |
+| [`k2-fsa/OmniVoice`](https://huggingface.co/k2-fsa/OmniVoice) `c5fdb5cc`; MLX conversion [`mlx-community/OmniVoice-bf16`](https://huggingface.co/mlx-community/OmniVoice-bf16) `8fb0b754` | [Apache-2.0](https://github.com/k2-fsa/OmniVoice) | The card states **no weight licence**. Training data is described only as "581k hours … curated entirely from open-source data" ([arXiv 2604.00688](https://arxiv.org/abs/2604.00688)), including 2,264 h of Dutch. The bundled `audio_tokenizer/` is Boson's Higgs Audio 2 tokenizer under the **Boson Higgs Audio 2 Community License**. It allows commercial use, but requires an expanded licence above 100,000 annual active users, a "Built with Higgs Materials licensed from Boson AI" notice, a "Higgs Audio 2" name prefix on distributed derivative models, and the Llama acceptable-use policy. The README forbids unauthorised cloning and impersonation. | Not non-commercial, so it was run. **Not permissive** for Sodalis. |
+| [`pevers/parkiet`](https://huggingface.co/pevers/parkiet) `57ef2975` (Dia-1.6B fine-tune) plus codec [`descript/dac_44khz`](https://huggingface.co/descript/dac_44khz) `c1bc5216` | [MIT](https://github.com/pevers/parkiet); DAC code [MIT](https://github.com/descriptinc/descript-audio-codec) | Weights are under a custom **RAIL-M v1.0 (TTS adaptation)**. It allows use, modification and redistribution with attribution, provided the licence and its use restrictions travel with the weights. Prohibited uses include non-consensual impersonation or deepfakes, fraud, harassment, biometric profiling and **medical, legal or safety-critical advice without human oversight**, which Sodalis must design for. The card disclaimer says the model is "intended for research and educational use"; that is a statement of intent, not a licence term. The DAC card states no licence; its code repository is MIT. | Run. Usable only under the RAIL-M restrictions. |
+| [`ResembleAI/chatterbox`](https://huggingface.co/ResembleAI/chatterbox) `5bb1f6ee`, multilingual T3 `t3_mtl23ls_v3` | [MIT](https://github.com/resemble-ai/chatterbox) | MIT. Every output carries an imperceptible Resemble **Perth watermark** (`resemble-perth`) applied by the library. | Run. Permissive. |
+| [`OpenMOSS-Team/MOSS-TTS-v1.5`](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5) `cdd3b911` (8B) | Apache-2.0 | Apache-2.0, and Dutch was added in v1.5. It needs [`MOSS-Audio-Tokenizer`](https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer) (Apache-2.0), which is **not cached and is about 7.1 GB**. | **Not run**: the missing tokenizer is not a "small missing piece". It is Mac-runnable on paper: mlx-audio lists this model for MLX, and OpenMOSS publishes a llama.cpp GGUF and ONNX path, so a CUDA-only stack is not required. Expect about 16 GB of bf16 weights in memory. |
+
+**Setup**
+
+| Model | Runtime |
+| --- | --- |
+| OmniVoice | `mlx-community/OmniVoice-bf16` via mlx-audio 0.6.1 and mlx 0.32.4 on Metal. The cached `k2-fsa/OmniVoice` PyTorch snapshot lacks `audio_tokenizer/`, so only the MLX snapshot was usable. Defaults: 32 steps, guidance 2.0. |
+| Parkiet | transformers 4.57.6 `DiaForConditionalGeneration` on MPS, torch 2.14.1, fp32. Card sampling settings: guidance 3.0, temperature 1.8, top-p 0.9, top-k 50; up to 3,072 new tokens. The prompt is `[S1] <reference transcript> <target>`, with the reference resampled to 44.1 kHz. The card advises lowercase text with digits written out; these prompts used normal casing. |
+| Chatterbox | GitHub `resemble-ai/chatterbox` `5de7a54a`, installed with `--no-deps` because PyPI 0.1.7 pins torch 2.6 and gradio and always loads the v2 T3. Used `ChatterboxMultilingualTTS.from_local(…, t3_model="v3")` on MPS with torch/torchaudio 2.11.0 and transformers 5.2.0; library defaults (exaggeration 0.5, cfg 0.5, temperature 0.8). |
+
+All three cloned the same references as the Pocket selection:
+`piper-female-nl-reference.wav` for Dutch and `piper-female-en-reference.wav`
+for English. Parkiet and OmniVoice also received the exact reference
+transcript. The seed was 42 for both torch engines, and one warm-up was
+discarded each time. None of these APIs streams: **first audio equals
+total time**, and a reply can only be cancelled by abandoning the request
+or process. Parkiet's `generate` could take a stopping criterion, but
+produces no audio until it finishes.
+
+Load was heavy: oMLX, Ollama and Defender stayed resident, with a load
+average of 6–37. During OmniVoice's first pass the load reached 37, so its
+best-of-two time is shown (the RTF uses that time). The saved samples come
+from pass 1. Peak RSS excludes GPU memory.
+
+| Model | Prompt | First audio = total | Audio | RTF | Peak RSS |
+| --- | --- | ---: | ---: | ---: | ---: |
+| OmniVoice MLX | nl-short | 4.83 s (other pass 8.13 s) | 3.36 s | 1.44 | 2.0 GB |
+| OmniVoice MLX | nl-long | 8.18 s (other pass 26.05 s) | 15.40 s | 0.53 | 2.0 GB |
+| OmniVoice MLX | nl-long-normalized | 8.58 s (other pass 10.32 s) | 15.92 s | 0.54 | 2.0 GB |
+| OmniVoice MLX | en-short | 4.23 s (other pass 7.23 s) | 4.12 s | 1.03 | 2.0 GB |
+| Parkiet MPS | nl-short | 25.34 s | 2.97 s | 8.53 | 2.5 GB |
+| Parkiet MPS | nl-long | 180.61 s | 11.56 s | 15.62 | 5.5 GB |
+| Parkiet MPS | nl-long-normalized | 144.81 s | 11.88 s | 12.19 | 5.9 GB |
+| Parkiet MPS | en-short | 54.69 s | 4.41 s | 12.40 | 6.2 GB |
+| Chatterbox V3 MPS | nl-short | 30.16 s | 3.36 s | 8.98 | 2.6 GB |
+| Chatterbox V3 MPS | nl-long | 69.12 s | 12.92 s | 5.35 | 3.0 GB |
+| Chatterbox V3 MPS | nl-long-normalized | 70.71 s | 12.96 s | 5.46 | 1.6 GB |
+| Chatterbox V3 MPS | en-short | 29.55 s | 3.28 s | 9.01 | 1.7 GB |
+| *Pocket Q8/Metal, selected* | *nl-long-normalized (female)* | *1.58 s (first PCM 41 ms)* | *13.28 s* | *0.119* | *0.26 GiB* |
+
+Memory and size:
+
+- **OmniVoice:** Metal peak 2.7–3.4 GB; the whole-run footprint was
+  15.7 GB, including oMLX contention. The MLX cache is 1.5 GB (1.1 GB
+  transformer plus a 384 MB tokenizer); model load took 23 s.
+- **Parkiet:** whole-run peak footprint 13.6 GB; the MPS driver held
+  7.6 GB. The cache is 6.0 GB plus 292 MB for DAC.
+- **Chatterbox:** the MPS driver allocation grew to **53 GB**, and the
+  whole-run peak footprint was 56.5 GB. The cache is 5.0 GB, holding both
+  the v2 and v3 T3 checkpoints. The earlier
+  [TTS provider evaluation](tts-providers.md) measured a 38.69 s median
+  per reply (RTF 15.6) on laptop CPU. On MPS, RTF was 5.3–9.0: faster, but
+  still far from interactive.
+
+Whisper large-v3-turbo transcripts:
+
+| Model | nl-short | nl-long (raw "24") | nl-long-normalized | en-short |
+| --- | --- | --- | --- | --- |
+| OmniVoice | Exact | Exact, including "Stationsstraat 24" | Exact | Exact ("9.30") |
+| Parkiet | Exact | Exact apart from "Stationstraat" | Exact | Exact ("9:30") |
+| Chatterbox V3 | Exact | Exact ("stationsstraat 24") | Exact | Exact ("9.30") |
+
+Findings:
+
+- All three cloned the MLS reference and produced **accurate Dutch**. All
+  three read the raw "24" correctly, which Pocket cannot do. Naturalness
+  and accent were **not judged**; the user must listen.
+- **None is interactive.** OmniVoice is the fastest, at RTF of about 0.5
+  for long prompts. However, it is non-streaming, so the user waits 8 s
+  before hearing a 15 s reply. That is roughly 5× Pocket's total time and
+  200× its first-PCM delay. Short replies were slower than real time.
+  Parkiet and Chatterbox V3 run 5–16× slower than real time on MPS.
+- **Licences:** only Chatterbox is MIT, with an output watermark.
+  OmniVoice carries the Higgs community licence and has no stated weight
+  licence. Parkiet's RAIL-M restricts medical, legal and safety-critical
+  advice without human oversight.
+- **Pocket remains the selection.** OmniVoice is the strongest accuracy
+  reference, and a candidate for pre-rendered or offline speech if its
+  licence terms are acceptable.
+
+Samples, outside git, for listening:
+
+- `~/tts-trials/samples/omnivoice-{nl-short,nl-long,nl-long-normalized,en-short}.wav`
+- `~/tts-trials/samples/parkiet-{nl-short,nl-long,nl-long-normalized,en-short}.wav`
+- `~/tts-trials/samples/chatterbox-{nl-short,nl-long,nl-long-normalized,en-short}.wav`
+
+The raw results are in
+`~/tts-trials/{omnivoice,omnivoice-run2,parkiet,chatterbox}-results.json`.
+The harnesses are `mlx_trial.py`, `parkiet_trial.py` and
+`chatterbox_trial.py` in `~/tts-trials/`. Their venvs have been deleted.
+
 ## Results
 
 ### Popularity and eligibility snapshot
@@ -654,6 +778,9 @@ research date (not an independently reproducible fixed-time snapshot).
 | [Pocket TTS GGUF](https://huggingface.co/Serveurperso/pocket-tts-GGUF) | 2,309 / 2 | 2026-09-27 | Separate Dutch and English packs; original **CC BY 4.0**, runtime **MIT**; gated terms accepted for this account, voice rights vary | Community [`pockettts.cpp`](https://github.com/ServeurpersoCom/pockettts.cpp) with Metal, Q8 Dutch pack 138 MB, HTTP PCM streaming; see measured M4 figures above | Trialed; first quality-listening candidate |
 | [KittenTTS 2](https://huggingface.co/KittenML/kitten-tts-2) | 46,417 / 168 | 2026-10-22 | Both; weights under **Stellon Labs Community License**, which ends free commercial use at the specified revenue/funding limits; loader Apache-2.0 | Publisher reports CPU/Apple Silicon speed but no unrestricted weight grant; measured locally: best Dutch accuracy, RTF 1.3–1.8 | **Research only** (user-accepted); not permissive, commercial use needs a Stellon licence |
 | [VibeVoice-Realtime-0.5B](https://huggingface.co/microsoft/VibeVoice-Realtime-0.5B) | 298,953 / 1,306 | 2025-12-12 | English; Dutch "experimental" and out of scope per card; MIT metadata, but card limits use to **research**; card claims an audible AI disclaimer and watermark (no audible disclaimer in local output) | Measured on M4 Max MPS under load: first audio 0.22–0.9 s, RTF 2.4–4.3 (publisher claims real-time on M4 Pro) | **Exclude** for Sodalis; research-only listening trial done with user consent |
+| [OmniVoice](https://huggingface.co/k2-fsa/OmniVoice) / [MLX bf16](https://huggingface.co/mlx-community/OmniVoice-bf16) | 1,963,142 / 1,585 | 2026-07-03 | Both (600+ languages); Apache-2.0 code, **no stated weight licence**, Higgs Audio 2 community-licensed tokenizer | Measured on MLX: accurate Dutch, non-streaming, RTF 0.5–1.4 | Not permissive; accuracy reference only |
+| [Parkiet](https://huggingface.co/pevers/parkiet) | 927 / 12 | 2025-09-28 | Dutch-specific Dia fine-tune; MIT code, **RAIL-M** weights with use restrictions | Measured on MPS: accurate Dutch, RTF 8.5–15.6, non-streaming | Exclude for live use (speed); restrictions apply |
+| [Chatterbox Multilingual V3](https://huggingface.co/ResembleAI/chatterbox) | 1,789,185 / 1,863 | 2026-06-10 | Both; **MIT**, output watermark | Measured on MPS: accurate Dutch, RTF 5.3–9.0, non-streaming | Eligible, too slow on this Mac |
 | [Audio8 0.1B ONNX INT8](https://huggingface.co/Edge0/audio8-TTS-0.1B-ONNX-INT8) | 810 / 76 | 2026-08-28 | Conversion claims both and **Apache-2.0**, but [source 0.1B weights](https://huggingface.co/Edge0/Audio8-TTS-Preview-0.1b) are **Audio8 Community License**, with a $2m revenue cap; original card does **not** list Dutch | Conversion says macOS arm64 tested, ~0.6 GB loaded; no Dutch quality evidence | **Exclude** pending explicit upstream relicense and Dutch validation |
 | [Qwen3-TTS CustomVoice](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice) | 1,938,636 / 2,163 | 2026-01-29 | Apache-2.0, but card's 10 supported languages **omit Dutch** | Claimed 97 ms latency cannot establish Dutch support | **Exclude** despite HF filter match |
 | [MOSS-TTS Nano 100M](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Nano-100M) | 114,273 / 244 | 2026-04-13 | Card's 20-language list **omits Dutch** despite search metadata | CPU/streaming claims not relevant without Dutch support | **Exclude** |
@@ -664,7 +791,9 @@ Other large MOSS v1.5 releases (including
 [LAION's 8B voice-acting fine-tune](https://huggingface.co/laion/moss-tts-v1.5-8b-voice-acting),
 183 / 3, updated 2026-07-14) claim Dutch via the v1.5 family and
 Apache-2.0 licensing, but do not offer verified Mac speed or a better
-hardware fit than the smaller Local Transformer. Their audio tokenizer,
+hardware fit than the smaller Local Transformer. The 8B model is cached
+locally, but was not run in the quick trial because its 7.1 GB
+`MOSS-Audio-Tokenizer` was not; mlx-audio lists MLX support for it. Their audio tokenizer,
 reference recordings, and finetune files need separate checks before
 redistribution. Popularity does not imply the model runs on Metal.
 
@@ -815,6 +944,16 @@ TTS endpoint.
 - [Higgs TTS 3 license](https://huggingface.co/bosonai/higgs-tts-3-4b/blob/main/LICENSE),
   [Voxtral TTS license](https://huggingface.co/mistralai/Voxtral-4B-TTS-2603),
   and [KittenTTS 2 weight license](https://huggingface.co/KittenML/kitten-tts-2/blob/main/LICENSE.md).
+- Quick cached-candidate trial: [OmniVoice card](https://huggingface.co/k2-fsa/OmniVoice),
+  [OmniVoice code (Apache-2.0)](https://github.com/k2-fsa/OmniVoice),
+  [OmniVoice audio-tokenizer licence](https://huggingface.co/k2-fsa/OmniVoice/tree/main/audio_tokenizer),
+  [OmniVoice paper](https://arxiv.org/abs/2604.00688),
+  [Parkiet card and RAIL-M licence](https://huggingface.co/pevers/parkiet),
+  [Parkiet code](https://github.com/pevers/parkiet),
+  [DAC codec](https://github.com/descriptinc/descript-audio-codec),
+  [Chatterbox code](https://github.com/resemble-ai/chatterbox),
+  [MOSS-TTS v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5)
+  and [mlx-audio](https://github.com/Blaizzy/mlx-audio).
 - [KittenTTS 2 model card](https://huggingface.co/KittenML/kitten-tts-2),
   [kittenml package (Apache-2.0)](https://pypi.org/project/kittenml/),
   and [Chatterbox-turbo decoder card (MIT)](https://huggingface.co/ResembleAI/chatterbox-turbo).

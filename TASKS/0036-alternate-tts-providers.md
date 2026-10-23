@@ -97,6 +97,17 @@ Sodalis integration. The selection is recorded in
   Hugging Face evaluation. Setup gotcha: its preset loader needs
   `torch==2.7.1`, because torch 2.14 rejects the presets under
   `weights_only=True`.
+- 2026-10-23 Copilot: User-directed quick trial of cached candidates with
+  the Pocket reference voice. OmniVoice (MLX), Parkiet (MPS) and
+  Chatterbox Multilingual V3 (MPS) all produced accurate Dutch, including
+  the raw "24", but none streams. Measured RTF: OmniVoice 0.5–1.4,
+  Chatterbox 5.3–9.0, Parkiet 8.5–15.6. Licences: OmniVoice has no stated
+  weight licence and a Higgs community-licensed tokenizer; Parkiet uses
+  RAIL-M with use restrictions; Chatterbox is MIT with a watermark.
+  MOSS-TTS v1.5 was not run because its 7.1 GB tokenizer was not cached.
+  Pocket remains the selection. The trial venvs were deleted. Chatterbox
+  gotcha: PyPI 0.1.7 always loads the v2 T3, so V3 needs GitHub
+  `5de7a54a` with `t3_model="v3"`.
 - Chatterbox and Azure AI Speech are evaluation targets; integrate when they
   meet the provider contract and platform constraints.
 - Added Fish Speech and F5-TTS for review, not as selected engines. Licensing
