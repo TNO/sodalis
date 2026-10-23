@@ -34,7 +34,7 @@ Parakeet needs more than a 2 GB Podman VM; see the
 | Role | Local selection | External selection |
 | --- | --- | --- |
 | STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL`; `azure` with `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` (real-time, max 30 s per utterance) |
-| TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
+| TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `pocket-http` with `POCKET_TTS_URL`, `POCKET_TTS_API_KEY`, and `POCKET_TTS_VOICE`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
 | LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL` (the example targets host Ollama); `azure` with `AZURE_LLM_URL`, `AZURE_LLM_KEY`, and `AZURE_LLM_DEPLOYMENT` |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
 
@@ -64,6 +64,57 @@ non-root endpoint path is also honored. `HOME_API_URL` must be an origin
 without a path or query, since Caddy proxies the existing `/api/home/*` path.
 Keep external endpoints private and trusted. Browser code receives neither
 provider URLs nor credentials.
+
+### Use Pocket TTS on the Mac host
+
+Pocket TTS runs natively because its Metal backend is unavailable in Docker.
+Build and start the separately installed `pockettts.cpp` runtime from
+`~/tts-trials/runtime/pockettts.cpp`, using the external Q8 GGUF model under
+`~/tts-trials/models/pocket`. Bind its unauthenticated native API to loopback
+only (for example, `http://127.0.0.1:8093`) and use the runtime's documented
+voice-cloning API. Do not expose that native endpoint to Compose, the LAN, or
+the browser.
+
+Start Sodalis' host wrapper in another terminal. It registers the configured
+reference WAV, synthesizes a warm-up utterance, and only then reports ready.
+It exits with an error if registration or warm-up fails:
+
+```sh
+set -a
+. ./.env
+set +a
+HOST=0.0.0.0 PORT=8094 \
+  pnpm --filter @sodalis/server start:pocket-tts-host
+```
+
+Set `POCKET_TTS_NATIVE_URL` to the loopback native endpoint and
+`POCKET_TTS_REFERENCE_WAV` to the external reference file. The selected Dutch
+voice is the Piper `nl_NL-mls-medium` reference, speaker 12500, licensed
+CC BY 4.0; retain attribution to MLS/LibriVox. The WAV remains under
+`~/tts-trials/samples/` and must not be copied into the repository. Follow the
+model's separate license and use restrictions; do not redistribute its
+weights.
+
+For the Compose speech service, set `TTS_PROVIDER=pocket-http`,
+`POCKET_TTS_URL=http://host.docker.internal:8094`,
+`POCKET_TTS_API_KEY` to a strong random bearer key, and
+`POCKET_TTS_VOICE=piper-female-nl-reference`. The same key must be set in the
+host wrapper's environment. Only the wrapper is reachable by Compose; the
+native runtime remains loopback-only. Because the wrapper must accept
+container traffic, bind it to a private host interface reachable from Docker
+and allow only the local container/host-gateway path through the host firewall.
+Do not publish port 8094 to a public network. Linux Docker Engine may require
+an explicitly configured host-gateway address rather than
+`host.docker.internal`.
+
+The wrapper exposes authenticated `POST /v1/audio/speech`, `GET /v1/voices`,
+and `GET /v1/capabilities` endpoints. Pocket responses use mono 24 kHz PCM16.
+Dutch number normalization is applied only to Pocket; Piper and Azure retain
+their existing number handling. Provider selection is explicit and startup
+fails for missing settings; there is no silent cloud fallback. The runtime's
+streaming behavior is not advertised as a capability until the discrepancy
+between its documented PCM response and observed Pocket trial behavior is
+resolved.
 
 For the default stack, download both Piper voice files into these ignored
 paths. Only download a multilingual Whisper.cpp model if you explicitly

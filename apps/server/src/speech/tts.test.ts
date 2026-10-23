@@ -169,6 +169,9 @@ describe("speech synthesis API", () => {
   it("synthesizes long replies sequentially and inserts a PCM pause between chunks", async () => {
     const spokenTexts: string[] = [];
     const engine: SpeechSynthesisEngine = {
+      sampleRate: 24_000,
+      mimeType:
+        "audio/pcm;rate=24000;bits=16;channels=1;endianness=little",
       async *synthesize(speech) {
         spokenTexts.push(speech.text);
         yield new Uint8Array([1, 0]);
@@ -194,11 +197,14 @@ describe("speech synthesis API", () => {
     const audio = new Uint8Array(await response.arrayBuffer());
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "audio/pcm;rate=24000;bits=16;channels=1;endianness=little",
+    );
     expect(spokenTexts).toEqual([
       "This first sentence has enough words to make a substantial spoken chunk.",
       "This second sentence also has enough words to require a separate spoken chunk.",
     ]);
-    const silenceByteLength = Math.round((22050 * pauseMs) / 1000) * 2;
+    const silenceByteLength = Math.round((24_000 * pauseMs) / 1000) * 2;
     expect(audio.byteLength).toBe(4 + silenceByteLength);
   });
 

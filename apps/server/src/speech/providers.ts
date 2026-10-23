@@ -7,6 +7,7 @@ import { PiperHttpEngine } from "./PiperHttpEngine.js";
 import { AzureTtsEngine } from "./AzureTtsEngine.js";
 import { AzureRealtimeSttEngine } from "./AzureRealtimeSttEngine.js";
 import type { StreamingSpeechRecognitionEngine } from "./StreamingRecognition.js";
+import { PocketTtsHttpEngine } from "./PocketTtsHttpEngine.js";
 
 export interface SpeechProviderSettings {
   readonly STT_PROVIDER?: string;
@@ -22,6 +23,9 @@ export interface SpeechProviderSettings {
   readonly AZURE_TTS_URL?: string;
   readonly AZURE_TTS_KEY?: string;
   readonly AZURE_TTS_VOICE?: string;
+  readonly POCKET_TTS_URL?: string;
+  readonly POCKET_TTS_API_KEY?: string;
+  readonly POCKET_TTS_VOICE?: string;
 }
 
 function required(value: string | undefined, name: string): string {
@@ -81,6 +85,12 @@ export function createSpeechProviders(settings: SpeechProviderSettings): {
           endpoint: required(settings.AZURE_TTS_URL, "AZURE_TTS_URL"),
           key: required(settings.AZURE_TTS_KEY, "AZURE_TTS_KEY"),
           voice: required(settings.AZURE_TTS_VOICE, "AZURE_TTS_VOICE"),
+        });
+      case "pocket-http":
+        return new PocketTtsHttpEngine({
+          serverUrl: required(settings.POCKET_TTS_URL, "POCKET_TTS_URL"),
+          apiKey: required(settings.POCKET_TTS_API_KEY, "POCKET_TTS_API_KEY"),
+          voice: required(settings.POCKET_TTS_VOICE, "POCKET_TTS_VOICE"),
         });
       case "mock":
         return {

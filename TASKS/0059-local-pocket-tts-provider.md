@@ -1,6 +1,6 @@
 # 0059 Adding the local Pocket TTS provider
 
-Status: open
+Status: done
 Priority: high
 Subsystem: speech
 Depends on: 0057, 0058
@@ -36,3 +36,9 @@ engine seam, with no browser-to-engine access or silent cloud fallback.
 - 2026-10-23 Copilot: User-directed implementation request supersedes the
   prior defer-integration note in task 0036. Keep weights external and record
   any unresolved runtime/license constraints before integration.
+- 2026-10-23 Copilot: Added the host-side bearer-authenticated wrapper,
+  explicit `pocket-http` provider, Dutch normalization, warm-up, and host /
+  Compose setup documentation. Runtime audio streaming remains unadvertised
+  because the trial behavior and the runtime's streaming documentation
+  disagree. The Pocket runtime API design was implemented independently;
+  no tts-mlx source was copied.

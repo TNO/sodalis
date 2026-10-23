@@ -135,7 +135,7 @@ result.
 - [x] 0056 Cleaning Markdown before speech
 - [x] 0057 Normalizing Dutch and English speech text *(needs 0056)*
 - [x] 0058 Chunking speech by sentence *(needs 0056)*
-- [ ] 0059 Adding the local Pocket TTS provider *(needs 0057, 0058)*
+- [x] 0059 Adding the local Pocket TTS provider *(needs 0057, 0058)*
 - [ ] 0060 Preprocessing reference voices *(needs 0059)*
 - [ ] 0061 Aligning transcript words to audio *(needs 0024)*
 - [ ] 0062 Repairing transcript tails and onset timing *(needs 0061)*

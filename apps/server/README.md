@@ -114,6 +114,16 @@ Piper HTTP's format is specific to that adapter, not a generic engine
 protocol. `TTS_PROVIDER=azure` streams from Azure AI Speech instead. It
 requires `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE`.
 
+`TTS_PROVIDER=pocket-http` selects Pocket TTS only when
+`POCKET_TTS_URL`, `POCKET_TTS_API_KEY`, and `POCKET_TTS_VOICE` are explicitly
+set. The server normalizes Dutch text before sending it to Pocket, and
+streams 24 kHz mono PCM16 to the existing browser speech route. It never
+falls back to a cloud provider. Pocket's native runtime and Q8 GGUF model
+must be installed separately on the Mac host; neither weights nor reference
+audio are part of this repository. See
+[`docs/development-stack.md`](../../docs/development-stack.md#use-pocket-tts-on-the-mac-host)
+for host setup, endpoint security, and voice attribution.
+
 - `AZURE_TTS_URL` is a Speech or Foundry resource endpoint, or a regional
   `/cognitiveservices/v1` endpoint.
 - `AZURE_TTS_VOICE` is any Azure voice name, such as

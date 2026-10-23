@@ -490,7 +490,9 @@ export function createSpeechApp(
           for (const [index, textChunk] of chunks.entries()) {
             abortController.signal.throwIfAborted();
             if (index > 0 && ttsChunkPauseMs > 0) {
-              const silenceSamples = Math.round((22_050 * ttsChunkPauseMs) / 1000);
+              const silenceSamples = Math.round(
+                ((engine.sampleRate ?? 22_050) * ttsChunkPauseMs) / 1000,
+              );
               streamController.enqueue(new Uint8Array(silenceSamples * 2));
             }
             for await (const audioChunk of engine.synthesize(
@@ -525,7 +527,7 @@ export function createSpeechApp(
 
     return new Response(body, {
       headers: {
-        "content-type": PIPER_PCM_MIME_TYPE,
+        "content-type": engine.mimeType ?? PIPER_PCM_MIME_TYPE,
         "cache-control": "no-store",
         "x-sodalis-session-id": sessionId,
         "x-sodalis-speech-id": speechId,
