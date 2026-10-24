@@ -13,7 +13,10 @@ blender -b -noaudio --python-exit-code 1 \
 ```
 
 `extract_glb_texture.py` pulls a single texture, such as Unreal's baked iris,
-from a glTF export for use in `map_overrides`.
+from a glTF export for use in `map_overrides` or `outfit.textures`. It bakes
+the material's texture transform into the image; `--detail-from-roughness K`
+restores pattern detail that Unreal only kept in roughness.
+`extract_face_ao.py` does the same for the face occlusion map.
 
 `characters/anna.json` is an example config. Its paths point at local
 exports. Keep MetaHuman exports, DNA, textures, `arkit_mapping.json` and the

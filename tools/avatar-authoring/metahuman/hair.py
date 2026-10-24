@@ -43,12 +43,13 @@ def import_cards():
     return cards
 
 
-def root_mask(cards, frac=0.15):
+def root_mask(cards, frac=None):
     """Per card (connected component): vertices in the top `frac` of its height.
 
     Card corners sit on transparent atlas texels, so the atlas root->tip
     channel cannot label them; for a hanging bob the root end is the top end.
     """
+    frac = ROOT_FRAC if frac is None else frac
     me = cards.data
     n = len(me.vertices)
     parent = np.arange(n)
@@ -117,7 +118,7 @@ def fit(roots, target, iters=40):
         q = np.array([kd.find(x)[0] for x in p])
         pc, qc = roots.mean(0), q.mean(0)
         a, b = roots - pc, q - qc
-        s = float((a * b).sum() / (a * a).sum())
+        s = float((a * b).sum() / (a * a).sum()) if FIT_SCALE is None else float(FIT_SCALE)
         t = qc - s * pc
     err = np.linalg.norm(roots * s + t - q, axis=1)
     return s, t, err
@@ -167,6 +168,11 @@ VOLUME_CROWN = 0.11
 SCALP_MIN_Z_ABOVE_EYES = 0.015
 SCALP_TINT = np.array([0x2a, 0x1c, 0x14]) / 255  # sRGB, dark-brown root colour
 SCALP_STRENGTH = 0.85
+# Share of each card's height treated as root. Long hair needs less: a large share
+# reaches below the cranium and the fit shrinks the groom to pull it up.
+ROOT_FRAC = 0.15
+# None fits a uniform scale; a number fixes it (grooms are authored for their head).
+FIT_SCALE = None
 
 
 def configure(cfg):

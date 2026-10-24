@@ -429,7 +429,9 @@ python3 <repo>/tools/avatar-authoring/metahuman/bake_card_textures.py brows \
 ```
 
 `--gain` scales coverage into alpha; thin brow strands need more. For
-Anna, hair used `1a100a`/`4f3423` and brows `180f0a`/`3a281c`.
+Anna, hair used `1a100a`/`4f3423` and brows `180f0a`/`3a281c`. For Odette's
+near-black hair (Melanin 0.81, Redness 0.37), hair used `0d0907`/`110c09`
+and brows `140e0a`/`140e0a`, chosen by eye against her Unreal render.
 
 ### C3. Face ambient occlusion (optional)
 
@@ -437,9 +439,13 @@ If you made the glTF export, copy its baked face occlusion map next to the
 DCC maps. The build uses it when it is there:
 
 ```bash
-python3 <repo>/tools/avatar-authoring/metahuman/extract_face_ao.py \
+uv run -q --with pillow python <repo>/tools/avatar-authoring/metahuman/extract_face_ao.py \
   unreal/<name>Export.glb dcc/Maps/Head_Occlusion.png
 ```
+
+The script bakes the material's `KHR_texture_transform` into the image (see
+"Baked textures carry a UV transform" below). It prints the transform it
+applied.
 
 ### C4. Character config
 
@@ -464,9 +470,11 @@ do not apply.
 | `face.rest_lid_lift` | no (0.7) | Fraction of the character's own `eyeWide` baked into the rest pose |
 | `hair.FBX`, `hair.BASE`, `hair.SCALP_OUT` | with hair | Card FBX, baked texture, output for the scalp-tinted head colour |
 | `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, scalp colour (sRGB 0–1) |
+| `hair.ROOT_FRAC`, `hair.FIT_SCALE` | no (0.15, fitted) | Fraction of each card treated as root when fitting to the scalp; fixed fit scale instead of a fitted one. Long hair: `0.05` and `1.0` |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
 | `outfit.tuck` | no | `{inner new name: outer new name}`: cut the inner garment where the outer covers it, e.g. `{"Blouse": "Jeans"}` |
+| `outfit.textures` | no | `{new name: {"baseColor": PNG}}` replaces a garment's base colour (see "Blurred garment colour" below) |
 | `texture_cap` | no (2048) | Largest texture side; Sodalis recommends at most 2048 |
 | `map_overrides` | no | `{map name: PNG}` replacing a file in `maps`, e.g. `Eyes_Color` |
 
@@ -539,7 +547,9 @@ What the build does:
    belly between top and jeans. Garments are not tested against each other:
    if a top shows through the jeans, list it in `outfit.tuck`. The build
    then deletes the top's faces that the jeans cover, keeping a 2 cm strip
-   pushed just inside the waistband, so the top looks tucked in.
+   pushed just inside the waistband, so the top looks tucked in. Odette's
+   log: `TUCK Blouse into Jeans: removed 4842 of 29286 faces, pushed 478
+   verts inside`.
 7. **Export** (`build_avatar.export_glb`) with morph normals, then
    **post-process** (`gltf_morphs.py`): repairs fold normals and stores morph
    targets sparsely (see the eyelid observation below).
@@ -652,6 +662,39 @@ The DCC maps are 2048 px. "4K" packs are worth checking with `magick
 identify` or `sips -g pixelWidth`. Packs named 4K have turned out to be 2K,
 and glTF bakes at 4096 have turned out to be upscaled. Real 4K face maps
 (Materials Export) looked the same as 2K in Face framing, so ship 2K.
+
+### Baked textures carry a UV transform
+
+Unreal's glTF export bakes face and eye materials into textures with a
+`KHR_texture_transform` (Odette's face occlusion: scale 1.0057, 1.2220;
+offset −0.0029, −0.0095). Applied to the DCC head UVs without that
+transform, Odette's occlusion map drew dark creases across both cheeks;
+Anna's smaller transform only shifted hers slightly. `extract_face_ao.py`
+and `extract_glb_texture.py` bake the transform into the image. To find
+which map causes an artefact, strip single maps from a copy of the GLB and
+compare screenshots in Face framing.
+
+### Long hair shrinks or shows the scalp
+
+The fit matches card roots to the scalp. With `ROOT_FRAC` 0.15, roots of
+long cards reached below the cranium, so the fit shrank Odette's hair to
+0.89 and showed her scalp. `ROOT_FRAC` 0.05 with `FIT_SCALE` 1.0 gives the
+same root error (3.9 mm) at full size. Check the `HAIR_FIT` log line: a
+scale well below 1 points to this problem.
+
+### Blurred garment colour
+
+Unreal baked Odette's lace turtleneck to a blurred base colour; the lace
+pattern survived only in the roughness texture's green channel. Rebuild
+the base colour from it and set `outfit.textures`:
+
+```bash
+uv run -q --with pillow --with numpy python <repo>/tools/avatar-authoring/metahuman/extract_glb_texture.py \
+  --glb unreal/OdetteExport.glb --material <garment material> \
+  --detail-from-roughness 0.85 --out maps-override/Blouse_Basecolor.png
+```
+
+`K` (0–1) sets how strongly the roughness detail darkens the colour.
 
 ### Body and outfit
 

@@ -390,10 +390,16 @@ def load_config(path):
         if bad:
             raise ValueError(f"config {path}: outfit.tuck {bad} must map one new garment name "
                              f"to another, from {sorted(names)}")
+        textures = {k: v for k, v in cfg["outfit"].get("textures", {}).items() if not k.startswith("_")}
+        if set(textures) - names:
+            raise ValueError(f"config {path}: outfit.textures {sorted(set(textures) - names)} "
+                             f"are not garment names {sorted(names)}")
+        cfg["outfit"]["textures"] = {g: {k: resolve(v) for k, v in t.items()} for g, t in textures.items()}
     cfg["map_overrides"] = {k: resolve(v) for k, v in cfg.get("map_overrides", {}).items()
                             if not k.startswith("_")}
+    garment_maps = [p for t in cfg.get("outfit", {}).get("textures", {}).values() for p in t.values()]
     missing = [p for p in [cfg["head_fbx"], cfg["body_fbx"], cfg["dna"], cfg["maps"], *cfg["recipes"],
-                           *cfg["map_overrides"].values()]
+                           *cfg["map_overrides"].values(), *garment_maps]
                if not os.path.exists(p)]
     if missing:
         raise FileNotFoundError(f"config {path}: missing {missing}")
@@ -493,7 +499,7 @@ def main():
             raise RuntimeError(f"{o.name}: groups without bones {stray}")
     if cfg.get("outfit"):
         add_metahuman_outfit.add_outfit(body_arm, body, head, cfg["outfit"]["glb"], cfg["outfit"]["garments"],
-                                        cfg["outfit"].get("tuck"))
+                                        cfg["outfit"].get("tuck"), cfg["outfit"].get("textures"))
     build_avatar.cap_textures(cfg.get("texture_cap", 2048))
     if blend:
         bpy.ops.wm.save_as_mainfile(filepath=blend, compress=True)

@@ -221,10 +221,21 @@ def tuck_under(inner, outer, margin=TUCK_MARGIN, clearance=TUCK_CLEARANCE):
           f"pushed {pushed} verts inside")
 
 
-def add_outfit(rig, rig_body, rig_head, glb, garments_map, tuck=None):
+def replace_base_color(material, path):
+    bsdf = next(n for n in material.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    link = bsdf.inputs["Base Color"].links[0]
+    tex = link.from_node
+    if tex.type != "TEX_IMAGE":
+        raise RuntimeError(f"{material.name}: base colour is not an image texture")
+    tex.image = bpy.data.images.load(path)
+    print("GARMENT_TEXTURE", material.name, "baseColor <-", path)
+
+
+def add_outfit(rig, rig_body, rig_head, glb, garments_map, tuck=None, textures=None):
     """Import `glb` and keep {GLB mesh object name: new object/material name} garments on `rig`.
 
     `tuck` maps an inner garment's new name to the outer garment it is tucked into.
+    `textures` maps a new garment name to {"baseColor": png} replacing that texture.
     """
     assert rig.matrix_world == Matrix.Identity(4)
     before = set(bpy.data.objects)
@@ -272,6 +283,10 @@ def add_outfit(rig, rig_body, rig_head, glb, garments_map, tuck=None):
         if len(obj.material_slots) != 1:
             raise RuntimeError(f"{gname}: expected one material, got {len(obj.material_slots)}")
         obj.material_slots[0].material.name = new_name
+        for slot, path in (textures or {}).get(new_name, {}).items():
+            if slot != "baseColor":
+                raise ValueError(f"outfit.textures.{new_name}: unsupported slot {slot!r}")
+            replace_base_color(obj.material_slots[0].material, path)
         print("GARMENT", new_name, "verts", len(obj.data.vertices), "groups", len(obj.vertex_groups))
 
     worn = [bpy.data.objects[v] for v in garments_map.values()]

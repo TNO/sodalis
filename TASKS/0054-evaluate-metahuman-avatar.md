@@ -363,3 +363,19 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
 - 2026-10-22: Added GUI locations for first-time Unreal users: where the
   Launcher, Plugins, Content Drawer, Creator categories, Outliner and export
   dialogs are, and how to identify each required asset.
+- 2026-10-22: Merged `main` and added a second MetaHuman, **Odette**
+  (`?avatar=metahuman-odette-eval`; GLB 42.0 MB, 154k triangles, validator
+  passes with only the triangle warning). Same pipeline and visemes as Anna;
+  blouse tucked into the jeans (`outfit.tuck`). Fixes found on the way:
+  - Cheek creases came from the face occlusion map: Unreal's baked textures
+    carry a `KHR_texture_transform` that `extract_face_ao.py` ignored. It
+    now bakes it in; Anna's AO had a smaller offset and was rebuilt too.
+  - Long hair was fitted at scale 0.89, showing the scalp: new hair
+    `ROOT_FRAC`/`FIT_SCALE` options (Odette: 0.05, 1.0).
+  - The lace pattern exists only in the blouse's roughness texture:
+    `extract_glb_texture.py --detail-from-roughness` plus `outfit.textures`.
+  - Hair colours from `groom-colours.txt` (Melanin/Redness) were matched by
+    eye: hair `0d0907`/`110c09`, brows `140e0a`.
+  - Open: a faint straight-edged shading band on the left cheek in Face
+    framing (also on Anna); it remains with all hair hidden, so it is not
+    the hair.
