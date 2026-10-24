@@ -12,7 +12,7 @@ import type {
   ConversationSnapshot,
   ConversationState,
 } from "@sodalis/assistant";
-import type { AttentionTargetRegistry } from "@sodalis/avatar";
+import type { AttentionTargetRegistry, AvatarAsset } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import {
   createEnergyVoiceActivityDetector,
@@ -31,7 +31,8 @@ import type {
 import { AvatarConversationCard } from "./AvatarConversationCard.js";
 import { AvatarNotificationPanel } from "./AvatarNotificationPanel.js";
 import type { AvatarNotification } from "./AvatarNotificationPanel.js";
-import { AvatarViewport } from "./AvatarViewport.js";
+import { AvatarViewport, type AvatarSwitchOption } from "./AvatarViewport.js";
+import { AVATAR_CATALOGUE, DEFAULT_AVATAR_ID } from "./avatarCatalogue.js";
 import type { AvatarPresentationController } from "./AvatarPresentationController.js";
 import {
   createSpeechPlaybackController,
@@ -39,6 +40,9 @@ import {
 } from "./SpeechPlaybackController.js";
 
 interface DesktopAvatarOverlayAttrs {
+  /** The avatar to show; defaults to the catalogue default. */
+  asset?: AvatarAsset;
+  switchTo?: AvatarSwitchOption;
   targetRegistry?: AttentionTargetRegistry;
   onGeometryChange?: () => void;
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
@@ -55,6 +59,10 @@ interface DesktopAvatarOverlayAttrs {
   actionRuntime?: AssistantActionRuntime;
 }
 
+const DEFAULT_ASSET = (
+  AVATAR_CATALOGUE.find((entry) => entry.asset.id === DEFAULT_AVATAR_ID) ??
+  AVATAR_CATALOGUE[0]!
+).asset;
 const CLOUD_RECOGNIZER_NAMES: Readonly<Record<string, string>> = { azure: "Azure" };
 const TASKBAR_FLOOR_OVERLAP = 3;
 const TASKBAR_AVATAR_OCCLUSION_RATIO = 0.5;
@@ -826,6 +834,8 @@ export const DesktopAvatarOverlay =
 
       view(vnode: Vnode<DesktopAvatarOverlayAttrs>) {
         const viewportAttrs = {
+          asset: vnode.attrs.asset ?? DEFAULT_ASSET,
+          ...(vnode.attrs.switchTo ? { switchTo: vnode.attrs.switchTo } : {}),
           targetRegistry: vnode.attrs.targetRegistry,
           onScene(scene: AvatarSceneHandle | undefined) {
             avatarScene = scene;

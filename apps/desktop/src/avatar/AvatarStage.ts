@@ -5,11 +5,8 @@ import { createAttentionManager } from "./AttentionManager.js";
 import { createAvatarLab, createAvatarLabState } from "./AvatarLab.js";
 import { createAvatarPresentationController } from "./AvatarPresentationController.js";
 import { AvatarViewport } from "./AvatarViewport.js";
-import {
-  ACTIVE_AVATAR_ASSET,
-  ACTIVE_AVATAR_CREDIT,
-  AVATAR_CATALOGUE,
-} from "./defaultAvatar.js";
+import { AvatarChoice } from "./AvatarChoice.js";
+import { createAvatarSelection } from "./avatarCatalogue.js";
 import {
   pickOnDeviceVoice,
   playRecordedOnStage,
@@ -30,6 +27,10 @@ const RECORDED_BASE = `${import.meta.env.BASE_URL}avatars/eval/speech-nl/`;
  */
 export const AvatarStage = (): m.Component => {
   const registry = createAttentionTargetRegistry();
+  const selection = createAvatarSelection({
+    search: location.search,
+    onChange: () => m.redraw(),
+  });
   const lab = createAvatarLabState();
   lab.quality = "high";
   const Lab = createAvatarLab();
@@ -115,6 +116,7 @@ export const AvatarStage = (): m.Component => {
       const voice = pickOnDeviceVoice(voices);
       return m("main.avatar-stage", [
         m(AvatarViewport, {
+          asset: selection.selected.asset,
           look: "stage",
           targetRegistry: registry,
           onScene(next: AvatarSceneHandle | undefined) {
@@ -127,22 +129,8 @@ export const AvatarStage = (): m.Component => {
           },
         }),
         m("aside.avatar-stage-panel", [
-          m("h1", ACTIVE_AVATAR_ASSET.name),
-          m("p.avatar-attribution", [
-            m("a", { href: ACTIVE_AVATAR_CREDIT.href, target: "_blank", rel: "noreferrer" },
-              ACTIVE_AVATAR_CREDIT.label),
-            " · ",
-            m("a", { href: ACTIVE_AVATAR_CREDIT.licenceHref, target: "_blank", rel: "noreferrer" },
-              ACTIVE_AVATAR_CREDIT.licence),
-          ]),
-          m("nav.avatar-stage-avatars[aria-label='Avatars']",
-            AVATAR_CATALOGUE.list().map((asset) =>
-              m("a", {
-                href: `?stage&avatar=${encodeURIComponent(asset.id)}`,
-                "aria-current": asset.id === ACTIVE_AVATAR_ASSET.id ? "page" : undefined,
-              }, asset.name),
-            ),
-          ),
+          m("h1", selection.selected.asset.name),
+          m(AvatarChoice, { selection }),
           m("form.avatar-stage-say", {
             onsubmit: (event: Event) => {
               event.preventDefault();

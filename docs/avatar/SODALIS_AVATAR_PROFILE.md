@@ -1,7 +1,9 @@
 # Sodalis Avatar Profile 0.1
 
-Status: implementation contract with one included non-commercial example
-avatar; no model is approved for commercial use.
+Status: implementation contract with two included avatars: a non-commercial
+example and an original, rights-checked male avatar with user-approved visual
+preview. The male asset is approved for commercial redistribution; the desktop
+bundle containing the brunette is not.
 
 ## Runtime contract
 
@@ -43,9 +45,12 @@ required joints, skin attributes, morphs, supported materials, geometry, or
 valid bounds fail validation. Large geometry or textures warn but do not hide
 measurements.
 
-## Included example asset
+## Included assets
 
-The desktop currently loads the TalkingHead `brunette.glb` example by default:
+The desktop offers both included avatars through its Avatar choice and
+remembers the selection on the device; the male avatar is the default.
+
+### TalkingHead brunette (non-commercial example)
 
 - Local path: `apps/desktop/public/avatars/talkinghead-brunette.glb`
 - The `Wolf3D_Glasses` node is hidden by the desktop's `AvatarAsset` metadata.
@@ -61,6 +66,28 @@ The desktop shows source attribution and links the license beside the viewer.
 The model is included unchanged; its non-commercial restriction applies
 independently of the MIT license for Sodalis code. See
 `apps/desktop/public/avatars/NOTICE.md` when redistributing the asset.
+
+### Sodalis male, thuiszorg style
+
+- Local path: `apps/desktop/public/avatars/sodalis-male-thuiszorg.glb`
+- Design: [male thuiszorg-style avatar specification](./MALE_THUISZORG_AVATAR_SPEC.md)
+- Built by `tools/avatar-authoring/` from CC0 MakeHuman assets with Blender
+  4.5.14 LTS and MPFB 2.0.18; rig from TalkingHead's MPFB definition (MIT)
+  with rest bone orientations from TalkingHead's CC0 `mpfb.glb`.
+- Editable source: `tools/avatar-authoring/source/male-thuiszorg.blend`.
+- License: MIT; components and their licenses are listed in
+  `apps/desktop/public/avatars/sodalis-male-thuiszorg.manifest.json`.
+- SHA-256: `a5a93d42fce4a57ffafe00b39e8adb03df5105ed26fb98f9f7e567038b3ece33`
+- Validator: all profile checks pass; 39,132 triangles, 9 estimated draw
+  calls, 10 textures (largest 2048 px), 76 bones, and measured bounds of
+  1.15m × 1.82m × 0.49m. Its wider A-pose bounds are offset by
+  `framing.cameraDistanceScale: 0.82`.
+- Status: profile-valid, rights-checked, and visually approved by the user
+  (2026-10-19). The user reports smooth performance without noticeable
+  slowness or visual irregularities. Avatar Lab inspection covered
+  expressions, speech/visemes, user and UI-target gaze, head motion, and
+  reduced motion; it displayed 60 FPS in that preview session. This is not a
+  representative-hardware benchmark.
 
 ## Facial shape names
 
@@ -132,8 +159,10 @@ of a particular frame rate; actual performance depends on the browser, GPU,
 scene complexity, and viewport size.
 
 The desktop keeps Aster usable when WebGL setup, rendering, or context recovery
-or default model loading fails. The avatar viewer displays the error and offers
-a retry that recreates the scene and reloads the default asset. Visibility
+or model loading fails. The avatar viewer displays the error and offers a retry
+that recreates the scene and reloads the selected asset, plus a switch to the
+other included avatar. A failed load never silently changes the stored choice.
+Visibility
 changes pause/resume the render loop, and scene disposal removes
 observers/listeners, stops animation, disposes the runtime and renderer, and
 clears scene children.

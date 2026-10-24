@@ -28,6 +28,8 @@ and avatar foundation; later work is sequenced by explicit dependencies.
   *(needs 0010, 0012)*
 - [ ] 0015 Building in-app avatar selection *(needs 0014)*
 - [ ] 0054 Evaluating a MetaHuman avatar export *(needs 0014)*
+- [x] 0055 Adding a male thuiszorg-style avatar option
+  *(needs 0010, 0012, 0013, 0016; precedes 0014/0015)*
 
 ## Desktop avatar presentation
 

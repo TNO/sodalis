@@ -5,6 +5,8 @@ import { createAppIntegrationRegistry } from "@sodalis/app-sdk";
 import { DesktopAvatarOverlay } from "./avatar/DesktopAvatarOverlay.js";
 import { createAttentionManager } from "./avatar/AttentionManager.js";
 import { createAvatarPresentationController } from "./avatar/AvatarPresentationController.js";
+import { createAvatarSelection } from "./avatar/avatarCatalogue.js";
+import { AvatarChoice } from "./avatar/AvatarChoice.js";
 import type { SpeechInputController } from "@sodalis/speech";
 import {
   createAvatarLab,
@@ -17,7 +19,6 @@ import {
   type DesktopHost,
 } from "@sodalis/desktop-host";
 import { createDesktopAssistantActionRuntime } from "./assistant/createDesktopAssistantActions.js";
-import { ACTIVE_AVATAR_CREDIT } from "./avatar/defaultAvatar.js";
 import { isStageRequested } from "./avatar/stageRoute.js";
 import { createSampleNotes } from "./integrations/SampleNotes.js";
 import "mithril-materialized/index.css";
@@ -48,6 +49,14 @@ const DesktopShell = () => {
     avatarLab: createAvatarLabState(),
     sampleNotesFocused: false,
   };
+  const avatarSelection = createAvatarSelection({
+    search: location.search,
+    onChange: () => m.redraw(),
+    onError(error) {
+      state.presentationError = error.message;
+      m.redraw();
+    },
+  });
   const presentation = createAvatarPresentationController({
     onChange: m.redraw,
     onError(error) {
@@ -76,6 +85,18 @@ const DesktopShell = () => {
     attention,
     integrations,
   });
+
+  const avatarSwitchOption = () => {
+    const other = avatarSelection.entries.find(
+      (entry) => entry !== avatarSelection.selected,
+    );
+    return other
+      ? {
+          name: other.asset.name,
+          select: () => avatarSelection.select(other.asset.id),
+        }
+      : undefined;
+  };
 
   const connect = async (frame: HTMLIFrameElement) => {
     state.desktopFrame = frame;
@@ -162,6 +183,8 @@ const DesktopShell = () => {
                   ],
                 ),
                 m(DesktopAvatarOverlay, {
+                  asset: avatarSelection.selected.asset,
+                  switchTo: avatarSwitchOption(),
                   targetRegistry: avatarTargetRegistry,
                   onGeometryChange: () => attention.refresh(),
                   gazeOverlay: state.avatarLab.gazeOverlay,
@@ -199,28 +222,7 @@ const DesktopShell = () => {
               m("div.assistant-heading", [
                 m("h2#assistant-title", "Assistant"),
               ]),
-              m("p.avatar-attribution", [
-                "Avatar model: ",
-                m(
-                  "a",
-                  {
-                    href: ACTIVE_AVATAR_CREDIT.href,
-                    target: "_blank",
-                    rel: "noreferrer",
-                  },
-                  ACTIVE_AVATAR_CREDIT.label,
-                ),
-                " · ",
-                m(
-                  "a",
-                  {
-                    href: ACTIVE_AVATAR_CREDIT.licenceHref,
-                    target: "_blank",
-                    rel: "noreferrer",
-                  },
-                  ACTIVE_AVATAR_CREDIT.licence,
-                ),
-              ]),
+              m(AvatarChoice, { selection: avatarSelection }),
               import.meta.env.DEV
                 ? m(AvatarLab, {
                     scene: state.avatarScene,

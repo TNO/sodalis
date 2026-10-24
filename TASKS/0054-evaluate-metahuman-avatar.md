@@ -354,3 +354,12 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   TalkingHead's `realtime` channel; lip correlation for Dutch clip 01 went
   from 0.71 to 0.86, with the mouth about 60 ms ahead of the audio. The
   system voice stops on `onend`. See the tutorial's "Lip-sync timing".
+- 2026-10-22: Expanded the linked tutorial into a reusable, character-neutral
+  Unreal-to-Blender checklist. Anna's asset names and colours are examples;
+  the guide now covers first-time setup, rigging/assembly order, the required
+  exports, Windows-to-Mac hand-off and common Unreal export failures. The
+  dev-only avatar stage described there is still on `mpfb-avatar-pipeline`,
+  not `main`.
+- 2026-10-22: Added GUI locations for first-time Unreal users: where the
+  Launcher, Plugins, Content Drawer, Creator categories, Outliner and export
+  dialogs are, and how to identify each required asset.

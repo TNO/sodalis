@@ -1,38 +1,83 @@
 #!/usr/bin/env bash
-# Installs the MPFB extension and the pinned CC0 asset packs used by build_avatar.py.
+# Prepares a private, pinned Blender + MPFB authoring environment for Sodalis avatars.
+# Nothing is installed system-wide; everything lives in $SODALIS_AVATAR_CACHE.
 set -euo pipefail
 
-BLENDER="${BLENDER:-blender}"
-CACHE="${SODALIS_MPFB_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/sodalis/mpfb-packs}"
-HERE="$(cd "$(dirname "$0")" && pwd)"
-BASE="https://files.makehumancommunity.org/asset_packs"
+CACHE="${SODALIS_AVATAR_CACHE:-$HOME/.cache/sodalis-avatar-authoring}"
+DL="$CACHE/downloads"
+mkdir -p "$DL"
 
-# name|url|sha256
-PACKS=(
-  "makehuman_system_assets_cc0.zip|$BASE/makehuman_system_assets/makehuman_system_assets_cc0.zip|b542127a8e25547c7c29c19f2d1d2adb9a664c80396ecd694095dbc8028a0107"
-  "faceunits01.zip|https://files.makehumancommunity.org/functional/faceunits01.zip|d113107bd7eb59f3af4df6fc0ec29bfcc593f496d0b336aec14f086a80ce7146"
-  "visemes02.zip|https://files.makehumancommunity.org/functional/visemes02.zip|a69ab6fb95ddd5f56f70acc7e859f5f9c6ae613c527d577ea1571eff2183d29e"
-  "skins01_cc0.zip|$BASE/skins01/skins01_cc0.zip|7495ab99287053bd19ff1636114e64b608994d9f7437fea6cc75ea387f96dba9"
-  "skins02_cc0.zip|$BASE/skins02/skins02_cc0.zip|1613f1ef3afca53094511d26620ed7cf1d2dedc29ed3d384d60bdebe250698ae"
-  "system_eye_materials01_cc0.zip|$BASE/system_eye_materials01/system_eye_materials01_cc0.zip|acad4636c08ff96ac8a27775cfa071052c8cba9b21e0029b649bdd6ec7aeb332"
-  "system_hair_materials01_cc0.zip|$BASE/system_hair_materials01/system_hair_materials01_cc0.zip|bfdbbf3407a7877e2ad5bee211310709b51cc6203e73c90bbb2adf71375848fe"
-  "system_hair_materials02_cc0.zip|$BASE/system_hair_materials02/system_hair_materials02_cc0.zip|c69aec30698734b8b57f6876d4ba8f6231535a776f98adb92c7bbe4acdea7b74"
+BLENDER_VERSION=4.5.14
+BLENDER_ARCHIVE="blender-$BLENDER_VERSION-linux-x64.tar.xz"
+BLENDER_SHA256=9ba871ff2ecd36526b77432745980b7e6664ecd0c7ca11c48849073dcfe06da3
+MPFB_ARCHIVE=add-on-mpfb-v2.0.18.zip
+MPFB_SHA256=c075b3e9b94b8e5556a5f03f4653602d02ea306de08126e8f55ed6dee28a2dad
+TALKINGHEAD_COMMIT=2afe6d79779313db8909badebf46f9805a6c7b70
+MH=https://files.makehumancommunity.org
+
+# file|url|sha256
+DOWNLOADS=(
+  "$BLENDER_ARCHIVE|https://download.blender.org/release/Blender4.5/$BLENDER_ARCHIVE|$BLENDER_SHA256"
+  "$MPFB_ARCHIVE|https://extensions.blender.org/download/sha256:$MPFB_SHA256/$MPFB_ARCHIVE|$MPFB_SHA256"
+  "makehuman_system_assets_cc0.zip|$MH/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip|b542127a8e25547c7c29c19f2d1d2adb9a664c80396ecd694095dbc8028a0107"
+  "skins02_cc0.zip|$MH/asset_packs/skins02/skins02_cc0.zip|1613f1ef3afca53094511d26620ed7cf1d2dedc29ed3d384d60bdebe250698ae"
+  "system_clothes_materials01_cc0.zip|$MH/asset_packs/system_clothes_materials01/system_clothes_materials01_cc0.zip|d99fdd8d393b46c545ad40ac6f1304c43dd47e215300e0021d740124b5cd05f5"
+  "system_hair_materials01_cc0.zip|$MH/asset_packs/system_hair_materials01/system_hair_materials01_cc0.zip|bfdbbf3407a7877e2ad5bee211310709b51cc6203e73c90bbb2adf71375848fe"
+  "visemes02.zip|$MH/functional/visemes02.zip|a69ab6fb95ddd5f56f70acc7e859f5f9c6ae613c527d577ea1571eff2183d29e"
+  "faceunits01.zip|$MH/functional/faceunits01.zip|d113107bd7eb59f3af4df6fc0ec29bfcc593f496d0b336aec14f086a80ce7146"
+  "talkinghead.mpfbskel|https://raw.githubusercontent.com/met4citizen/TalkingHead/$TALKINGHEAD_COMMIT/blender/MPFB/talkinghead.mpfbskel|a3965c8298137dbc07cadcd0863974fc2e523a62245cf4719b5f266d9cbad058"
+  "talkinghead.mhw|https://raw.githubusercontent.com/met4citizen/TalkingHead/$TALKINGHEAD_COMMIT/blender/MPFB/talkinghead.mhw|8d0175a31e2255a322efbcd051a2a0c738a552168feaa28a3975d6be22c8af0e"
 )
 
-command -v "$BLENDER" >/dev/null || { echo "Blender 5.2+ is required (set BLENDER=/path/to/blender)." >&2; exit 1; }
-
-echo "Installing the MPFB extension from extensions.blender.org…"
-"$BLENDER" -b -noaudio --online-mode --command extension install -s -e mpfb
-
-mkdir -p "$CACHE"
-zips=()
-for entry in "${PACKS[@]}"; do
-  IFS="|" read -r name url sha <<<"$entry"
-  file="$CACHE/$name"
-  [[ -f "$file" ]] || curl -fL --retry 3 -o "$file" "$url"
-  echo "$sha  $file" | shasum -a 256 -c - >/dev/null || { echo "Checksum mismatch: $file" >&2; exit 1; }
-  zips+=("$file")
+for entry in "${DOWNLOADS[@]}"; do
+  IFS='|' read -r file url sha <<<"$entry"
+  if ! echo "$sha  $DL/$file" | sha256sum -c --status - 2>/dev/null; then
+    echo "Downloading $file"
+    curl -sSfL -o "$DL/$file" "$url"
+    echo "$sha  $DL/$file" | sha256sum -c -
+  fi
 done
 
-"$BLENDER" -b -noaudio --python-exit-code 1 --python "$HERE/load_packs.py" -- "${zips[@]}"
-echo "MPFB and asset packs are ready."
+if [ ! -x "$CACHE/blender-$BLENDER_VERSION-linux-x64/blender" ]; then
+  tar -xf "$DL/$BLENDER_ARCHIVE" -C "$CACHE"
+fi
+
+# Blender needs libSM/libICE; extract them privately when the host lacks them.
+LIBDIR="$CACHE/libs/usr/lib/x86_64-linux-gnu"
+if LD_LIBRARY_PATH="$LIBDIR" ldd "$CACHE/blender-$BLENDER_VERSION-linux-x64/blender" | grep -q 'not found'; then
+  mkdir -p "$CACHE/debs"
+  (cd "$CACHE/debs" && apt-get download libsm6 libice6)
+  for deb in "$CACHE"/debs/*.deb; do dpkg-deb -x "$deb" "$CACHE/libs"; done
+fi
+
+cat >"$CACHE/blender.sh" <<EOF
+#!/usr/bin/env bash
+# Runs the cached Blender with private runtime libraries and an isolated user profile.
+export LD_LIBRARY_PATH="$LIBDIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+export BLENDER_USER_RESOURCES="$CACHE/blender-user"
+exec "$CACHE/blender-$BLENDER_VERSION-linux-x64/blender" "\$@"
+EOF
+chmod +x "$CACHE/blender.sh"
+
+"$CACHE/blender.sh" -b --factory-startup --command extension install-file \
+  -r user_default -e "$DL/$MPFB_ARCHIVE" >/dev/null
+
+# Install asset packs and register the TalkingHead rig as an MPFB custom rig.
+"$CACHE/blender.sh" -b --python-expr "
+import json, os, zipfile
+from bl_ext.user_default.mpfb.services import LocationService
+data = LocationService.get_user_data()
+for pack in ['makehuman_system_assets_cc0', 'skins02_cc0', 'system_clothes_materials01_cc0',
+             'system_hair_materials01_cc0', 'visemes02', 'faceunits01']:
+    zipfile.ZipFile(os.path.join('$DL', pack + '.zip')).extractall(data)
+rigs = os.path.join(data, 'rigs')
+os.makedirs(rigs, exist_ok=True)
+rig = json.load(open(os.path.join('$DL', 'talkinghead.mpfbskel')))
+rig['identifying_bones'] = ['LeftToe_End']
+json.dump(rig, open(os.path.join(rigs, 'talkinghead.json'), 'w'), indent=2)
+weights = json.load(open(os.path.join('$DL', 'talkinghead.mhw')))
+json.dump(weights, open(os.path.join(rigs, 'weights.talkinghead.json'), 'w'))
+print('SODALIS_SETUP_OK', data)
+" 2>&1 | grep -E 'SODALIS_SETUP_OK|Error' || { echo "MPFB asset setup failed" >&2; exit 1; }
+
+echo "Authoring environment ready: $CACHE/blender.sh"

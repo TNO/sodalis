@@ -3,9 +3,13 @@
 This tutorial turns a character made in MetaHuman Creator into a single GLB file
 that Sodalis (TalkingHead 1.7) can animate. The GLB has the 52 ARKit face
 shapes, the 15 Oculus visemes, eye bones and a Mixamo/Ready Player Me
-skeleton. It works for any MetaHuman. **Anna**, a 30-year-old woman with a
-short layered bob, crop top, jeans and sneakers, is the worked example
-throughout ([TASKS/0054](../../TASKS/0054-evaluate-metahuman-avatar.md)).
+skeleton. It is a workflow for **new** MetaHumans, not a recipe for
+recreating Anna. Anna is the only character tested end to end so far and is
+used only as the example
+([TASKS/0054](../../TASKS/0054-evaluate-metahuman-avatar.md)). Use `<name>`
+for a lowercase character folder/id (Anna: `anna`), `<MHC>` for its Unreal
+MetaHuman Character asset (Anna: `MHC_Anna`), and `<repo>` for your Sodalis
+checkout. Replace these placeholders in commands and filenames.
 
 ![Anna in Sodalis, Bust framing](images/metahuman/anna-bust.jpg)
 
@@ -15,6 +19,18 @@ throughout ([TASKS/0054](../../TASKS/0054-evaluate-metahuman-avatar.md)).
 > derived from Epic's pose asset, or the resulting GLB. The repository
 > ignores `apps/desktop/public/avatars/eval/` for that reason. The scripts in
 > `tools/avatar-authoring/metahuman/` are ours and contain no Epic content.
+
+## Next-character checklist
+
+After the one-time setup in A0 and B:
+
+1. In Creator (A1), select skin, card-capable hair and brows, optional
+   garments; record groom colours. Rig, download texture sources, assemble.
+2. Export DCC ZIP, head/body FBX, and hair/brow card FBX + attribute PNG
+   (A2). Export the ARKit mapping once per Unreal version. Export a GLB
+   only when you need garments or the optional face AO.
+3. Check and transfer the files in A3, prepare textures and config in C,
+   build in D, then inspect in E.
 
 ## Why not Unreal's own glTF export?
 
@@ -59,7 +75,7 @@ flowchart LR
 
 | Stage | Where | Time |
 | --- | --- | --- |
-| A. Create and export | Unreal 5.6+ with the MetaHuman plugin | 30–60 min |
+| A. Create and export | Unreal 5.6+ with the MetaHuman plugin (tested 5.8.3) | Allow extra time for first-time downloads |
 | B. One-time Mac setup | Blender 5.2, OpenRigLogic | 15 min |
 | C. Prepare inputs | Python scripts | 5 min |
 | D. Build | Blender, headless | about 35 s |
@@ -69,64 +85,274 @@ flowchart LR
 
 Unreal runs on Windows here (more disk space); Part B onwards runs on a Mac.
 The menus below were checked with UE 5.8.3. Names can move between versions.
+If a label differs, use the search box in the panel or menu you are in; the
+instructions name the panel so you know where to search.
 
-### A1. Create the character
+### Finding your way in the Unreal Editor
 
-Make the MetaHuman in Creator. A few settings matter for the conversion:
+| Part of the editor | Where it is | How to open it if it is missing |
+| --- | --- | --- |
+| **Main menu** (*File*, *Edit*, *Window*, *Tools*, *Help*) | Top-left of the main editor window | Always visible |
+| **Viewport** | The large 3D view in the middle | *Window > Viewports > Viewport 1* |
+| **Outliner** | Top-right; lists actors placed in the open level | *Window > Outliner > Outliner 1* |
+| **Details** | Right, below the Outliner; settings of the selected item | *Window > Details > Details 1* |
+| **Content Drawer / Content Browser** | Bottom-left button *Content Drawer*, or `Ctrl+Space`; shows project files (assets) | *Window > Content Browser > Content Browser 1* opens a docked copy |
 
-- **Hair and eyebrows.** Choose groom styles that also ship **card**
-  meshes; the conversion uses the cards, not the strands. Write down the
-  groom colours. The card export has no colour map, so you recreate the
-  colours in step C2.
+In the Content Browser, the **folder tree** is on the left, the **asset
+grid** in the middle, the **Search** box above the grid, and **Settings**
+(gear icon) at the top-right of the browser. *Right-click* an asset for its
+context menu; *double-click* it to open it in its own editor tab. Hover an
+asset to see its full name and type.
 
-  ![Groom settings for Anna's hair and eyebrows](images/metahuman/creator-grooms.png)
+### A0. One-time Unreal setup
 
-- **Outfit.** Garments only reach Sodalis through the glTF export. Keep the
-  default skin-weight fixes on (*Prune*, *Relax*, *Hammer*, *Clamp*,
-  *Normalize*). They are not what corrupts the glTF weights; the
-  conversion recomputes the weights anyway.
+1. **Install Unreal.** Open **Epic Games Launcher**, sign in, then select
+   *Unreal Engine* in the left sidebar and the **Library** tab at the top.
+   Next to *ENGINE VERSIONS*, click **+**, choose the version (5.8.3 was
+   tested), and click **Install**. Before or after installation, click the
+   small arrow next to that engine's *Launch* button and choose
+   **Options**; tick **MetaHuman Creator Core Data**, then **Apply**. Stay
+   signed in: full rig creation and texture synthesis use Epic's online
+   services.
+2. **Create a project.** In the Launcher, click **Launch** on that engine.
+   In *Unreal Project Browser*, choose **Games > Blank**, select
+   *Blueprint*, choose a local folder with plenty of free space, enter a
+   project name, and click **Create**. Avoid cloud-synced folders: MetaHuman
+   downloads are large.
+3. **Enable plugins.** In the main editor, choose **Edit > Plugins**. Use
+   the search box at the top of the Plugins window:
+   - Search `MetaHuman Creator`; tick **MetaHuman Creator**.
+   - If you will export clothing, search `glTF` and tick **glTF Exporter**.
+   - Do not enable the experimental *MetaHuman Creator - UAF support* plugin;
+     this workflow does not need it.
+   Click **Restart Now** when Unreal asks, or close and reopen the project.
+4. **Show plugin content.** Open the **Content Drawer** (bottom-left, or
+   `Ctrl+Space`). Click its **Settings** gear at the top-right and turn on
+   **Show Plugin Content**. A *Plugins* section appears in the folder tree.
+   This is needed to find the ARKit mapping and groom card assets.
+5. **Get the character.** For a Fab character, open **Window > Fab** in the
+   main editor (or the Fab button in the toolbar, if shown), sign in, find the
+   listing in **My Library**, and choose **Add to Project**. Wait for the
+   download notification in the bottom-right. Then find its
+   **MetaHuman Character** asset in the Content Browser; its icon/tooltip
+   says *MetaHuman Character*. For a new character, use the next section.
 
-  ![Outfit settings: crop top, sneakers, jeans](images/metahuman/creator-outfit-clothing.png)
+### A1. Create and assemble a character
 
-- **Makeup.** A no-makeup texture set works best. Dark eyeshadow baked into
-  the face colour reads as "double eyes" in a browser and makes closed lids
-  look bruised. Apply makeup in Creator only if you want it in the avatar.
+The **Creator** is the editor tab that opens when you double-click a
+MetaHuman Character asset. Its category buttons run down the **left edge**,
+the character preview is in the middle, and the selected category's settings
+are on the **right**. Exact category names can differ by version; if a step
+names a setting you cannot see, click through the left-edge categories or
+use the right panel's search box.
 
-- **Preview.** Keep *Grooms* and *Outfit Clothing* set to *Visible* and the
-  face and body on the *Idle* template, so the export captures the
-  character as you see it.
+1. **Create or open `<MHC>`.** In the Content Drawer, open a folder such as
+   *Content*, right-click empty space in the asset grid, and search the menu
+   for **MetaHuman Character**. Create it, type `<MHC>` (for example
+   `MHC_Odette`) and press `Enter`. Double-click it to open Creator. For a
+   Fab character, double-click its existing MetaHuman Character asset
+   instead. Edit face, body and skin only if needed.
+2. **Choose card-capable hair and brows.** Open the left-edge hair/groom
+   category (*Hair and Clothing* or *Grooms*). Select hair and eyebrow
+   styles that offer **cards**, not only strands. In the right panel, click
+   each **Hair Color** swatch and record its **Melanin** and **Redness**
+   values for hair and brows in `groom-colours.txt`. Also record whether
+   *Use Ombre* is enabled and any other active colour effects. This
+   MetaHuman picker does **not** provide Hex sRGB: C2 needs separately
+   chosen hex colours to approximate the appearance, because the card
+   atlas has coverage but no baked colour. After assembly, confirm the
+   styles have
+   `*_CardsMesh_Group0_LOD0` assets; otherwise select a style with cards.
+   Anna used `Hair_S_BobLayered` and `Eyebrows_L_Shaded`.
 
-  ![Preview details panel](images/metahuman/creator-preview-details.png)
+   ![Anna's groom settings as an example](images/metahuman/creator-grooms.png)
+
+3. **Add clothing if wanted.** In the clothing/outfit category, choose the
+   outfit. Fab outfits are Chaos Outfit assets; the DCC export does **not**
+   contain them, so you will need the optional GLB in A2.5. Keep the default
+   fitting/skin-weight fixes (*Prune*, *Relax*, *Hammer*, *Clamp*,
+   *Normalize*); the converter transfers garment weights from the FBX body.
+   Record any custom garment colours, which the GLB bakes.
+
+   ![Anna's outfit settings as an example](images/metahuman/creator-outfit-clothing.png)
+
+4. **Check preview settings.** Decide whether to bake makeup into the
+   exported skin. For Anna, no makeup avoided dark eyelids; makeup is a
+   character choice, not a pipeline requirement. In the right panel's
+   *Preview* settings, keep *Grooms* and *Outfit Clothing* **Visible**, and
+   face/body on *Idle*.
+
+   ![Preview settings](images/metahuman/creator-preview-details.png)
+
+5. **Rig and download textures.** When appearance is final, click
+   **Create Full Rig** in Creator's toolbar or rig category. Wait for the
+   progress notification in the bottom-right. Then click **Download Texture
+   Sources** (in the skin/material category or the same rig/texture
+   controls). Rigging locks some face/body texture controls behind a warning;
+   if you need to change them, remove the rig, edit, then rig again.
+6. **Assemble.** Click the left-edge **Assembly** category. Choose
+   **UE Cine** to retain high-detail LOD0 meshes, then click
+   **Assemble**. If choosing **UE Optimized**, verify the exported FBXs
+   still contain LOD0 before building. The tested example used standard,
+   non-UAF output. Assembly creates a character Blueprint (`BP_...`) and
+   skeletal meshes; the MetaHuman Character asset itself can be elsewhere
+   in *Content*, and DCC Export alone does not create these assembled
+   assets. Note the output folder shown by Assembly rather than assuming
+   it matches the Character asset's folder. Assembly is distinct from
+   **DCC Export**; in UE 5.8 DCC Export moved to the *Export* category.
+   After later Creator edits, assemble again before exporting from the
+   project. Then choose **File > Save All** in the main editor.
 
 ### A2. Exports to make
 
-Put everything for one character in one folder, e.g.
-`~/avatar-work/<name>/`.
+Keep one folder per character on Windows, e.g. `Downloads\<name>\`, with
+these inputs for the hand-off in A3. Names in screenshots are **Anna
+examples**; use the assets belonging to your `<MHC>` and its chosen grooms.
 
-| Export | How | Used for |
-| --- | --- | --- |
-| **DCC export** (zip) | Creator: *Export > DCC Export*. Do it once without makeup. | `head.dna`, `body.dna`, `Maps/*.png` (2K): head, body, teeth, eyes, eyelashes |
-| **Head and body FBX** | Content Browser: right-click the face and body skeletal meshes > *Asset Actions > Export* > FBX | Meshes, skin weights and skeleton. Unreal exports them at 0.01 scale with intermediate empties; the build fixes both. |
-| **Hair and eyebrow cards** | The groom's `*_CardsMesh_Group0_LOD0` static mesh > *Export* > FBX, and the `*_CardsAtlas_Attribute` texture > *Export* > PNG | Hair and brows |
-| **ARKit mapping** | Content Browser, *Settings > Show Plugin Content*, find `PA_MetaHuman_ARKit_Mapping` (MetaHuman plugin), right-click > *Asset Actions > Export* > `.T3D` | Which rig controls make each ARKit shape |
-| **glTF export** (optional) | Place the MetaHuman in a level, select it, *File > Export Selected* > `.glb`, settings below | Garments; face ambient occlusion |
+#### A2.1 DCC ZIP (required)
 
-The glTF export settings that worked for Anna:
+In Creator, click the left-edge **Export** category, then **DCC Export**
+(in older versions, look in *Assembly*). Save the downloaded ZIP as
+`<MHC>_DCC.zip` in the character folder. In Windows File Explorer,
+right-click the ZIP, choose **Extract All…**, and confirm it includes
+`head.dna`, `body.dna`, and `Maps/Head_Basecolor.png` plus body, teeth,
+eyes and eyelash maps. **DCC Export has no 4K setting.** Check the
+dimensions of `Maps/Head_Basecolor.png` (right-click > *Properties* >
+*Details*), not a 1024 px preview image; Anna's actual maps were 2048 px.
+Keep the ZIP or its extracted contents outside git.
 
-![Unreal glTF export settings](images/metahuman/unreal-gltf-export-settings.png)
+#### A2.2 Head and body FBX (required)
 
-- *Export Uniform Scale* 0.01, so the export is in metres.
-- *Default Material Bake Size* 1024 with *Auto-detect* gives 2K garment maps
-  where the source has them. Don't force 4096: it upscales (see the table
-  above) and the GLB grows from about 0.9 GB to 1.1 GB.
-- *Export Morph Targets* and *Export Vertex Skin Weights* can stay on; the
-  conversion uses neither.
-- *Export Thin Translucent Materials* does not repair the lashes.
+1. First complete **Assembly** in A1. The DCC ZIP does not make the mesh
+   assets appear in the Content Browser. Open the Content Drawer, select
+   *Content* in its left tree and clear any text in the search field above
+   that tree (for example `Texture`) and the asset-grid Search field.
+   Remove any active type filters using the **Filter** button beside the
+   asset-grid Search field.
+2. Open the folder reported by Assembly (often under *Content >
+   MetaHumans*). If you cannot find it, search from *Content* for the new
+   `BP_` Blueprint with your character's name; right-click it and choose
+   **Show in Folder View** to locate the assembled output. If no Blueprint
+   appears, return to the Character asset (which may be directly under
+   *Content*) and check that Assembly finished successfully.
+3. In the assembled output, use the **Filter** button and choose
+   **Skeletal Mesh** if the folder is busy. Hover candidates to identify
+   the assembled **face/head** and **body** meshes; they may be in a
+   subfolder rather than beside the Blueprint. Do not choose the Blueprint,
+   a Skeleton, a Physics Asset, or a Groom.
+4. Right-click the face mesh, choose **Asset Actions > Export…**, select
+   **FBX** as the file type, and save `<MHC>_Head.FBX`. Accept the default
+   FBX export options unless they disable mesh LODs. Repeat for the body,
+   saving `<MHC>_Body.FBX`.
 
-The "Materials Export" of the unbaked material inputs (`T_Face_*`,
-`T_Body_*`) gives real 4096 px face maps with the DCC head's UVs. For Anna
-they were indistinguishable from 2K in Face framing, and the body colour is an
-untinted layer that Unreal tints in its shader. They are not needed.
+The Blender build selects LOD0 and fixes Unreal's 0.01-scale FBX hierarchy.
+
+#### A2.3 Hair and brow cards (for a character with hair/brows)
+
+For **each selected groom** (normally one hair and one brow groom):
+
+1. Search the Content Drawer for the groom style name you selected, for
+   example `BobLayered` or `Eyebrows_L_Shaded`. *Show Plugin Content* must
+   be on. If several match, right-click the selected groom and choose
+   **Reference Viewer** to see linked assets.
+2. Find the **Static Mesh** whose name ends in
+   `_CardsMesh_Group0_LOD0`. Right-click it, choose **Asset Actions >
+   Export…**, select **FBX**, and save it with the same name.
+3. Find the **Texture** whose name ends in `_CardsAtlas_Attribute`.
+   Right-click it, choose **Asset Actions > Export…**, choose **PNG** in the
+   *Save as type* list, and save it with the same name.
+
+The hair and brow atlases are different. Do not export lash cards: the
+build uses the DCC eyelashes.
+
+#### A2.4 ARKit mapping (once per Unreal version)
+
+With *Show Plugin Content* enabled, type `PA_MetaHuman_ARKit_Mapping` in
+the Content Drawer's Search box. If nothing appears, select *Plugins* in the
+folder tree first, then search again. Right-click the pose asset, choose
+**Asset Actions > Export…**, and save the `.T3D` outside the per-character
+folder, e.g. in `Downloads\metahuman-shared\`. C1 converts it once; reuse
+the mapping for characters built with that version. Keep this Epic-derived
+data out of git.
+
+#### A2.5 GLB (only for garments or optional face AO)
+
+1. In the main editor, choose **File > New Level…**, select **Basic**, and
+   click **Create**. Then choose **File > Save Current Level As…** and save
+   it, for example as `<name>_Export`. An **Empty** level has no lights; in
+   *Lit* view the character may show only an outline while *Unlit* still
+   shows it.
+2. In the Content Drawer, locate the assembled character Blueprint (`BP_...`)
+   as in A2.2, and drag it (not the MetaHuman Character asset) into the
+   Viewport. In the **Outliner** (top-right), click only that actor; do not
+   hold `Ctrl` or select lights or the floor. Choose **File > Save All**
+   before exporting: GLTFExporter crashed once during the Anna evaluation.
+3. Choose **File > Export Selected…**. In the save dialog, set *Save as
+   type* to **glTF binary (`.glb`)**, enter `<name>Export.glb`, and click
+   **Save**. In the export options window, use:
+
+   ![Anna's working glTF export settings](images/metahuman/unreal-gltf-export-settings.png)
+
+   - *Export Uniform Scale*: **0.01** (metres).
+   - *Default Material Bake Size*: **1024** with *Auto-detect*, as in the
+     tested export. Inspect the resulting maps rather than assuming
+     Auto-detect guarantees a size. Forcing 4096 upscaled Anna's bakes and
+     inflated the GLB.
+   - Disable *Export Lights* and *Export Cameras*. Morph targets and skin
+     weights are not used from the GLB for the face/body. *Export Thin
+     Translucent Materials* did not fix Anna's black eye shell or lashes.
+   - Click **Export** and wait until the notification disappears.
+
+Warnings about `-1` indices, near-zero normals/tangents and Eye or
+Subsurface materials becoming *Default Lit* did not prevent garment
+extraction in Anna's case. If the editor crashes, reopen the saved level
+and retry; if the exported garments are broken, investigate rather than
+ignoring new warnings.
+
+### A3. Handoff checklist
+
+Keep the **actual files**, not only Unreal asset references. Copy this
+folder to the Mac; substitute your character's and grooms' names:
+
+```text
+~/avatar-work/
+  shared/
+    PA_MetaHuman_ARKit_Mapping.T3D       # once per Unreal version
+    arkit_mapping.json                   # generated in C1
+  <name>/
+    unreal/
+      <MHC>_DCC.zip                      # or extracted dcc/ below
+      <MHC>_Head.FBX
+      <MHC>_Body.FBX
+      <HairGroom>_CardsMesh_Group0_LOD0.FBX
+      <HairGroom>_CardsAtlas_Attribute.PNG
+      <BrowGroom>_CardsMesh_Group0_LOD0.FBX
+      <BrowGroom>_CardsAtlas_Attribute.PNG
+      <name>Export.glb                   # only when needed
+      groom-colours.txt                  # groom picker values; chosen bake hex colours
+    dcc/                                 # extracted ZIP: head.dna, Maps/, ...
+    hair/                                # generated in C2
+    out/                                 # generated in D
+```
+
+Before leaving Unreal, confirm the two body/face FBXs and, for each groom
+used, its card FBX, attribute PNG and recorded colours. Check the real DCC map dimensions and the
+optional GLB's garments. Copy only assets selected for this character;
+shared/unused outfits (`Khaos*`, `RomanticCasual*` in Anna's project),
+underwear variants and animated wrinkle maps are not separate required
+inputs. `CombinedSkelMesh` references are body assets, **not garments**.
+The optional **Materials Export** gave Anna real 4K inputs, but those had
+no visible benefit in the Face evaluation and its untinted body colour
+needs Unreal's shader: start with the DCC maps, not 220 material textures.
+
+| Unreal symptom | Next step |
+| --- | --- |
+| Rig warning blocks skin controls | Remove the rig to change textures; re-rig and reassemble. |
+| DCC Export absent from Assembly | In UE 5.8, find it in **Export**. |
+| Pose mapping or groom cards not found | Enable **Show Plugin Content**; check the selected groom has cards. |
+| Visible in Unlit but not Lit | Use a **Basic** level with lighting. |
+| GLB misses character | Select **only** `BP_<MHC>` before Export Selected. |
+| ZIP previews show 1024 px | Inspect `Maps/Head_Basecolor.png` instead. |
 
 ## Part B — Mac: one-time setup
 
@@ -153,16 +379,19 @@ untinted layer that Unreal tints in its shader. They are not needed.
 
 ## Part C — Prepare the inputs
 
-Unzip the DCC export (Anna: `~/avatar-work/anna/dcc-nomakeup/`). The build
-expects in its `Maps` folder: `Head_Basecolor`, `Head_Normal`, `Head_SRMF`,
-`Body_Basecolor`, `Body_Normal`, `Body_SRMF`, `Teeth_Color`, `Teeth_Normal`,
-`Eyes_Color`, `Eyes_Normal` and `Eyelashes_Color` (`.png`).
+Extract the DCC ZIP into `~/avatar-work/<name>/dcc/`. Ensure the **actual**
+`head.dna` and `Maps/` directory are directly inside `dcc/` (some unzip
+tools introduce an extra parent directory). The build expects in `Maps/`:
+`Head_Basecolor`, `Head_Normal`, `Head_SRMF`, `Body_Basecolor`,
+`Body_Normal`, `Body_SRMF`, `Teeth_Color`, `Teeth_Normal`, `Eyes_Color`,
+`Eyes_Normal` and `Eyelashes_Color` (`.png`).
 
-### C1. ARKit mapping
+### C1. ARKit mapping (once per Unreal version)
 
 ```bash
-python3 tools/avatar-authoring/metahuman/make_arkit_mapping.py \
-  PA_MetaHuman_ARKit_Mapping.T3D ~/avatar-work/anna/arkit_mapping.json
+python3 <repo>/tools/avatar-authoring/metahuman/make_arkit_mapping.py \
+  ~/avatar-work/shared/PA_MetaHuman_ARKit_Mapping.T3D \
+  ~/avatar-work/shared/arkit_mapping.json
 ```
 
 Each ARKit pose becomes additive `CTRL_expressions_*` weights relative to the
@@ -180,17 +409,27 @@ viseme (AX→aa, OW→O, ER→RR, HH→kk).
 ### C2. Hair and brow colour textures
 
 Unreal colours grooms in its shader from the attribute atlas
-(R = coverage, G = per-strand seed, B = root→tip). Bake a colour + alpha
-texture, using the colours you noted in Creator:
+(R = coverage, G = per-strand seed, B = root→tip). Creator's **Hair Color**
+picker exposes Melanin and Redness, not Hex sRGB; there is no exact hex
+value to copy from it. Choose initial hex sRGB root/tip colours to match the
+appearance in Unreal and record them in `unreal/groom-colours.txt`. With
+*Use Ombre* disabled, start with the same root and tip colour. Bake a
+colour + alpha texture, preview it in Sodalis, and adjust the colours
+if needed rather than treating a screenshot sample as an exact conversion.
+From the character folder (`~/avatar-work/<name>/`), run:
 
 ```bash
-python bake_card_textures.py hair  Hair_S_BobLayered_CardsAtlas_Attribute.PNG \
-  ~/avatar-work/anna/hair/Hair_BaseAlpha.png --root 1a100a --tip 4f3423 --gain 4
-python bake_card_textures.py brows Eyebrows_L_Shaded_CardsAtlas_Attribute.PNG \
-  ~/avatar-work/anna/hair/Brows_BaseAlpha.png --root 180f0a --tip 3a281c --gain 16
+mkdir -p hair
+python3 <repo>/tools/avatar-authoring/metahuman/bake_card_textures.py hair \
+  unreal/<HairGroom>_CardsAtlas_Attribute.PNG hair/Hair_BaseAlpha.png \
+  --root <hair-root-hex> --tip <hair-tip-hex> --gain 4
+python3 <repo>/tools/avatar-authoring/metahuman/bake_card_textures.py brows \
+  unreal/<BrowGroom>_CardsAtlas_Attribute.PNG hair/Brows_BaseAlpha.png \
+  --root <brow-root-hex> --tip <brow-tip-hex> --gain 16
 ```
 
-`--gain` scales the coverage into alpha; thin brow strands need more.
+`--gain` scales coverage into alpha; thin brow strands need more. For
+Anna, hair used `1a100a`/`4f3423` and brows `180f0a`/`3a281c`.
 
 ### C3. Face ambient occlusion (optional)
 
@@ -198,15 +437,22 @@ If you made the glTF export, copy its baked face occlusion map next to the
 DCC maps. The build uses it when it is there:
 
 ```bash
-python3 tools/avatar-authoring/metahuman/extract_face_ao.py \
-  AnnaExportTest_v2.glb ~/avatar-work/anna/dcc-nomakeup/Maps/Head_Occlusion.png
+python3 <repo>/tools/avatar-authoring/metahuman/extract_face_ao.py \
+  unreal/<name>Export.glb dcc/Maps/Head_Occlusion.png
 ```
 
 ### C4. Character config
 
 Copy [`characters/anna.json`](../../tools/avatar-authoring/metahuman/characters/anna.json)
-and edit the paths. Relative paths resolve from the config file; `~` is
-expanded.
+to `~/avatar-work/<name>/character.json` as a **template**. Change `name`,
+`id`, and every Anna-specific path to this character's `unreal/`, `dcc/`,
+`hair/` and the shared mapping. In `recipes`, use the absolute path to
+`<repo>/tools/avatar-authoring/metahuman/visemes.json` and
+`~/avatar-work/shared/arkit_mapping.json`; the original `../visemes.json`
+path only works when the config is beside the example file. Relative paths
+resolve from the config file; `~` is expanded. Delete the `outfit` section
+if you did not export garments, and remove `hair`/`brows` sections if they
+do not apply.
 
 | Key | Required | Meaning |
 | --- | --- | --- |
@@ -217,9 +463,10 @@ expanded.
 | `face.lid_follow` | no (0.35) | How much the lids follow the eyes in `eyeLook*` shapes |
 | `face.rest_lid_lift` | no (0.7) | Fraction of the character's own `eyeWide` baked into the rest pose |
 | `hair.FBX`, `hair.BASE`, `hair.SCALP_OUT` | with hair | Card FBX, baked texture, output for the scalp-tinted head colour |
-| `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, root colour (sRGB 0–1) |
+| `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, scalp colour (sRGB 0–1) |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
+| `outfit.tuck` | no | `{inner new name: outer new name}`: cut the inner garment where the outer covers it, e.g. `{"Blouse": "Jeans"}` |
 | `texture_cap` | no (2048) | Largest texture side; Sodalis recommends at most 2048 |
 | `map_overrides` | no | `{map name: PNG}` replacing a file in `maps`, e.g. `Eyes_Color` |
 
@@ -242,19 +489,22 @@ material for both eyes, so the left eye's texture is enough.
 To find the garment mesh names, open the glTF in Blender or read its JSON
 `meshes[].name` (Anna: `MHC_Anna_Outfits`, `_2`, `_3`).
 
+`SCALP_TINT` is a starting colour, not a universal constant: Anna used
+`[0.1647, 0.1098, 0.0784]` for dark brown hair. Start with the example's
+fit offsets, then adjust for a different groom after inspecting the GLB.
+
 ## Part D — Build
 
 ```bash
-cd ~/avatar-work/anna
+cd ~/avatar-work/<name>
 blender -b -noaudio --python-exit-code 1 \
   --python <repo>/tools/avatar-authoring/metahuman/build_metahuman.py -- \
-  --config <repo>/tools/avatar-authoring/metahuman/characters/anna.json \
-  --out out/anna.glb --blend out/anna.blend
+  --config character.json --out out/<name>.glb --blend out/<name>.blend
 ```
 
-It ends with `METAHUMAN_EXPORTED <path> <bytes>`. Anna takes about 35 s and
-gives a 39 MB GLB. `--blend` saves the scene for inspection; the GLB is the
-only artefact Sodalis needs. Blender's FBX importer prints
+It ends with `METAHUMAN_EXPORTED <path> <bytes>`. Anna took about 35 s and
+gave a 39 MB GLB; new characters vary. `--blend` saves the scene for
+inspection; the GLB is the only artefact Sodalis needs. Blender's FBX importer prints
 `Error, could not find any file path in FBXElem(... EnvSamplerTex ...)` for
 Unreal's environment-sampler textures. These are harmless; real failures
 stop the build with a traceback and a non-zero exit code.
@@ -286,24 +536,29 @@ What the build does:
    from the body and head. It hides body skin under the garments: skin that
    fabric touches, or that a short ray along its normal hits fabric from.
    Body skin is never hidden by distance alone, which would remove a bare
-   belly between top and jeans.
+   belly between top and jeans. Garments are not tested against each other:
+   if a top shows through the jeans, list it in `outfit.tuck`. The build
+   then deletes the top's faces that the jeans cover, keeping a 2 cm strip
+   pushed just inside the waistband, so the top looks tucked in.
 7. **Export** (`build_avatar.export_glb`) with morph normals, then
    **post-process** (`gltf_morphs.py`): repairs fold normals and stores morph
    targets sparsely (see the eyelid observation below).
 
 ## Part E — Install and check in Sodalis
 
-```bash
-cp out/anna.glb <repo>/apps/desktop/public/avatars/eval/anna-eval.glb
-VITE_SODALIS_EVAL_AVATARS=1 pnpm --filter @sodalis/desktop dev
-# open http://localhost:5173/?stage&avatar=metahuman-anna-eval
-```
+Place the GLB in the git-ignored `apps/desktop/public/avatars/eval/` folder
+as `<id>-eval.glb`, and add `metahumanEval("<id>", "<Name>")` to
+`EVALUATION_CANDIDATES` in `apps/desktop/src/avatar/avatarCatalogue.ts`. That
+registers `metahuman-<id>-eval` with `behavior.poseScale` 0.35; adjust the
+entry if your character needs other settings. Anna and Odette are examples.
+With `VITE_SODALIS_EVAL_AVATARS=1`, the entries appear in the assistant
+panel's avatar choice and on the dev-only stage.
 
-Evaluation avatars are listed in `EVALUATION_CANDIDATES` in
-`apps/desktop/src/avatar/defaultAvatar.ts` and only load in development
-with that flag (on the `mpfb-avatar-pipeline` branch until it is merged,
-together with `?stage` and the framing levels). For a new character, add an entry with its id, GLB path,
-attribution and `behavior.poseScale`.
+```bash
+cp out/<name>.glb <repo>/apps/desktop/public/avatars/eval/<name>-eval.glb
+VITE_SODALIS_EVAL_AVATARS=1 pnpm --filter @sodalis/desktop dev
+# open http://localhost:5173/?stage&avatar=<registered-id>
+```
 
 To make an evaluation avatar the default on your machine, without
 `?avatar=`, put this in the git-ignored `apps/desktop/.env.local` and restart
@@ -311,11 +566,12 @@ the dev server:
 
 ```bash
 VITE_SODALIS_EVAL_AVATARS=1
-VITE_SODALIS_DEFAULT_AVATAR=metahuman-anna-eval
+VITE_SODALIS_DEFAULT_AVATAR=<registered-id>
 ```
 
-The override applies to development builds only; an unknown id falls back to
-the first catalogue entry.
+The override applies to development builds only, until the user picks an
+avatar (the choice is stored per device). An unknown id falls back to the
+catalogue default.
 
 Check:
 

@@ -4,14 +4,21 @@ import type {
   AvatarSceneHandle,
   AvatarSceneLook,
 } from "@sodalis/avatar/internal/scene";
-import type { AttentionTargetRegistry } from "@sodalis/avatar";
-import { ACTIVE_AVATAR_ASSET } from "./defaultAvatar.js";
+import type { AttentionTargetRegistry, AvatarAsset } from "@sodalis/avatar";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-interface AvatarViewportAttrs {
+export interface AvatarSwitchOption {
+  name: string;
+  select: () => void;
+}
+
+export interface AvatarViewportAttrs {
+  asset: AvatarAsset;
+  /** Offered alongside Retry when the selected avatar cannot be shown. */
+  switchTo?: AvatarSwitchOption;
   targetRegistry?: AttentionTargetRegistry;
   look?: AvatarSceneLook;
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
@@ -32,12 +39,18 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
   let initializing = false;
   let generation = 0;
   let canvas: HTMLCanvasElement | undefined;
+  let loadedAssetId: string | undefined;
+  let ready = false;
 
-  const initialize = async (attrs: AvatarViewportAttrs) => {
-    if (initializing || removed) return;
+  // A changed selection supersedes any load in progress; retries do not stack.
+  const initialize = async (attrs: AvatarViewportAttrs, supersede = false) => {
+    if ((initializing && !supersede) || removed) return;
     initializing = true;
     const attempt = ++generation;
-    status = `Preparing the ${ACTIVE_AVATAR_ASSET.name} avatar viewer…`;
+    const asset = attrs.asset;
+    loadedAssetId = asset.id;
+    ready = false;
+    status = `Preparing the ${asset.name} avatar viewer…`;
     scene?.dispose();
     scene = undefined;
     attrs.onScene?.(undefined);
@@ -54,6 +67,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
           : {}),
         onError(error) {
           if (removed || attempt !== generation) return;
+          ready = false;
           status = `3D avatar unavailable: ${error.message}`;
           m.redraw();
         },
@@ -62,16 +76,17 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
         },
       });
       attrs.onScene?.(scene);
-      status = `Loading ${ACTIVE_AVATAR_ASSET.name} avatar…`;
+      status = `Loading ${asset.name} avatar…`;
       m.redraw();
-      await scene.controller.load(ACTIVE_AVATAR_ASSET);
+      await scene.controller.load(asset);
       if (removed || attempt !== generation) return;
-      status = `${ACTIVE_AVATAR_ASSET.name} avatar ready.`;
+      ready = true;
+      status = `${asset.name} avatar ready.`;
     } catch (error) {
       if (removed || attempt !== generation) return;
       status = `3D avatar unavailable: ${errorMessage(error)}`;
     } finally {
-      initializing = false;
+      if (attempt === generation) initializing = false;
       if (!removed) m.redraw();
     }
   };
@@ -86,6 +101,12 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
       }
       canvas = element;
       void initialize(vnode.attrs);
+    },
+
+    onupdate(vnode: VnodeDOM<AvatarViewportAttrs>) {
+      if (canvas && vnode.attrs.asset.id !== loadedAssetId) {
+        void initialize(vnode.attrs, true);
+      }
     },
 
     onremove(vnode: VnodeDOM<AvatarViewportAttrs>) {
@@ -113,7 +134,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
             : null,
           vnode.attrs.interactive &&
           vnode.attrs.onActivate &&
-          status === `${ACTIVE_AVATAR_ASSET.name} avatar ready.`
+          ready
             ? m(
                 "button.avatar-interaction-target[type=button]",
                 {
@@ -129,7 +150,7 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
           vnode.attrs.notificationCount &&
           vnode.attrs.notificationCount > 0 &&
           vnode.attrs.onNotificationsActivate &&
-          status === `${ACTIVE_AVATAR_ASSET.name} avatar ready.`
+          ready
               ? m(
                   "button.avatar-notification-indicator[type=button]",
                   {
@@ -156,18 +177,27 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
             "p.avatar-viewport-status[role=status][aria-live=polite]",
             {
               class:
-                status === `${ACTIVE_AVATAR_ASSET.name} avatar ready.`
+                ready
                   ? "avatar-viewport-status-ready"
                   : "",
             },
             status,
           ),
           status.startsWith("3D avatar unavailable")
-            ? m(
-                "button[type=button].avatar-viewport-retry",
-                { onclick: () => void initialize(vnode.attrs) },
-                "Retry avatar",
-              )
+            ? m(".avatar-viewport-recovery", [
+                m(
+                  "button[type=button].avatar-viewport-retry",
+                  { onclick: () => void initialize(vnode.attrs) },
+                  "Retry avatar",
+                ),
+                vnode.attrs.switchTo
+                  ? m(
+                      "button[type=button].avatar-viewport-retry",
+                      { onclick: vnode.attrs.switchTo.select },
+                      `Switch to ${vnode.attrs.switchTo.name}`,
+                    )
+                  : null,
+              ])
             : null,
         ],
       );
