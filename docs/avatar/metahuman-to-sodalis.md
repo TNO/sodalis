@@ -477,6 +477,7 @@ do not apply.
 | `hair.ROOT_FRAC`, `hair.FIT_SCALE` | no (0.15, fitted) | Fraction of each card treated as root when fitting to the scalp; fixed fit scale instead of a fitted one. Long hair: `0.05` and `1.0` |
 | `hair.BACK_FILL`, `hair.BACK_FILL_MIN_SIDE` | no (off, 0.06) | Workaround for a missing back card group: copy the long side cards, rotated by these angles (degrees) towards the back. Only cards whose tips hang more than `MIN_SIDE` m beside the head are copied. Odette: `[35, 70, 105]` |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
+| `brows.BROW_EYE_HEIGHT` | no | Mean brow height above the eye centres, in eye spacings (Anna measures 0.26). Replaces `BROW_OFFSET`'s vertical effect. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
 | `outfit.tuck` | no | `{inner new name: outer new name}`: cut the inner garment where the outer covers it, e.g. `{"Blouse": "Jeans"}` |
 | `outfit.textures` | no | `{new name: {"baseColor": PNG}}` replaces a garment's base colour (see "Blurred garment colour" below) |
@@ -645,6 +646,35 @@ character's own `eyeWide` into the rest pose; blinks still close fully. In
 the RigLogic poses, the lids follow `eyeLookDown` by about 16 mm, compared
 with about 5 mm for a Ready Player Me avatar. `lid_follow` 0.35 scales that
 down.
+
+The right `rest_lid_lift` depends on the character. Odette's lids sit
+higher than Anna's, so 0.7 made her look surprised; 0.35 matches her
+reference render.
+
+### Brows sink into the eyelids
+
+If the brows look partly inside the head or hidden by the lashes, check
+the `BROW_FIT` log line. The brow fit skips eyelid skin, so brows that
+start over the upper lid snap to the lid edge and curl along the socket
+(Odette: only 3191 of 5676 rays hit). Set `brows.BROW_EYE_HEIGHT` (start
+at 0.26) and drop `BROW_OFFSET`; rayHits should then be close to 100%.
+Brow colour: Odette's soft brown is `--root 2e2016 --tip 3a2a1e --gain 10`.
+
+### Skin lacks the Creator makeup
+
+The DCC `Head_Basecolor` has no Creator makeup (blush, eye shadow); only
+Unreal's baked face texture has it, at 1024 px. Transfer its low-frequency
+tone onto the 2048 px DCC map and add it to `map_overrides`:
+
+```bash
+uv run -q --with pillow --with numpy python <repo>/tools/avatar-authoring/metahuman/extract_glb_texture.py \
+  --glb unreal/OdetteExport.glb --material MID_MI_Face_Skin_Baked_LOD0_VT_0_Face \
+  --tone-onto <DCC>/Head_Basecolor.png --out maps-override/Head_Basecolor.png
+```
+
+`--tone-blur` (default 24 px) sets how much detail comes from the bake.
+The stage lighting is brighter and cooler than Unreal's, so the skin will
+not match a reference render exactly.
 
 ### Eyelashes
 

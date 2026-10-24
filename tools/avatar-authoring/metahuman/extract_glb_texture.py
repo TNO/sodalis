@@ -12,6 +12,11 @@ baked in, so it can replace the matching DCC map, and downscales it to the cap.
 Some garment exports bake a blurred base colour and keep the fine pattern (for example
 lace) only in roughness. `--detail-from-roughness K` darkens the base colour by up to K
 where roughness dips below its local average (needs numpy: add `--with numpy`).
+
+Creator's makeup (blush, lipstick, eye shadow) and skin-tone tweaks are missing from the
+DCC maps, but present in Unreal's lower-resolution baked face. `--tone-onto BASE` keeps
+BASE's detail and takes the baked colour's low frequencies (blur radius `--tone-blur`):
+out = BASE + blur(baked) - blur(BASE), where the bake has data (needs numpy).
 """
 
 import argparse
@@ -84,6 +89,37 @@ def roughness_detail(img, roughness, strength, radius=12, depth=0.12):
     return Image.fromarray(out.clip(0, 255).astype(np.uint8))
 
 
+def tone_onto(baked, base, radius):
+    """Give `base` the low-frequency colour of `baked`, keeping base's fine detail."""
+    import numpy as np
+
+    baked = baked.resize(base.size, Image.Resampling.LANCZOS)
+    b = np.asarray(baked, float)
+    a = np.asarray(base.convert("RGB"), float)
+    # Texels outside the bake's transformed area are black; blur only valid data.
+    valid = (b.sum(-1) > 6).astype(float)
+
+    r = max(1, int(radius))
+
+    def box(x, axis):
+        c = np.cumsum(np.pad(x, [(r + 1, r) if i == axis else (0, 0) for i in range(2)], mode="edge"), axis)
+        hi = np.take(c, np.arange(2 * r + 1, c.shape[axis]), axis)
+        lo = np.take(c, np.arange(0, c.shape[axis] - 2 * r - 1), axis)
+        return (hi - lo) / (2 * r + 1)
+
+    def blur(x):  # three box passes approximate a Gaussian
+        for _ in range(3):
+            x = box(box(x, 0), 1)
+        return x
+
+    w = blur(valid)
+    low_b = np.stack([blur(b[..., c] * valid) for c in range(3)], -1) / np.maximum(w, 1e-3)[..., None]
+    low_a = np.stack([blur(a[..., c]) for c in range(3)], -1)
+    fade = np.clip((w - 0.5) / 0.4, 0, 1)[..., None]
+    out = a + (low_b - low_a) * fade
+    return Image.fromarray(out.clip(0, 255).astype(np.uint8))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--glb", required=True)
@@ -94,6 +130,10 @@ def main():
     parser.add_argument("--cap", type=int, default=2048, help="maximum edge in pixels")
     parser.add_argument("--detail-from-roughness", type=float, default=0.0, metavar="K",
                         help="darken by up to K (0-1) where roughness dips, restoring baked-out detail")
+    parser.add_argument("--tone-onto", metavar="BASE",
+                        help="write BASE with the extracted texture's low-frequency colour (makeup, tone)")
+    parser.add_argument("--tone-blur", type=float, default=24.0, metavar="PX",
+                        help="blur radius in BASE pixels for --tone-onto")
     args = parser.parse_args()
 
     gltf_blob = read_glb(os.path.expanduser(args.glb))
@@ -101,6 +141,11 @@ def main():
     if args.detail_from_roughness:
         rough, _, _ = extract(args.glb, args.material, "metallicRoughnessTexture", args.cap, gltf_blob)
         img = roughness_detail(img, rough, args.detail_from_roughness)
+    if args.tone_onto:
+        base = Image.open(os.path.expanduser(args.tone_onto))
+        if max(base.size) > args.cap:
+            base = base.resize((args.cap, args.cap * base.size[1] // base.size[0]), Image.Resampling.LANCZOS)
+        img = tone_onto(img, base, args.tone_blur)
     out = os.path.expanduser(args.out)
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     img.save(out)

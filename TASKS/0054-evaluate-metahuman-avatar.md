@@ -387,3 +387,10 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     exported, `hair.BACK_FILL [35, 70, 105]` copies the side curtains
     towards the back (12k -> 43k hair vertices; GLB 42 -> 44 MB). Anna's
     build is byte-identical. See the tutorial, *Bald back of the head*.
+  - Odette skin and brows (user feedback): the DCC face map lacks the
+    Creator makeup; `extract_glb_texture.py --tone-onto` transfers it from
+    Unreal's baked face. The brows sat about 7 mm too low, on the upper
+    lids (3191/5676 brow rays hit), so they curled under the lids and
+    lashes. New `brows.BROW_EYE_HEIGHT` (Odette 0.26; Anna measures 0.26)
+    gives 5648/5676 hits. Brows rebaked soft brown; `rest_lid_lift` 0.35
+    (0.7 looked surprised). Anna's build is byte-identical.

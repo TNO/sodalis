@@ -488,7 +488,7 @@ def main():
         if not cfg.get("hair"):
             raise ValueError("brows are placed with the hair's template fit; configure hair too")
         brows.configure({"NAME": NAME + "_Brows", **cfg["brows"]})
-        brows.add_brows(head, hair_s, hair_t)
+        brows.add_brows(head, hair_s, hair_t, eyes)
     body_arm.name = "Armature"  # TalkingHead resolves the model root by this name.
     body_arm.data.name = cfg["id"]
     head.name, body.name = NAME + "_Head", NAME + "_Body"

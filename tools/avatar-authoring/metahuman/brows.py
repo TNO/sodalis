@@ -21,6 +21,10 @@ BROW_LIFT = 0.0006
 # The scalp-based template fit can leave the brows above the brow ridge (Anna: ~8 mm,
 # checked against the brow shading baked in her basecolor); move them down first.
 BROW_OFFSET = np.array([0.0, 0.0, -0.006])
+# Faces whose proportions differ from the template leave the scalp-fitted brows too low or
+# high. If set, raise or lower them so their mean height above the eye centres is this
+# fraction of the eye spacing (Anna: 0.25), instead of applying BROW_OFFSET's z.
+BROW_EYE_HEIGHT = None
 LID_MOTION = 0.001  # skin moving more than this in a blink is eyelid, not brow
 
 
@@ -68,14 +72,23 @@ def brow_material():
     return m
 
 
-def add_brows(head, s, t, skin_slot=0):
-    """Join fitted eyebrow cards into `head` (call after all head shape keys are final)."""
+def add_brows(head, s, t, eyes, skin_slot=0):
+    """Join fitted eyebrow cards into `head` (call after all head shape keys are final).
+
+    `eyes` holds the world-space eye centres, keyed "LeftEye" and "RightEye".
+    """
     cards = import_cards()
     me = cards.data
     n = len(me.vertices)
     v = np.empty(n * 3)
     me.vertices.foreach_get("co", v)
     v = v.reshape(-1, 3) * s + t + BROW_OFFSET
+    eye_l, eye_r = (np.array(eyes[k][:]) for k in ("LeftEye", "RightEye"))
+    spacing = abs(eye_l[0] - eye_r[0])
+    eye_z = (eye_l[2] + eye_r[2]) / 2
+    if BROW_EYE_HEIGHT is not None:
+        v[:, 2] += eye_z + BROW_EYE_HEIGHT * spacing - v[:, 2].mean()
+    print(f"BROW_EYE_HEIGHT {(v[:, 2].mean() - eye_z) / spacing:.3f} (eye spacing {spacing * 1000:.1f} mm)")
 
     hm = head.data
     hm.calc_loop_triangles()
