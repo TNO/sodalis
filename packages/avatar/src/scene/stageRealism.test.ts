@@ -35,16 +35,20 @@ describe("stage realism", () => {
     }
   });
 
-  it("enables shadows, smooth cutouts and skin scattering", () => {
+  it("enables shadows except from cards, smooth cutouts and skin scattering", () => {
     const root = new Group();
     const skin = meshWith("Anna_Head");
     const hair = meshWith("Anna_Hair", 0.35);
     const eyes = meshWith("Anna_Eyes");
-    root.add(skin, hair, eyes);
+    const lashes = meshWith("Anna_Eyelashes");
+    (lashes.material as MeshStandardMaterial).transparent = true;
+    root.add(skin, hair, eyes, lashes);
 
     enhanceStageAvatar(root);
 
-    for (const mesh of [skin, hair, eyes]) expect(mesh.castShadow).toBe(true);
+    for (const mesh of [skin, eyes]) expect(mesh.castShadow).toBe(true);
+    // Card shells cast hard-edged blocks, not strands, in the shadow pass.
+    for (const mesh of [hair, lashes]) expect(mesh.castShadow).toBe(false);
     expect(skin.receiveShadow).toBe(true);
     expect(hair.receiveShadow).toBe(false);
     const hairMaterial = hair.material as MeshStandardMaterial;

@@ -48,7 +48,7 @@ function isCutout(material: Material): boolean {
 }
 
 /**
- * Stage-only material upgrades: soft shadow participation, smooth
+ * Stage-only material upgrades: soft shadows (not from cards), smooth
  * alpha-to-coverage edges for hair, brows and lashes, and skin scattering.
  * Requires an MSAA renderer for alpha-to-coverage to take effect.
  */
@@ -62,8 +62,11 @@ export function enhanceStageAvatar(root: Object3D): void {
     const materials = Array.isArray(mesh.material)
       ? mesh.material
       : [mesh.material];
-    mesh.castShadow = true;
-    // Card geometry self-shadows into dark streaks, so cutouts only cast.
+    // Hair, brow and lash cards render as solid shells in the shadow pass,
+    // casting hard-edged blocks across the face, so they cast no shadow.
+    // Cutout cards also self-shadow into dark streaks, so they receive none.
+    const card = materials.some((m) => isCutout(m) || m.transparent);
+    mesh.castShadow = !card;
     mesh.receiveShadow = !materials.some(isCutout);
     for (const material of materials) {
       if (isCutout(material) && !material.alphaToCoverage) {
