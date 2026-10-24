@@ -155,10 +155,13 @@ use the right panel's search box.
 2. **Choose card-capable hair and brows.** Open the left-edge hair/groom
    category (*Hair and Clothing* or *Grooms*). Select hair and eyebrow
    styles that offer **cards**, not only strands. In the right panel, click
-   each hair/brow root and tip colour swatch; in Unreal's **Color Picker**,
-   copy **Hex sRGB** (not *Hex Linear*). Save the four values in
-   `groom-colours.txt`: the card atlas has coverage but no baked colour, so
-   C2 recreates it. After assembly, confirm the styles have
+   each **Hair Color** swatch and record its **Melanin** and **Redness**
+   values for hair and brows in `groom-colours.txt`. Also record whether
+   *Use Ombre* is enabled and any other active colour effects. This
+   MetaHuman picker does **not** provide Hex sRGB: C2 needs separately
+   chosen hex colours to approximate the appearance, because the card
+   atlas has coverage but no baked colour. After assembly, confirm the
+   styles have
    `*_CardsMesh_Group0_LOD0` assets; otherwise select a style with cards.
    Anna used `Hair_S_BobLayered` and `Eyebrows_L_Shaded`.
 
@@ -326,7 +329,7 @@ folder to the Mac; substitute your character's and grooms' names:
       <BrowGroom>_CardsMesh_Group0_LOD0.FBX
       <BrowGroom>_CardsAtlas_Attribute.PNG
       <name>Export.glb                   # only when needed
-      groom-colours.txt                  # hair/brow root + tip hex values
+      groom-colours.txt                  # groom picker values; chosen bake hex colours
     dcc/                                 # extracted ZIP: head.dna, Maps/, ...
     hair/                                # generated in C2
     out/                                 # generated in D
@@ -402,8 +405,13 @@ combines rig controls by hand.
 ### C2. Hair and brow colour textures
 
 Unreal colours grooms in its shader from the attribute atlas
-(R = coverage, G = per-strand seed, B = root→tip). Bake a colour + alpha
-texture, using the hex colours recorded in `unreal/groom-colours.txt` in A3.
+(R = coverage, G = per-strand seed, B = root→tip). Creator's **Hair Color**
+picker exposes Melanin and Redness, not Hex sRGB; there is no exact hex
+value to copy from it. Choose initial hex sRGB root/tip colours to match the
+appearance in Unreal and record them in `unreal/groom-colours.txt`. With
+*Use Ombre* disabled, start with the same root and tip colour. Bake a
+colour + alpha texture, preview it in Sodalis, and adjust the colours
+if needed rather than treating a screenshot sample as an exact conversion.
 From the character folder (`~/avatar-work/<name>/`), run:
 
 ```bash
