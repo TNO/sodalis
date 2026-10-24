@@ -257,7 +257,11 @@ For **each selected groom** (normally one hair and one brow groom):
    **Reference Viewer** to see linked assets.
 2. Find the **Static Mesh** whose name ends in
    `_CardsMesh_Group0_LOD0`. Right-click it, choose **Asset Actions >
-   Export…**, select **FBX**, and save it with the same name.
+   Export…**, select **FBX**, and save it with the same name. Long hair
+   styles can split their cards over several groups: also export every
+   `_CardsMesh_Group1_LOD0`, `_Group2_LOD0`, … that exists, and list them
+   all in `hair.FBX`. A missing group leaves part of the head bald (see
+   *Bald back of the head*).
 3. Find the **Texture** whose name ends in `_CardsAtlas_Attribute`.
    Right-click it, choose **Asset Actions > Export…**, choose **PNG** in the
    *Save as type* list, and save it with the same name.
@@ -324,7 +328,7 @@ folder to the Mac; substitute your character's and grooms' names:
       <MHC>_DCC.zip                      # or extracted dcc/ below
       <MHC>_Head.FBX
       <MHC>_Body.FBX
-      <HairGroom>_CardsMesh_Group0_LOD0.FBX
+      <HairGroom>_CardsMesh_Group0_LOD0.FBX   # plus Group1, … if they exist
       <HairGroom>_CardsAtlas_Attribute.PNG
       <BrowGroom>_CardsMesh_Group0_LOD0.FBX
       <BrowGroom>_CardsAtlas_Attribute.PNG
@@ -468,9 +472,10 @@ do not apply.
 | `face.lash_alpha_gain` | no (1.8) | Multiplies lash alpha after growing the strands 1 px |
 | `face.lid_follow` | no (0.35) | How much the lids follow the eyes in `eyeLook*` shapes |
 | `face.rest_lid_lift` | no (0.7) | Fraction of the character's own `eyeWide` baked into the rest pose |
-| `hair.FBX`, `hair.BASE`, `hair.SCALP_OUT` | with hair | Card FBX, baked texture, output for the scalp-tinted head colour |
+| `hair.FBX`, `hair.BASE`, `hair.SCALP_OUT` | with hair | Card FBX (or a list, one per card group), baked texture, output for the scalp-tinted head colour |
 | `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, scalp colour (sRGB 0–1) |
 | `hair.ROOT_FRAC`, `hair.FIT_SCALE` | no (0.15, fitted) | Fraction of each card treated as root when fitting to the scalp; fixed fit scale instead of a fitted one. Long hair: `0.05` and `1.0` |
+| `hair.BACK_FILL`, `hair.BACK_FILL_MIN_SIDE` | no (off, 0.06) | Workaround for a missing back card group: copy the long side cards, rotated by these angles (degrees) towards the back. Only cards whose tips hang more than `MIN_SIDE` m beside the head are copied. Odette: `[35, 70, 105]` |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
 | `outfit.tuck` | no | `{inner new name: outer new name}`: cut the inner garment where the outer covers it, e.g. `{"Blouse": "Jeans"}` |
@@ -681,6 +686,34 @@ long cards reached below the cranium, so the fit shrank Odette's hair to
 0.89 and showed her scalp. `ROOT_FRAC` 0.05 with `FIT_SCALE` 1.0 gives the
 same root error (3.9 mm) at full size. Check the `HAIR_FIT` log line: a
 scale well below 1 points to this problem.
+
+### Bald back of the head
+
+Odette's export had only `Hair_L_Straight_CardsMesh_Group0_LOD0`: cards
+covering the front and sides, 12.5 cm front to back on a 23 cm head. The
+back of her head was bare and showed the scalp tint. Anna's bob is a single
+group that covers the whole head. Compare the hair's front-to-back extent
+with the head's (Blender: select both, read *Dimensions* Y in the N panel).
+If it is much shorter, export the other card groups (A2.3) and list them
+in `hair.FBX`.
+
+`hair.BACK_FILL` is a stop-gap when you cannot export them: it copies the
+long side curtains, rotates them towards the back, and moves each copy out
+by the difference in skull radius so it keeps its stand-off from the skin.
+The scalp tint then also covers the back of the cranium. The log reports
+`HAIR_BACK_FILL cards=… verts a -> b`. Hair from the real groups looks
+better, especially at the crown parting.
+
+### Hard-edged shading band on a cheek
+
+A faint, straight-edged darker band on one cheek, visible in Face framing,
+was the **shadow of the hair cards** from the stage key light. three.js
+shadow maps ignore the cards' alpha, so each card cast a solid shadow.
+The stage no longer lets cutout or transparent materials (hair, brows,
+lashes) cast shadows (`packages/avatar/src/scene/stageRealism.ts`).
+To diagnose similar artefacts, hide meshes one at a time (A/B screenshots):
+the band stayed without lashes and brows, but disappeared without the hair
+or without the key-light shadow.
 
 ### Blurred garment colour
 

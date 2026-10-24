@@ -15,7 +15,7 @@ from mathutils.bvhtree import BVHTree
 from mathutils.kdtree import KDTree
 
 # Set by configure(); see build_metahuman.py for the config keys.
-FBX = None  # hair-card LOD0 FBX exported from Unreal
+FBX = None  # hair-card LOD0 FBX exported from Unreal, or a list (one per card group)
 BASE = None  # baked RGBA hair texture (bake_card_textures.py)
 SCALP_OUT = None  # where to write the scalp-tinted head basecolor
 NAME = "MetaHuman_Hair"
@@ -30,26 +30,28 @@ def world_verts(o):
 
 
 def import_cards():
-    before = set(bpy.data.objects)
-    bpy.ops.import_scene.fbx(filepath=FBX)
-    new = set(bpy.data.objects) - before
-    cards = next(o for o in new if o.name.startswith("Hair_") and o.type == "MESH")
-    for o in new - {cards}:  # UCX_ collision hull
-        bpy.data.objects.remove(o)
+    groups = []
+    for path in FBX if isinstance(FBX, list) else [FBX]:
+        before = set(bpy.data.objects)
+        bpy.ops.import_scene.fbx(filepath=path)
+        new = set(bpy.data.objects) - before
+        cards = next(o for o in new if o.name.startswith("Hair_") and o.type == "MESH")
+        for o in new - {cards}:  # UCX_ collision hull
+            bpy.data.objects.remove(o)
+        groups.append(cards)
+    cards = groups[0]
     bpy.ops.object.select_all(action="DESELECT")
-    cards.select_set(True)
+    for o in groups:
+        o.select_set(True)
     bpy.context.view_layer.objects.active = cards
+    if len(groups) > 1:
+        bpy.ops.object.join()
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     return cards
 
 
-def root_mask(cards, frac=None):
-    """Per card (connected component): vertices in the top `frac` of its height.
-
-    Card corners sit on transparent atlas texels, so the atlas root->tip
-    channel cannot label them; for a hanging bob the root end is the top end.
-    """
-    frac = ROOT_FRAC if frac is None else frac
+def components(cards):
+    """Card index (connected component root) per vertex."""
     me = cards.data
     n = len(me.vertices)
     parent = np.arange(n)
@@ -66,7 +68,18 @@ def root_mask(cards, frac=None):
         ra, rb = find(a), find(b)
         if ra != rb:
             parent[ra] = rb
-    comp = np.array([find(i) for i in range(n)])
+    return np.array([find(i) for i in range(n)])
+
+
+def root_mask(cards, frac=None):
+    """Per card (connected component): vertices in the top `frac` of its height.
+
+    Card corners sit on transparent atlas texels, so the atlas root->tip
+    channel cannot label them; for a hanging bob the root end is the top end.
+    """
+    frac = ROOT_FRAC if frac is None else frac
+    n = len(cards.data.vertices)
+    comp = components(cards)
     z = world_verts(cards)[:, 2]
     zmax = np.full(n, -np.inf)
     zmin = np.full(n, np.inf)
@@ -75,6 +88,76 @@ def root_mask(cards, frac=None):
     hi, lo = zmax[comp], zmin[comp]
     print(f"HAIR_CARDS components={len(np.unique(comp))}")
     return z >= hi - frac * (hi - lo)
+
+
+def back_fill(cards, v, mask, centre, bvh):
+    """Cover a bare back of the head with rotated copies of the side curtains.
+
+    Some grooms export their back cards in a separate group; without it the
+    back of the scalp is bare. Long cards whose tips hang beside the face are
+    copied and rotated about the vertical axis through `centre`, towards the
+    back, by each angle in BACK_FILL (degrees). The skull is deeper than it
+    is wide, so each copied vertex is then moved out along the ray from
+    `centre` by the difference in skull radius, keeping its stand-off. Returns the new v,
+    mask and a copy flag per vertex.
+    """
+    def skin_along(p):
+        d = Vector(p - centre)
+        hit = bvh.ray_cast(Vector(centre), d.normalized(), 1.0)[0]
+        return None if hit is None else (hit - Vector(centre)).length
+
+    comp = components(cards)
+    n = len(v)
+    tip = np.full(n, np.inf)
+    np.minimum.at(tip, comp, v[:, 2])
+    side = np.zeros(n)
+    low = v[:, 2] <= tip[comp] + 0.03
+    np.add.at(side, comp[low], v[low, 0] - centre[0])
+    cnt = np.zeros(n)
+    np.add.at(cnt, comp[low], 1)
+    side = np.divide(side, cnt, out=np.zeros(n), where=cnt > 0)[comp]
+    long_card = tip[comp] < centre[2] - 0.08
+    pick = long_card & (np.abs(side) > BACK_FILL_MIN_SIDE)
+
+    cards.data.vertices.foreach_set("co", v.ravel())
+    bm = bmesh.new()
+    bm.from_mesh(cards.data)
+    bm.verts.ensure_lookup_table()
+    faces = [f for f in bm.faces if all(pick[x.index] for x in f.verts)]
+    v_out, m_out = [v], [mask]
+    for deg in BACK_FILL:
+        dup = bmesh.ops.duplicate(bm, geom=faces)
+        vmap = dup["vert_map"]
+        bm.verts.index_update()
+        src = [a for a in vmap if a.index < n]
+        idx = np.array([a.index for a in src])
+        a = np.radians(deg) * np.sign(side[idx])  # MetaHumans face -y: turn each side towards +y
+        p = v[idx] - centre
+        x = p[:, 0] * np.cos(a) - p[:, 1] * np.sin(a)
+        y = p[:, 0] * np.sin(a) + p[:, 1] * np.cos(a)
+        q = np.column_stack([x, y, p[:, 2]]) + centre
+        for j, i in enumerate(idx):
+            r_new, r_old = skin_along(q[j]), skin_along(v[i])
+            if r_new is not None and r_old is not None:
+                out = (q[j] - centre) / np.linalg.norm(q[j] - centre)
+                q[j] += out * np.clip(r_new - r_old, 0.0, 0.05)
+        for s, co in zip(src, q):
+            vmap[s].co = Vector(co)
+        new_idx = np.array([vmap[s].index for s in src])
+        add = np.zeros((len(bm.verts) - sum(len(x) for x in v_out), 3))
+        madd = np.zeros(len(add), bool)
+        off = sum(len(x) for x in v_out)
+        add[new_idx - off] = q
+        madd[new_idx - off] = mask[idx]
+        v_out.append(add)
+        m_out.append(madd)
+    bm.to_mesh(cards.data)
+    bm.free()
+    cards.data.update()
+    print(f"HAIR_BACK_FILL cards={len(np.unique(comp[pick]))} angles={[float(a) for a in BACK_FILL]} "
+          f"verts {n} -> {sum(len(x) for x in v_out)}")
+    copied = np.arange(sum(len(x) for x in v_out)) >= n
+    return np.concatenate(v_out), np.concatenate(m_out), copied
 
 
 def root_mask_atlas(cards, attr_png):
@@ -173,6 +256,10 @@ SCALP_STRENGTH = 0.85
 ROOT_FRAC = 0.15
 # None fits a uniform scale; a number fixes it (grooms are authored for their head).
 FIT_SCALE = None
+# Degrees to rotate copies of the side curtains towards the back, for grooms whose
+# back cards were not exported (see back_fill). None disables it.
+BACK_FILL = None
+BACK_FILL_MIN_SIDE = 0.06  # m from the head's mid-plane for a card to count as a side curtain
 
 
 def configure(cfg):
@@ -180,7 +267,7 @@ def configure(cfg):
     for k, v in cfg.items():
         if k not in globals() or not k.isupper():
             raise KeyError(f"unknown hair setting {k}")
-        globals()[k] = np.array(v, float) if isinstance(v, list) else v
+        globals()[k] = np.array(v, float) if isinstance(v, list) and k != "FBX" else v
 
 
 def volumize(v, centre, top):
@@ -281,8 +368,14 @@ def add_hair(head, armature=None, bone="Head"):
     # The similarity fit can land the hairline above the groom's bound position (Anna: ~1 cm,
     # judged against the MetaHuman Creator render); HAIR_OFFSET corrects it before pushing out.
     v = v * s + t + HAIR_OFFSET
-    tint_scalp(head, v[mask], SCALP_OUT)
     centre = np.array([target[:, 0].mean(), target[:, 1].mean(), top - 0.10])
+    tint_at = v[mask]
+    if BACK_FILL is not None and len(BACK_FILL):
+        v, mask, _ = back_fill(cards, v, mask, centre, bvh)
+        # The copies hang from the parting, so their roots don't reach the back of
+        # the scalp: tint the back half of the cranium as well.
+        tint_at = np.concatenate([tint_at, target[target[:, 1] > centre[1]]])
+    tint_scalp(head, tint_at, SCALP_OUT)
     v = volumize(v, centre, top)
     pushed = push_out(v, bvh)
     cards.data.vertices.foreach_set("co", v.ravel())

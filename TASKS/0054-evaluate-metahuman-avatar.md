@@ -376,6 +376,14 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     `extract_glb_texture.py --detail-from-roughness` plus `outfit.textures`.
   - Hair colours from `groom-colours.txt` (Melanin/Redness) were matched by
     eye: hair `0d0907`/`110c09`, brows `140e0a`.
-  - Open: a faint straight-edged shading band on the left cheek in Face
-    framing (also on Anna); it remains with all hair hidden, so it is not
-    the hair.
+  - Resolved: the faint straight-edged band on the left cheek in Face
+    framing (also on Anna) was the hair cards' shadow from the stage key
+    light (shadow maps ignore alpha). Hiding the hair or the key-light
+    shadow removed it. Cutout and transparent materials no longer cast
+    stage shadows.
+  - Odette's back of head was bald: only hair card `Group0` (front and
+    sides, 12.5 cm deep on a 23 cm head) was exported. `hair.FBX` now
+    accepts a list of groups; until the other `Hair_L_Straight` groups are
+    exported, `hair.BACK_FILL [35, 70, 105]` copies the side curtains
+    towards the back (12k -> 43k hair vertices; GLB 42 -> 44 MB). Anna's
+    build is byte-identical. See the tutorial, *Bald back of the head*.

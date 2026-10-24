@@ -381,7 +381,8 @@ def load_config(path):
     for section, keys in (("hair", ("FBX", "BASE", "SCALP_OUT")), ("brows", ("FBX", "TEX"))):
         for k in keys:
             if cfg.get(section) and k in cfg[section]:
-                cfg[section][k] = resolve(cfg[section][k])
+                v = cfg[section][k]
+                cfg[section][k] = [resolve(x) for x in v] if isinstance(v, list) else resolve(v)
     if cfg.get("outfit"):
         cfg["outfit"]["glb"] = resolve(cfg["outfit"]["glb"])
         names = set(cfg["outfit"]["garments"].values())
