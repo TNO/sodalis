@@ -157,8 +157,75 @@ def cull_hidden_body(body, garments):
     print(f"CULL {body.name} removed {len(faces)} of {before} faces, {len(me.vertices)} verts remain")
 
 
-def add_outfit(rig, rig_body, rig_head, glb, garments_map):
-    """Import `glb` and keep {GLB mesh object name: new object/material name} garments on `rig`."""
+TUCK_MARGIN = 0.02  # length of inner garment kept under the outer garment's edge
+TUCK_CLEARANCE = 0.003
+
+
+def tuck_under(inner, outer, margin=TUCK_MARGIN, clearance=TUCK_CLEARANCE):
+    """Tuck `inner` (e.g. a blouse) into `outer` (e.g. jeans): cut what `outer` covers.
+
+    Faces of `inner` that are covered by `outer` are deleted, except a `margin` strip next to
+    the visible part so no gap opens at the edge. That strip is pushed `clearance` inside
+    `outer`, so it cannot show through.
+    """
+    import bmesh
+    from mathutils.bvhtree import BVHTree
+    from mathutils.kdtree import KDTree
+
+    outer.data.calc_loop_triangles()
+    tree = BVHTree.FromPolygons([v.co for v in outer.data.vertices],
+                                [t.vertices for t in outer.data.loop_triangles])
+    me = inner.data
+
+    def covered(v):
+        hit, _, _, dist = tree.ray_cast(v.co + v.normal * 1e-4, v.normal, 0.03)
+        if hit is not None:
+            return True
+        if tree.find_nearest(v.co, 0.005)[0] is not None:
+            return True
+        # Inner fabric already outside the outer garment (the visible poke-through).
+        return tree.ray_cast(v.co - v.normal * 1e-4, -v.normal, 0.015)[0] is not None
+
+    under = [covered(v) for v in me.vertices]
+    visible = [v.co for v in me.vertices if not under[v.index]]
+    if not visible:
+        raise RuntimeError(f"tuck: {outer.name} covers all of {inner.name}")
+    kd = KDTree(len(visible))
+    for i, p in enumerate(visible):
+        kd.insert(p, i)
+    kd.balance()
+    cut = [under[v.index] and kd.find(v.co)[2] > margin for v in me.vertices]
+
+    pushed = 0
+    for v in me.vertices:
+        if not under[v.index] or cut[v.index]:
+            continue
+        hit, normal, _, _ = tree.find_nearest(v.co, 0.05)
+        if hit is None:
+            continue
+        depth = (v.co - hit).dot(normal)
+        if depth > -clearance:
+            v.co -= normal * (depth + clearance)
+            pushed += 1
+
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bm.verts.ensure_lookup_table()
+    faces = [f for f in bm.faces if all(cut[v.index] for v in f.verts)]
+    before = len(bm.faces)
+    bmesh.ops.delete(bm, geom=faces, context="FACES_ONLY")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(me)
+    bm.free()
+    print(f"TUCK {inner.name} into {outer.name}: removed {len(faces)} of {before} faces, "
+          f"pushed {pushed} verts inside")
+
+
+def add_outfit(rig, rig_body, rig_head, glb, garments_map, tuck=None):
+    """Import `glb` and keep {GLB mesh object name: new object/material name} garments on `rig`.
+
+    `tuck` maps an inner garment's new name to the outer garment it is tucked into.
+    """
     assert rig.matrix_world == Matrix.Identity(4)
     before = set(bpy.data.objects)
     mats_before = set(bpy.data.materials)
@@ -208,6 +275,8 @@ def add_outfit(rig, rig_body, rig_head, glb, garments_map):
         print("GARMENT", new_name, "verts", len(obj.data.vertices), "groups", len(obj.vertex_groups))
 
     worn = [bpy.data.objects[v] for v in garments_map.values()]
+    for inner, outer in (tuck or {}).items():
+        tuck_under(bpy.data.objects[inner], bpy.data.objects[outer])
     cull_hidden_body(rig_body, worn)  # the head is not culled: it would open a gap inside the collar
     for o in new:
         if o.name not in set(garments_map.values()):

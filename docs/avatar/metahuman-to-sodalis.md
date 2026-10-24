@@ -462,6 +462,7 @@ do not apply.
 | `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, scalp colour (sRGB 0–1) |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
+| `outfit.tuck` | no | `{inner new name: outer new name}`: cut the inner garment where the outer covers it, e.g. `{"Blouse": "Jeans"}` |
 | `texture_cap` | no (2048) | Largest texture side; Sodalis recommends at most 2048 |
 
 To find the garment mesh names, open the glTF in Blender or read its JSON
@@ -514,7 +515,10 @@ What the build does:
    from the body and head. It hides body skin under the garments: skin that
    fabric touches, or that a short ray along its normal hits fabric from.
    Body skin is never hidden by distance alone, which would remove a bare
-   belly between top and jeans.
+   belly between top and jeans. Garments are not tested against each other:
+   if a top shows through the jeans, list it in `outfit.tuck`. The build
+   then deletes the top's faces that the jeans cover, keeping a 2 cm strip
+   pushed just inside the waistband, so the top looks tucked in.
 7. **Export** (`build_avatar.export_glb`) with morph normals, then
    **post-process** (`gltf_morphs.py`): repairs fold normals and stores morph
    targets sparsely (see the eyelid observation below).
