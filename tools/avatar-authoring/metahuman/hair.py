@@ -30,6 +30,11 @@ def world_verts(o):
 
 
 def import_cards():
+    """Import each card-group FBX; returns one mesh object per group, not joined.
+
+    Unreal does not export every group in the same frame (Odette: Group0 in groom
+    template space, Group1 about 15 cm higher), so each group is fitted separately.
+    """
     groups = []
     for path in FBX if isinstance(FBX, list) else [FBX]:
         before = set(bpy.data.objects)
@@ -38,16 +43,26 @@ def import_cards():
         cards = next(o for o in new if o.name.startswith("Hair_") and o.type == "MESH")
         for o in new - {cards}:  # UCX_ collision hull
             bpy.data.objects.remove(o)
+        bpy.ops.object.select_all(action="DESELECT")
+        cards.select_set(True)
+        bpy.context.view_layer.objects.active = cards
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        # UV channel 0 holds the atlas UVs, but its name varies per export
+        # (UVmap_0, or LightMapUV when no lightmap channel was exported).
+        if groups and cards.data.uv_layers:
+            cards.data.uv_layers[0].name = groups[0].data.uv_layers[0].name
         groups.append(cards)
-    cards = groups[0]
+    return groups
+
+
+def join(groups):
     bpy.ops.object.select_all(action="DESELECT")
     for o in groups:
         o.select_set(True)
-    bpy.context.view_layer.objects.active = cards
+    bpy.context.view_layer.objects.active = groups[0]
     if len(groups) > 1:
         bpy.ops.object.join()
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    return cards
+    return groups[0]
 
 
 def components(cards):
@@ -358,16 +373,30 @@ def tint_scalp(head, roots, out_path):
 
 def add_hair(head, armature=None, bone="Head"):
     bpy.context.view_layer.update()  # matrix_world is stale right after reparenting
-    cards = import_cards()
-    mask = root_mask(cards)
-    v = world_verts(cards)
+    groups = import_cards()
     target, bvh = scalp(head)
     top = target[:, 2].max()
     target = target[target[:, 2] > top - 0.13]  # cranium only
-    s, t, err = fit(v[mask], target)
+    fits, errs = [], []
+    for g in groups:
+        gv = world_verts(g)
+        gs, gt, gerr = fit(gv[root_mask(g)], target)
+        if len(groups) > 1:
+            print(f"HAIR_GROUP {g.name} scale={gs:.4f} t={np.round(gt, 4)} "
+                  f"rootErr(mm) med={np.median(gerr)*1000:.1f}")
+        if fits:  # move later groups into the first group's frame
+            s0, t0 = fits[0]
+            g.data.vertices.foreach_set("co", ((gv * gs + gt - t0) / s0).ravel())
+        fits.append((gs, gt))
+        errs.append(gerr)
+    # The first group shares the brow cards' (template) frame; the brows reuse its fit.
+    s, t = fits[0]
+    err = np.concatenate(errs)
+    cards = join(groups)
+    mask = root_mask(cards)
     # The similarity fit can land the hairline above the groom's bound position (Anna: ~1 cm,
     # judged against the MetaHuman Creator render); HAIR_OFFSET corrects it before pushing out.
-    v = v * s + t + HAIR_OFFSET
+    v = world_verts(cards) * s + t + HAIR_OFFSET
     centre = np.array([target[:, 0].mean(), target[:, 1].mean(), top - 0.10])
     tint_at = v[mask]
     if BACK_FILL is not None and len(BACK_FILL):

@@ -394,3 +394,8 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     lashes. New `brows.BROW_EYE_HEIGHT` (Odette 0.26; Anna measures 0.26)
     gives 5648/5676 hits. Brows rebaked soft brown; `rest_lid_lift` 0.35
     (0.7 looked surprised). Anna's build is byte-identical.
+  - Odette's hair Group1 exported (back of the head). It came out about
+    15 cm higher than Group0 and with its atlas UVs named `LightMapUV`, so
+    `hair.py` now fits each group separately (brows reuse Group0's fit) and
+    renames UV channel 0. `BACK_FILL` removed: 729 cards, 38 MB GLB, root
+    error 4.6 mm, brows unchanged (5648/5676 hits). Anna is byte-identical.

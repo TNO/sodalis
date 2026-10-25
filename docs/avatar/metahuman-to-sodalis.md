@@ -261,7 +261,12 @@ For **each selected groom** (normally one hair and one brow groom):
    styles can split their cards over several groups: also export every
    `_CardsMesh_Group1_LOD0`, `_Group2_LOD0`, … that exists, and list them
    all in `hair.FBX`. A missing group leaves part of the head bald (see
-   *Bald back of the head*).
+   *Bald back of the head*). To see how many groups exist, double-click
+   the **Groom** asset (not a CardsMesh) and open its **Cards** tab: it
+   has one entry per group. Expand each entry; its **Textures** list names
+   the atlas the group uses. If all groups use the same
+   `_CardsAtlas_Attribute`, export it once. The `_CardsAtlas_Tangent`
+   texture is not needed: it only steers Unreal's strand shading.
 3. Find the **Texture** whose name ends in `_CardsAtlas_Attribute`.
    Right-click it, choose **Asset Actions > Export…**, choose **PNG** in the
    *Save as type* list, and save it with the same name.
@@ -733,6 +738,15 @@ by the difference in skull radius so it keeps its stand-off from the skin.
 The scalp tint then also covers the back of the cranium. The log reports
 `HAIR_BACK_FILL cards=… verts a -> b`. Hair from the real groups looks
 better, especially at the crown parting.
+
+Unreal does not export every group in the same frame: Odette's Group0 is in
+groom template space, but Group1 came out about 15 cm higher, roughly in
+character space. The build therefore fits each group to the scalp
+separately (`HAIR_GROUP … t=…` per group in the log); the brows reuse the
+first group's fit, so list the group that shares the brows' frame first
+(Group0). Group1 also had its atlas UVs in a channel named `LightMapUV`
+instead of `UVmap_0`; the build uses UV channel 0 of every group,
+whatever its name.
 
 ### Hard-edged shading band on a cheek
 
