@@ -409,3 +409,9 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     the hair around the cheekbones with a step and was removed), hair rebaked `1c130d`/`2c1f16`,
     `rest_lid_lift` 0.15. Anna's build is byte-identical; her catalogue
     entry gets the new lighting and idle scale too.
+- Odette "wider head, short hair": the head slices match Unreal's export to
+    the millimetre; the width is an impression. Hair length matched too, but
+    the swept-back side cards hung behind and into the shoulders (22% inside
+    the blouse). Added `hair.DRAPE` (bend clear of the body, straighten the
+    front locks, lift them onto the garments, skin the lower hair to
+    `Spine2`). Anna's build is byte-identical.

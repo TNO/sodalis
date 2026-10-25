@@ -275,6 +275,19 @@ FIT_SCALE = None
 # back cards were not exported (see back_fill). None disables it.
 BACK_FILL = None
 BACK_FILL_MIN_SIDE = 0.06  # m from the head's mid-plane for a card to count as a side curtain
+# Long hair: Unreal's groom physics lays the cards over the shoulders, but our rigid
+# cards hang straight down into them. drape() slides each card's clipping part
+# forward or back over the clothing and skins it to DRAPE_BONE. Off by default.
+DRAPE = False
+DRAPE_BONE = "Spine2"
+DRAPE_BLEND = 0.06  # m above the shoulder line over which skinning blends Head -> DRAPE_BONE
+DRAPE_CLEARANCE = 0.012  # m from the body: room for the clothing worn over it
+DRAPE_BEND = 0.04  # m above a contact over which a card starts to bend away
+# Share of a card's front-to-back slope below the pivot (m above the shoulder line)
+# to remove, so locks authored sweeping back hang straight as under gravity.
+DRAPE_STRAIGHTEN = 0.0
+DRAPE_PIVOT = 0.12
+DRAPE_FRONT = 0.0  # m behind the shoulder ridge a straightened tip may land and still fall in front
 
 
 def configure(cfg):
@@ -422,3 +435,125 @@ def add_hair(head, armature=None, bone="Head"):
         mod = cards.modifiers.new("Armature", "ARMATURE")
         mod.object = armature
     return cards, s, t
+
+
+def _exit_distance(bvhs, p, d):
+    """Distance along d to leave every collider p is inside (odd hit count), or 0."""
+    far = 0.0
+    for bvh in bvhs:
+        hits, o, t = 0, Vector(p), 0.0
+        last = 0.0
+        while True:
+            co, _, _, dist = bvh.ray_cast(o, d, 1.0)
+            if co is None:
+                break
+            hits += 1
+            t += dist + 1e-4
+            last = t
+            o = co + d * 1e-4
+        if hits % 2:
+            far = max(far, last)
+    return far
+
+
+def drape(cards, body):
+    """Slide hair that hangs into the shoulders over them (see DRAPE).
+
+    Runs before the outfit is added: the body is closed there, so a ray's hit
+    count tells inside from outside; garments have inner and outer layers.
+    """
+    v = world_verts(cards)
+    bv = world_verts(body)
+    bvh = BVHTree.FromPolygons([tuple(p) for p in bv], [tuple(f.vertices) for f in body.data.polygons])
+    # Shoulder line: the body's top 12 cm beside the mid-plane; its y splits front from back.
+    band = bv[(np.abs(np.abs(bv[:, 0]) - 0.12) < 0.01) & (bv[:, 2] < v[:, 2].max() - 0.2)]
+    ridge = band[band[:, 2].argmax()]
+    comp = components(cards)
+    pivot = ridge[2] + DRAPE_PIVOT
+    moved = 0
+    _DRAPED["ridge"], _DRAPED["front"] = ridge, []
+    for c in np.unique(comp):
+        idx = np.flatnonzero(comp == c)
+        if v[idx, 2].min() > ridge[2] + 0.04:
+            continue
+        below = idx[v[idx, 2] < pivot]
+        tip = idx[v[idx, 2].argmin()]
+        if DRAPE_STRAIGHTEN and len(below) and len(below) < len(idx):
+            yp = v[idx[np.argmin(np.abs(v[idx, 2] - pivot))], 1]
+            # Ease in below the pivot so the card bends rather than kinks.
+            e = np.clip((pivot - v[below, 2]) / 0.05, 0, 1)
+            dy = DRAPE_STRAIGHTEN * e * (v[below, 1] - yp)
+            # Only locks that then fall in front: the back hair rests on the back as authored.
+            if v[tip, 1] - DRAPE_STRAIGHTEN * (v[tip, 1] - yp) < ridge[1] + DRAPE_FRONT:
+                v[below, 1] -= dy
+        sgn = -1.0 if v[tip, 1] < ridge[1] + DRAPE_FRONT else 1.0
+        if sgn < 0:
+            _DRAPED["front"].append(idx)
+        d = Vector((0, sgn, 0))
+        # Probe slightly inset so hair just outside the body still gets clearance.
+        need = np.array([_exit_distance([bvh], v[i] - np.array(d) * DRAPE_CLEARANCE, d) for i in idx])
+        need = np.where(need > 0, need, 0)
+        if not need.any():
+            continue
+        # Each contact bends the card from DRAPE_BEND above it down to the tip.
+        dz = v[idx, 2][:, None] - v[idx, 2][None, :]  # row: moved vertex, col: contact
+        f = np.where(dz <= 0, 1.0, np.clip(1 - dz / DRAPE_BEND, 0, 1) ** 2)
+        v[idx, 1] += sgn * (f * need[None, :]).max(1)
+        moved += 1
+    _set_world_verts(cards, v)
+    w = np.clip((v[:, 2] - ridge[2]) / DRAPE_BLEND, 0, 1)
+    w = w * w * (3 - 2 * w)
+    head = cards.vertex_groups["Head"]
+    low = cards.vertex_groups.new(name=DRAPE_BONE)
+    for i, wi in enumerate(w):
+        head.add([i], float(wi), "REPLACE")
+        if wi < 1:
+            low.add([i], float(1 - wi), "REPLACE")
+    print(f"HAIR_DRAPE cards={moved} shoulder z={ridge[2]:.3f} y={ridge[1]:.3f} lowest z={v[:, 2].min():.3f}")
+
+
+_DRAPED = {}
+DRAPE_OVER_DEPTH = 0.05
+
+
+def _set_world_verts(o, v):
+    M = np.array(o.matrix_world)
+    local = (v - M[:3, 3]) @ np.linalg.inv(M[:3, :3]).T
+    o.data.vertices.foreach_set("co", local.ravel())
+    o.data.update()
+
+
+def drape_over(cards, colliders):
+    """Lift the locks drape() laid in front onto the garments' outer surface.
+
+    Clothes stand off the body (most over the bust), so tips draped against the
+    body can end up inside them. Rays cast from the front hit the outer layer
+    first, which sidesteps the inner/outer layer ambiguity.
+    """
+    if not _DRAPED.get("front"):
+        return
+    v = world_verts(cards)
+    bvhs = []
+    for o in colliders:
+        ov = world_verts(o)
+        bvhs.append(BVHTree.FromPolygons([tuple(p) for p in ov], [tuple(f.vertices) for f in o.data.polygons]))
+    top = _DRAPED["ridge"][2] + 0.04
+    moved = 0
+    for idx in _DRAPED["front"]:
+        need = np.zeros(len(idx))
+        for k, i in enumerate(idx):
+            if v[i, 2] > top:
+                continue
+            o = Vector((v[i, 0], -1.0, v[i, 2]))
+            ys = [h[0].y for h in (b.ray_cast(o, Vector((0, 1, 0))) for b in bvhs) if h[0] is not None]
+            # Deeper than a garment's stand-off means the vertex is behind the body, not in its clothes.
+            if ys and v[i, 1] - min(ys) < DRAPE_OVER_DEPTH:
+                need[k] = max(0.0, v[i, 1] - (min(ys) - DRAPE_CLEARANCE))
+        if not need.any():
+            continue
+        dz = v[idx, 2][:, None] - v[idx, 2][None, :]
+        f = np.where(dz <= 0, 1.0, np.clip(1 - dz / DRAPE_BEND, 0, 1) ** 2)
+        v[idx, 1] -= (f * need[None, :]).max(1)
+        moved += 1
+    _set_world_verts(cards, v)
+    print(f"HAIR_DRAPE_OVER cards={moved} colliders={len(colliders)}")

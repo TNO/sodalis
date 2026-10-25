@@ -497,6 +497,7 @@ do not apply.
 | `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, scalp colour (sRGB 0–1) |
 | `hair.ROOT_FRAC`, `hair.FIT_SCALE` | no (0.15, fitted) | Fraction of each card treated as root when fitting to the scalp; fixed fit scale instead of a fitted one. Long hair: `0.05` and `1.0` |
 | `hair.BACK_FILL`, `hair.BACK_FILL_MIN_SIDE` | no (off, 0.06) | Workaround for a missing back card group: copy the long side cards, rotated by these angles (degrees) towards the back. Only cards whose tips hang more than `MIN_SIDE` m beside the head are copied. Odette: `[35, 70, 105]` |
+| `hair.DRAPE`, `DRAPE_STRAIGHTEN`, `DRAPE_FRONT`, `DRAPE_CLEARANCE`, `DRAPE_BEND`, `DRAPE_PIVOT`, `DRAPE_BLEND`, `DRAPE_BONE` | no (off, 0, 0, 0.012, 0.04, 0.12, 0.06, `Spine2`) | Lay long hair over the shoulders instead of through them. Cards are first bent clear of the body. `STRAIGHTEN` (0–1) removes the groom's backward sweep below `PIVOT` m above the shoulder line, for cards whose tips then fall in front of it (+`FRONT` m). After the outfit is added, front locks are lifted onto the garments' outer surface. Hair below the shoulders is skinned to `BONE`, blended over `BLEND` m. Odette: on, 0.9, 0.03, 0.02 |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `brows.BROW_EYE_HEIGHT` | no | Mean brow height above the eye centres, in eye spacings (Anna measures 0.26). Replaces `BROW_OFFSET`'s vertical effect. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
@@ -823,6 +824,13 @@ face texture matched ours. The differences were:
   flat. Odette uses `--root 1c130d --tip 2c1f16`; `2b1d15`/`45301f` was
   too light (chestnut).
 - **Wide eyes.** Lower `face.rest_lid_lift` (Odette: 0.15).
+- **Head looks wider.** Horizontal slices of our head and Unreal's export
+  matched to the millimetre. The impression came from hair standing off
+  the face, cheek blush, flat lighting and hair hidden behind the shoulders.
+- **Hair behind the shoulders.** The groom is authored swept back, and
+  Unreal's hair physics drapes it forward. Without physics, a fifth of the
+  long cards ended inside the blouse. Use `hair.DRAPE` (see the config
+  table) with `DRAPE_STRAIGHTEN` about 0.9.
 
 ### Idle body motion
 

@@ -483,7 +483,9 @@ def main():
     hair_s, hair_t = 1.0, np.zeros(3)
     if cfg.get("hair"):
         hair.configure({"NAME": NAME + "_Hair", **cfg["hair"]})
-        _, hair_s, hair_t = hair.add_hair(head, body_arm, "Head")
+        cards, hair_s, hair_t = hair.add_hair(head, body_arm, "Head")
+        if hair.DRAPE:
+            hair.drape(cards, body)
     if cfg.get("brows"):
         if not cfg.get("hair"):
             raise ValueError("brows are placed with the hair's template fit; configure hair too")
@@ -499,8 +501,12 @@ def main():
         if stray:
             raise RuntimeError(f"{o.name}: groups without bones {stray}")
     if cfg.get("outfit"):
+        before = set(bpy.data.objects)
         add_metahuman_outfit.add_outfit(body_arm, body, head, cfg["outfit"]["glb"], cfg["outfit"]["garments"],
                                         cfg["outfit"].get("tuck"), cfg["outfit"].get("textures"))
+        if cfg.get("hair") and hair.DRAPE:
+            garments = [o for o in bpy.data.objects if o not in before and o.type == "MESH"]
+            hair.drape_over(cards, garments + [body])
     build_avatar.cap_textures(cfg.get("texture_cap", 2048))
     if blend:
         bpy.ops.wm.save_as_mainfile(filepath=blend, compress=True)
