@@ -405,6 +405,7 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     0.2 on `noseSneer`/`cheekPuff`/`mouthRoll`: a grimace), side hair 1–4 cm
     off the cheeks, near-black hair and wide eyes. Fixes:
     `lighting: "portrait"` and `behavior.idleFaceScale` 0.3 for MetaHuman
-    entries, `hair.HUG` 0.03, hair rebaked `1c130d`/`2c1f16`,
+    entries, `hair.VOLUME_SIDE` 0.02 (a tried `hair.HUG` inward pull wrapped
+    the hair around the cheekbones with a step and was removed), hair rebaked `1c130d`/`2c1f16`,
     `rest_lid_lift` 0.15. Anna's build is byte-identical; her catalogue
     entry gets the new lighting and idle scale too.
