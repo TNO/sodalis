@@ -1,13 +1,16 @@
 import type { AvatarController } from "@sodalis/avatar";
+import {
+  DEFAULT_TTS_CHUNK_CHARACTERS,
+  DEFAULT_TTS_CHUNK_PAUSE_MS,
+  splitSpeechText,
+} from "@sodalis/speech";
 import type {
   ActiveSpeechOutput,
   SpeechRequest,
+  SpeechWordTimestamp,
   TextToSpeechProvider,
 } from "@sodalis/speech";
-import {
-  AmplitudeLipSyncAdapter,
-  type LipSyncAvatar,
-} from "./AmplitudeLipSyncAdapter.js";
+import { AmplitudeLipSyncAdapter } from "./AmplitudeLipSyncAdapter.js";
 
 export type SpeechAudioBuffer = AudioBuffer;
 export type SpeechAudioSource = AudioBufferSourceNode;
@@ -23,6 +26,13 @@ export interface SpeechPlaybackLatency {
 
 export interface SpeechPlaybackControllerOptions {
   readonly provider: TextToSpeechProvider;
+  readonly fallbackProviders?: readonly TextToSpeechProvider[];
+  readonly alignAudio?: (
+    text: string,
+    language: string,
+    audio: Blob,
+    signal: AbortSignal,
+  ) => Promise<readonly SpeechWordTimestamp[]>;
   readonly getAvatarController: () => Pick<
     AvatarController,
     "setState" | "setViseme"
@@ -33,6 +43,11 @@ export interface SpeechPlaybackControllerOptions {
     speaking: boolean,
     request: SpeechRequest,
   ) => void;
+  readonly onWordChange?: (
+    wordIndex: number | undefined,
+    request: SpeechRequest,
+  ) => void;
+  readonly onAlignmentError?: (error: Error, request: SpeechRequest) => void;
   readonly onCancelGeneration?: () => void;
   readonly onLatency?: (metric: SpeechPlaybackLatency) => void;
   readonly createAudioContext?: () => SpeechAudioContext;
@@ -47,6 +62,7 @@ export interface SpeechPlaybackController extends ActiveSpeechOutput {
 }
 
 interface ActivePlayback {
+  readonly request: SpeechRequest;
   readonly context: SpeechAudioContext;
   readonly abortController: AbortController;
   readonly sources: Set<SpeechAudioSource>;
@@ -55,16 +71,165 @@ interface ActivePlayback {
   lipSync?: AmplitudeLipSyncAdapter;
   nextStartTime: number;
   frameHandle?: number;
+  audioStartTime?: number;
+  wordTimestamps: readonly TimedSpeechWord[];
+  activeWordIndex?: number;
   speaking: boolean;
   stopped: boolean;
   cancellationStartedAt?: number;
 }
+
+interface TimedSpeechWord extends SpeechWordTimestamp {
+  readonly wordIndex: number;
+}
+
+interface SynthesizedSpeechChunk {
+  readonly pcm: Uint8Array;
+  readonly sampleRate: number;
+  readonly wordTimestamps: readonly SpeechWordTimestamp[];
+  readonly firstAudioReceivedAt: number;
+}
+
+class SpeechChunkProtocolError extends Error {}
 
 function createAudioContext(): SpeechAudioContext {
   if (typeof globalThis.AudioContext !== "function") {
     throw new Error("Web Audio is unavailable in this browser.");
   }
   return new globalThis.AudioContext();
+}
+
+function mergeAudioChunks(chunks: readonly Uint8Array[]): Uint8Array {
+  const byteLength = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const merged = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged;
+}
+
+function createWaveBlob(pcm: Uint8Array, sampleRate: number): Blob {
+  if (pcm.byteLength % 2 !== 0) {
+    throw new Error("Speech playback received an incomplete PCM sample.");
+  }
+  const wav = new Uint8Array(44 + pcm.byteLength);
+  const view = new DataView(wav.buffer);
+  const writeAscii = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) {
+      wav[offset + index] = value.charCodeAt(index);
+    }
+  };
+  writeAscii(0, "RIFF");
+  view.setUint32(4, 36 + pcm.byteLength, true);
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, "data");
+  view.setUint32(40, pcm.byteLength, true);
+  wav.set(pcm, 44);
+  return new Blob([wav], { type: "audio/wav" });
+}
+
+function activeWordIndexAt(
+  timestamps: readonly TimedSpeechWord[],
+  time: number,
+): number | undefined {
+  return timestamps.find(
+    (timestamp) => timestamp.start <= time && time < timestamp.end,
+  )?.wordIndex;
+}
+
+function countSpeechWords(text: string): number {
+  return [...text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)].length;
+}
+
+async function synthesizeSpeechChunk(
+  providers: readonly TextToSpeechProvider[],
+  request: SpeechRequest,
+  signal: AbortSignal,
+  now: () => number,
+): Promise<SynthesizedSpeechChunk> {
+  const providerErrors: Error[] = [];
+  for (const provider of providers) {
+    const chunks: Uint8Array[] = [];
+    const wordTimestamps: SpeechWordTimestamp[] = [];
+    let sampleRate: number | undefined;
+    let firstAudioReceivedAt: number | undefined;
+    let expectedSequence = 0;
+    try {
+      for await (const chunk of provider.speak(request, signal)) {
+        signal.throwIfAborted();
+        if (
+          chunk.sessionId !== request.sessionId ||
+          chunk.speechId !== request.speechId ||
+          chunk.sequence !== expectedSequence
+        ) {
+          throw new SpeechChunkProtocolError(
+            "Speech playback received a stale or out-of-order chunk.",
+          );
+        }
+        expectedSequence += 1;
+        if (chunk.type === "timing") {
+          if (chunk.kind === "word") {
+            const start = chunk.startMs / 1000;
+            const end = chunk.endMs / 1000;
+            if (
+              !chunk.value.trim() ||
+              !Number.isFinite(start) ||
+              !Number.isFinite(end) ||
+              start < 0 ||
+              end < start ||
+              (wordTimestamps.at(-1)?.start ?? -1) > start
+            ) {
+              throw new Error("Speech provider returned invalid word timings.");
+            }
+            wordTimestamps.push({ word: chunk.value, start, end });
+          }
+          continue;
+        }
+
+        const chunkSampleRate = pcmSampleRate(chunk.mimeType);
+        if (sampleRate !== undefined && sampleRate !== chunkSampleRate) {
+          throw new Error("Speech provider changed PCM sample rate mid-stream.");
+        }
+        sampleRate = chunkSampleRate;
+        if (!chunk.data.byteLength) continue;
+        firstAudioReceivedAt ??= now();
+        chunks.push(chunk.data);
+      }
+      if (!chunks.length || sampleRate === undefined || firstAudioReceivedAt === undefined) {
+        throw new Error("Speech provider returned no audio.");
+      }
+      return {
+        pcm: mergeAudioChunks(chunks),
+        sampleRate,
+        wordTimestamps,
+        firstAudioReceivedAt,
+      };
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof SpeechChunkProtocolError) throw error;
+      providerErrors.push(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  if (providerErrors.length === 1) throw providerErrors[0];
+  throw new Error(
+    `Speech synthesis failed for configured providers: ${providers
+      .map((provider, index) =>
+        `${provider.id}: ${providerErrors[index]?.message ?? "failed"}`,
+      )
+      .join("; ")}`,
+    { cause: providerErrors.at(-1) },
+  );
 }
 
 function pcmSampleRate(mimeType: string): number {
@@ -180,12 +345,22 @@ export function createSpeechPlaybackController(
   };
 
   const startLipSync = (playback: ActivePlayback) => {
-    if (!playback.analyser || !playback.lipSync) return;
+    if (!playback.analyser) return;
     const samples = new Uint8Array(playback.analyser.fftSize);
     const update = () => {
       if (active !== playback || playback.stopped || !playback.analyser) return;
       playback.analyser.getByteTimeDomainData(samples);
       playback.lipSync?.update(audioRms(samples));
+      if (playback.audioStartTime !== undefined) {
+        const wordIndex = activeWordIndexAt(
+          playback.wordTimestamps,
+          playback.context.currentTime - playback.audioStartTime,
+        );
+        if (wordIndex !== playback.activeWordIndex) {
+          playback.activeWordIndex = wordIndex;
+          options.onWordChange?.(wordIndex, playback.request);
+        }
+      }
       playback.frameHandle = requestFrame(update);
     };
     playback.frameHandle = requestFrame(update);
@@ -204,11 +379,13 @@ export function createSpeechPlaybackController(
 
     const context = createContext();
     const playback: ActivePlayback = {
+      request,
       context,
       abortController: new AbortController(),
       sources: new Set(),
       endedSources: [],
       nextStartTime: context.currentTime,
+      wordTimestamps: [],
       speaking: false,
       stopped: false,
     };
@@ -232,25 +409,69 @@ export function createSpeechPlaybackController(
       const avatar = options.getAvatarController();
       if (avatar) playback.lipSync = new AmplitudeLipSyncAdapter(avatar);
 
-      let expectedSequence = 0;
-      for await (const chunk of options.provider.speak(
-        request,
-        playback.abortController.signal,
-      )) {
-        playback.abortController.signal.throwIfAborted();
-        if (
-          chunk.sessionId !== request.sessionId ||
-          chunk.speechId !== request.speechId ||
-          chunk.sequence !== expectedSequence
-        ) {
-          throw new Error("Speech playback received a stale or out-of-order chunk.");
-        }
-        expectedSequence += 1;
-        if (chunk.type !== "audio") continue;
+      const textChunks = splitSpeechText(
+        request.text,
+        DEFAULT_TTS_CHUNK_CHARACTERS,
+      );
+      if (!textChunks.length) {
+        throw new Error("Speech request contains no speakable text.");
+      }
+      const providers = [options.provider, ...(options.fallbackProviders ?? [])];
+      const playbackStartTime = context.currentTime;
+      let sourceWordOffset = 0;
+      let firstAudioPlayed = false;
 
-        const receivedAt = now();
-        const sampleRate = pcmSampleRate(chunk.mimeType);
-        const buffer = createAudioBuffer(context, chunk.data, sampleRate);
+      for (const [chunkIndex, text] of textChunks.entries()) {
+        playback.abortController.signal.throwIfAborted();
+        if (playback.stopped) return;
+        const chunkRequest = { ...request, text };
+        const synthesized = await synthesizeSpeechChunk(
+          providers,
+          chunkRequest,
+          playback.abortController.signal,
+          now,
+        );
+        const buffer = createAudioBuffer(
+          context,
+          synthesized.pcm,
+          synthesized.sampleRate,
+        );
+        let wordTimestamps = [...synthesized.wordTimestamps];
+        if (!wordTimestamps.length && options.alignAudio) {
+          try {
+            wordTimestamps = [
+              ...(await options.alignAudio(
+                text,
+                request.language,
+                createWaveBlob(synthesized.pcm, synthesized.sampleRate),
+                playback.abortController.signal,
+              )),
+            ];
+          } catch (error) {
+            playback.abortController.signal.throwIfAborted();
+            options.onAlignmentError?.(
+              error instanceof Error ? error : new Error(String(error)),
+              request,
+            );
+          }
+        }
+        playback.abortController.signal.throwIfAborted();
+        if (playback.stopped) return;
+
+        const startAt = Math.max(playback.nextStartTime, context.currentTime);
+        if (playback.audioStartTime === undefined) {
+          playback.audioStartTime = startAt;
+        }
+        const elapsedBeforeChunk = startAt - playbackStartTime;
+        playback.wordTimestamps = [
+          ...playback.wordTimestamps,
+          ...wordTimestamps.map((timestamp, index) => ({
+            ...timestamp,
+            start: timestamp.start + elapsedBeforeChunk,
+            end: timestamp.end + elapsedBeforeChunk,
+            wordIndex: sourceWordOffset + index,
+          })),
+        ];
         const source = context.createBufferSource();
         source.buffer = buffer;
         source.connect(playback.analyser);
@@ -261,15 +482,16 @@ export function createSpeechPlaybackController(
           };
         });
         playback.sources.add(source);
-        const startAt = Math.max(
-          playback.nextStartTime,
-          context.currentTime,
-        );
         source.start(startAt);
-        playback.nextStartTime = startAt + buffer.duration;
+        playback.nextStartTime = startAt + buffer.duration +
+          (chunkIndex < textChunks.length - 1
+            ? DEFAULT_TTS_CHUNK_PAUSE_MS / 1000
+            : 0);
         playback.endedSources.push(sourceEnded);
+        sourceWordOffset += countSpeechWords(text);
 
-        if (!playback.speaking) {
+        if (!firstAudioPlayed) {
+          firstAudioPlayed = true;
           playback.speaking = true;
           setAvatarState(true);
           options.onStateChange?.(true, request);
@@ -278,7 +500,7 @@ export function createSpeechPlaybackController(
             sessionId: request.sessionId,
             speechId: request.speechId,
             type: "first-audio-to-playback",
-            latencyMs: Math.max(0, now() - receivedAt),
+            latencyMs: Math.max(0, now() - synthesized.firstAudioReceivedAt),
           });
         }
       }
@@ -307,6 +529,9 @@ export function createSpeechPlaybackController(
       if (active === playback) {
         active = undefined;
         options.onOutputChange?.(false);
+        if (playback.activeWordIndex !== undefined) {
+          options.onWordChange?.(undefined, request);
+        }
         if (playback.speaking) {
           setAvatarState(false);
           options.onStateChange?.(false, request);

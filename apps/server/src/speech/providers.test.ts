@@ -31,6 +31,14 @@ describe("speech provider selection", () => {
       STT_PROVIDER: "mock", TTS_PROVIDER: "piper-http",
     })).toThrow("PIPER_HTTP_URL");
     expect(() => createSpeechProviders({
+      STT_PROVIDER: "mock", TTS_PROVIDER: "pocket-http",
+    })).toThrow("POCKET_TTS_URL");
+    expect(() => createSpeechProviders({
+      STT_PROVIDER: "mock",
+      TTS_PROVIDER: "pocket-http",
+      POCKET_TTS_URL: "http://127.0.0.1:8094",
+    })).toThrow("POCKET_TTS_API_KEY");
+    expect(() => createSpeechProviders({
       STT_PROVIDER: "azure", TTS_PROVIDER: "mock",
     })).toThrow("AZURE_STT_ENDPOINT");
     expect(() => createSpeechProviders({
@@ -60,6 +68,22 @@ describe("speech provider selection", () => {
       AZURE_TTS_KEY: "test-key",
       AZURE_TTS_VOICE: "nl-NL-ColetteNeural",
     })).toThrow("HTTPS");
+  });
+
+  it("selects Pocket TTS only with its explicit local endpoint, key, and voice", () => {
+    const { tts } = createSpeechProviders({
+      STT_PROVIDER: "mock",
+      TTS_PROVIDER: "pocket-http",
+      POCKET_TTS_URL: "http://host.docker.internal:8094",
+      POCKET_TTS_API_KEY: "test-key",
+      POCKET_TTS_VOICE: "piper-female-nl-reference",
+    });
+    expect(tts).toMatchObject({
+      voiceId: "piper-female-nl-reference",
+      sampleRate: 24_000,
+      mimeType:
+        "audio/pcm;rate=24000;bits=16;channels=1;endianness=little",
+    });
   });
 
   it("selects Azure real-time STT only with its own explicit endpoint and key", () => {

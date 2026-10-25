@@ -411,6 +411,17 @@ body {
   padding-top: 0.15rem;
 }
 
+.avatar-conversation-caption-word-active {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--shell-focus) 24%, transparent);
+  color: var(--shell-focus);
+}
+
+.avatar-conversation-caption-status {
+  color: var(--shell-muted);
+  font-size: 0.8rem;
+}
+
 .avatar-conversation-status {
   margin: 0.75rem 0;
   color: var(--shell-muted);

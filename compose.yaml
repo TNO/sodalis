@@ -35,6 +35,9 @@ services:
       AZURE_TTS_URL: ${AZURE_TTS_URL:-}
       AZURE_TTS_KEY: ${AZURE_TTS_KEY:-}
       AZURE_TTS_VOICE: ${AZURE_TTS_VOICE:-}
+      POCKET_TTS_URL: ${POCKET_TTS_URL:-}
+      POCKET_TTS_API_KEY: ${POCKET_TTS_API_KEY:-}
+      POCKET_TTS_VOICE: ${POCKET_TTS_VOICE:-}
 
   ai:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-ai

@@ -17,10 +17,11 @@ function createResponse(
   body: ReadableStream<Uint8Array>,
   sessionId = request.sessionId,
   speechId = request.speechId,
+  mimeType = AUDIO_MIME_TYPE,
 ): Response {
   return new Response(body, {
     headers: {
-      "content-type": AUDIO_MIME_TYPE,
+      "content-type": mimeType,
       "x-sodalis-session-id": sessionId,
       "x-sodalis-speech-id": speechId,
     },
@@ -80,6 +81,35 @@ describe("ServerTextToSpeechProvider", () => {
       language: "nl-NL",
       voice: "nl_NL-ronnie-medium",
     });
+  });
+
+  it("accepts Pocket's 24 kHz PCM response format", async () => {
+    const mimeType =
+      "audio/pcm;rate=24000;bits=16;channels=1;endianness=little";
+    const provider = new ServerTextToSpeechProvider({
+      fetch: async () =>
+        createResponse(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array([1, 2]));
+              controller.close();
+            },
+          }),
+          request.sessionId,
+          request.speechId,
+          mimeType,
+        ),
+    });
+    const chunks = [];
+
+    for await (const chunk of provider.speak(
+      request,
+      new AbortController().signal,
+    )) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks[0]).toMatchObject({ mimeType });
   });
 
   it("reports request-to-first-audio latency once", async () => {
