@@ -399,3 +399,12 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     `hair.py` now fits each group separately (brows reuse Group0's fit) and
     renames UV channel 0. `BACK_FILL` removed: 729 cards, 38 MB GLB, root
     error 4.6 mm, brows unchanged (5648/5676 hits). Anna is byte-identical.
+  - "Why is the Sodalis Odette uglier than Unreal's?" Geometry (grey render
+    of Unreal's own glTF face) and baked face texture match. The causes
+    were flat studio lighting, TalkingHead's random idle face drift (up to
+    0.2 on `noseSneer`/`cheekPuff`/`mouthRoll`: a grimace), side hair 1–4 cm
+    off the cheeks, near-black hair and wide eyes. Fixes:
+    `lighting: "portrait"` and `behavior.idleFaceScale` 0.3 for MetaHuman
+    entries, `hair.HUG` 0.03, hair rebaked `1c130d`/`2c1f16`,
+    `rest_lid_lift` 0.15. Anna's build is byte-identical; her catalogue
+    entry gets the new lighting and idle scale too.

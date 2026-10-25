@@ -391,6 +391,29 @@ describe("TalkingHead avatar controller", () => {
     expect(smileWeight).toBeCloseTo(0.6237);
   });
 
+  it("scales TalkingHead's random idle face drift with idleFaceScale", async () => {
+    const face = (baseline: number | null) => ({ base: null as number | null, baseline });
+    const runtime = Object.assign(createRuntime(), {
+      mtRandomized: ["noseSneerLeft", "cheekPuff", "missing"],
+      mtAvatar: {
+        noseSneerLeft: face(null),
+        cheekPuff: face(0.1),
+        mouthSmile: face(null),
+      },
+    });
+    const { controller } = createHarness(runtime);
+    await controller.load({ ...testAsset, behavior: { idleFaceScale: 0.25 } });
+
+    runtime.mtAvatar.noseSneerLeft.base = 0.2;
+    runtime.mtAvatar.cheekPuff.base = 0.3;
+    runtime.mtAvatar.mouthSmile.base = 0.2;
+    expect(runtime.mtAvatar.noseSneerLeft.base).toBeCloseTo(0.05);
+    expect(runtime.mtAvatar.cheekPuff.base).toBeCloseTo(0.15);
+    expect(runtime.mtAvatar.mouthSmile.base).toBe(0.2);
+    runtime.mtAvatar.cheekPuff.base = null;
+    expect(runtime.mtAvatar.cheekPuff.base).toBeNull();
+  });
+
   it("damps standing idle poses toward straight with poseScale", async () => {
     const runtime = {
       ...createRuntime(),

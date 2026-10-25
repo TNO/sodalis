@@ -67,6 +67,8 @@ interface TalkingHeadRuntime {
   setValue(morph: string, value: number, durationMilliseconds?: number): void;
   /** Morph targets the loaded model exposes, keyed by name. */
   mtAvatar?: Record<string, unknown>;
+  /** Face morphs TalkingHead drifts at random while idle. */
+  mtRandomized?: readonly string[];
   makeEyeContact(durationMilliseconds: number): void;
   lookAt(x: number, y: number, durationMilliseconds: number): void;
   lookAtCamera(durationMilliseconds: number): void;
@@ -97,6 +99,30 @@ export interface TalkingHeadAvatarControllerOptions {
 interface LoadedRuntime {
   instance: TalkingHeadRuntime;
   dispose(): void;
+}
+
+/**
+ * TalkingHead drifts the idle target (`base`) of some face morphs by up to 0.2
+ * above the mood baseline. Scale that drift; other morph sources are untouched.
+ */
+function scaleIdleFace(runtime: TalkingHeadRuntime, scale: number): void {
+  if (scale === 1) return;
+  for (const name of runtime.mtRandomized ?? []) {
+    const morph = runtime.mtAvatar?.[name] as
+      | { base: number | null; baseline: number | null }
+      | undefined;
+    if (!morph) continue;
+    let base = morph.base;
+    Object.defineProperty(morph, "base", {
+      configurable: true,
+      enumerable: true,
+      get: () => base,
+      set: (value: number | null) => {
+        const rest = morph.baseline ?? 0;
+        base = value === null ? null : rest + (value - rest) * scale;
+      },
+    });
+  }
 }
 
 /** TalkingHead's standing idle poses; kneeling and sitting templates are left alone. */
@@ -742,6 +768,7 @@ export function createTalkingHeadAvatarController({
           }
           captureAmbientPose();
           installVerticalMotionLimits(runtime);
+          scaleIdleFace(runtime, validation.asset.behavior?.idleFaceScale ?? 1);
           cancelPendingLoad = undefined;
           applyHeadMotionPreference(runtime);
           runtime.setMood("neutral");

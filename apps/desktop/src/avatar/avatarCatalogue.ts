@@ -132,8 +132,11 @@ function metahumanEval(id: string, name: string): AvatarCatalogueEntry {
       modelUrl: `${BASE}avatars/eval/${id}-eval.glb`,
       profile: AVATAR_PROFILE_ID,
       framing: { preferred: "bust" },
-      // TalkingHead's hip/side poses read as exaggerated on MetaHuman proportions.
-      behavior: { poseScale: 0.35 },
+      // Photoreal skin looks flat under the bright studio rig.
+      lighting: "portrait",
+      // TalkingHead's hip/side poses and random idle face drift read as
+      // exaggerated on MetaHuman proportions and RigLogic expressions.
+      behavior: { poseScale: 0.35, idleFaceScale: 0.3 },
     },
     attribution: {
       title: `${name} (Epic MetaHuman, evaluation only; not for redistribution)`,

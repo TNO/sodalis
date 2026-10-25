@@ -6,7 +6,7 @@ import {
   type Scene,
   type ToneMapping,
 } from "three";
-import { createAvatarScene } from "./AvatarScene.js";
+import { STAGE_LIGHTING, createAvatarScene } from "./AvatarScene.js";
 import type { AvatarAsset } from "../index.js";
 
 const testAsset: AvatarAsset = {
@@ -73,6 +73,7 @@ describe("Sodalis avatar scene", () => {
     );
     expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(3);
     expect(renderer.toneMapping).toBe(NeutralToneMapping);
+    expect(renderer.toneMappingExposure).toBe(STAGE_LIGHTING.studio.exposure);
     scene.setQuality("low");
     expect(renderer.setPixelRatio).toHaveBeenLastCalledWith(1);
     scene.dispose();

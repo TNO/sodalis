@@ -275,6 +275,11 @@ FIT_SCALE = None
 # back cards were not exported (see back_fill). None disables it.
 BACK_FILL = None
 BACK_FILL_MIN_SIDE = 0.06  # m from the head's mid-plane for a card to count as a side curtain
+# Metres to pull side hair below the cranium centre towards the mid-plane, so long
+# curtains fall over the cheeks as in Unreal instead of framing the face from
+# outside; push_out then restores the skin clearance. 0 disables it.
+HUG = 0.0
+HUG_RAMP = 0.06  # m below the cranium centre over which the pull fades in
 
 
 def configure(cfg):
@@ -292,6 +297,17 @@ def volumize(v, centre, top):
     h = h * h * (3 - 2 * h)
     f = 1 + VOLUME_SIDE + (VOLUME_CROWN - VOLUME_SIDE) * h
     return centre + r * f[:, None]
+
+
+def hug(v, centre):
+    """Pull hair beside and below the cheeks towards the head's mid-plane by up to HUG."""
+    w = np.clip((centre[2] - v[:, 2]) / HUG_RAMP, 0, 1)
+    w = w * w * (3 - 2 * w)
+    dx = v[:, 0] - centre[0]
+    side = np.clip((np.abs(dx) - 0.03) / 0.03, 0, 1)
+    out = v.copy()
+    out[:, 0] -= np.sign(dx) * np.minimum(HUG * w * side, np.abs(dx))
+    return out
 
 
 def _blur(a, r):
@@ -406,6 +422,8 @@ def add_hair(head, armature=None, bone="Head"):
         tint_at = np.concatenate([tint_at, target[target[:, 1] > centre[1]]])
     tint_scalp(head, tint_at, SCALP_OUT)
     v = volumize(v, centre, top)
+    if HUG:
+        v = hug(v, centre)
     pushed = push_out(v, bvh)
     cards.data.vertices.foreach_set("co", v.ravel())
     cards.data.update()

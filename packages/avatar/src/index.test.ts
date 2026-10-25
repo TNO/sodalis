@@ -105,9 +105,11 @@ describe("public avatar contract", () => {
         cameraDistanceScale: 1.1,
       },
       hiddenNodes: ["Wolf3D_Glasses"],
+      lighting: "portrait",
       behavior: {
         blinkScale: 0.9,
         poseScale: 0.4,
+        idleFaceScale: 0.3,
       },
     };
 
@@ -120,6 +122,7 @@ describe("public avatar contract", () => {
       name: "",
       modelUrl: " ",
       profile: "unknown",
+      lighting: "noir",
       framing: {
         preferred: "full",
         cameraDistanceScale: 0,
@@ -136,6 +139,7 @@ describe("public avatar contract", () => {
         { path: "name" },
         { path: "modelUrl" },
         { path: "profile" },
+        { path: "lighting" },
         { path: "framing.preferred" },
         { path: "framing.cameraDistanceScale" },
         { path: "behavior.blinkScale" },
@@ -143,18 +147,21 @@ describe("public avatar contract", () => {
     });
   });
 
-  it("rejects a pose scale above one", () => {
+  it("rejects pose and idle face scales above one", () => {
     const validation = validateAvatarAsset({
       id: "companion",
       name: "Companion",
       modelUrl: "/avatars/companion.glb",
       profile: "sodalis-avatar-0.1",
-      behavior: { poseScale: 1.5 },
+      behavior: { poseScale: 1.5, idleFaceScale: 2 },
     });
 
     expect(validation).toMatchObject({
       ok: false,
-      issues: [{ path: "behavior.poseScale" }],
+      issues: [
+        { path: "behavior.poseScale" },
+        { path: "behavior.idleFaceScale" },
+      ],
     });
   });
 

@@ -36,6 +36,7 @@ import type {
   AvatarBehaviorController,
   AvatarAsset,
   AvatarFramingName,
+  AvatarLighting,
   AvatarQuality,
 } from "../index.js";
 
@@ -56,6 +57,21 @@ interface RendererPort {
  * resolution and three-point studio lighting.
  */
 export type AvatarSceneLook = "companion" | "stage";
+
+interface StageLightingLevels {
+  hemisphere: number;
+  key: number;
+  fill: number;
+  rim: number;
+  environment: number;
+  exposure: number;
+}
+
+/** Light intensities per stage rig; `portrait` lets the faces' sides fall off. */
+export const STAGE_LIGHTING: Record<AvatarLighting, StageLightingLevels> = {
+  studio: { hemisphere: 1.1, key: 3.2, fill: 1.1, rim: 2.4, environment: 0.45, exposure: 1.05 },
+  portrait: { hemisphere: 0.3, key: 3.0, fill: 0.3, rim: 1.6, environment: 0.2, exposure: 1.0 },
+};
 
 export interface AvatarSceneOptions {
   createRenderer?: (
@@ -92,8 +108,9 @@ export function createAvatarScene(
   const look = options.look ?? "companion";
   const scene = new Scene();
   let shadowLight: DirectionalLight | undefined;
+  let applyStageLighting: ((lighting: AvatarLighting) => void) | undefined;
   if (look === "stage") {
-    scene.add(new HemisphereLight(0xf2f4ff, 0x3a3230, 1.1));
+    const hemisphere = new HemisphereLight(0xf2f4ff, 0x3a3230, 1.1);
     const key = new DirectionalLight(0xfff1e0, 3.2);
     key.position.set(-1.6, 2.6, 2.4);
     key.castShadow = true;
@@ -106,7 +123,16 @@ export function createAvatarScene(
     fill.position.set(2.2, 1.6, 2);
     const rim = new DirectionalLight(0xffffff, 2.4);
     rim.position.set(0.8, 2.4, -2.6);
-    scene.add(key, key.target, fill, rim);
+    scene.add(hemisphere, key, key.target, fill, rim);
+    applyStageLighting = (lighting) => {
+      const levels = STAGE_LIGHTING[lighting];
+      hemisphere.intensity = levels.hemisphere;
+      key.intensity = levels.key;
+      fill.intensity = levels.fill;
+      rim.intensity = levels.rim;
+      scene.environmentIntensity = levels.environment;
+      renderer.toneMappingExposure = levels.exposure;
+    };
   } else {
     scene.add(new AmbientLight(0xffffff, 1.6));
     const keyLight = new DirectionalLight(0xffffff, 2.2);
@@ -142,6 +168,7 @@ export function createAvatarScene(
         enhanceStageAvatar(scene);
         fitShadowCamera(shadowLight, bounds);
       }
+      applyStageLighting?.(asset.lighting ?? "studio");
       framingMetadata = asset.framing;
       if (asset.framing) framing = asset.framing.preferred;
       applyFraming(framing);
@@ -154,7 +181,6 @@ export function createAvatarScene(
   let environment: Texture | undefined;
   if (look === "stage") {
     renderer.toneMapping = NeutralToneMapping;
-    renderer.toneMappingExposure = 1.05;
     if (renderer.shadowMap) {
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = PCFSoftShadowMap;
@@ -167,8 +193,8 @@ export function createAvatarScene(
       room.dispose();
       pmrem.dispose();
       scene.environment = environment;
-      scene.environmentIntensity = 0.45;
     }
+    applyStageLighting?.("studio");
   }
   const qualityDprCaps: Record<AvatarQuality, number> = {
     low: 1,

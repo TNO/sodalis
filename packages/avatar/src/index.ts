@@ -176,6 +176,13 @@ export const AVATAR_FRAMINGS = [
 ] as const;
 export type AvatarFramingName = (typeof AVATAR_FRAMINGS)[number];
 
+/**
+ * Stage lighting rigs. `studio` is bright three-point light; `portrait` keeps
+ * fill and ambient low so the key light models the face, for photoreal skin.
+ */
+export const AVATAR_LIGHTINGS = ["studio", "portrait"] as const;
+export type AvatarLighting = (typeof AVATAR_LIGHTINGS)[number];
+
 /** Human-readable names for {@link AVATAR_FRAMINGS}. */
 export const AVATAR_FRAMING_LABELS: Record<AvatarFramingName, string> = {
   face: "Face",
@@ -242,6 +249,8 @@ export interface AvatarAsset {
   profile: typeof AVATAR_PROFILE_ID;
   hiddenNodes?: readonly string[];
   dynamicBones?: readonly AvatarDynamicBone[];
+  /** Stage-look lighting rig; defaults to `studio`. */
+  lighting?: AvatarLighting;
   framing?: {
     preferred: AvatarFramingName;
     cameraTargetYOffset?: number;
@@ -253,6 +262,8 @@ export interface AvatarAsset {
     headMotionScale?: number;
     /** Scales how far TalkingHead's standing idle poses lean away from straight (0–1). */
     poseScale?: number;
+    /** Scales TalkingHead's random idle face drift (sneer, cheek puff, lip roll…) (0–1). */
+    idleFaceScale?: number;
   };
 }
 
@@ -405,6 +416,7 @@ function validateBehavior(
     expressionScale: value.expressionScale,
     headMotionScale: value.headMotionScale,
     poseScale: value.poseScale,
+    idleFaceScale: value.idleFaceScale,
   };
   for (const [path, scale] of Object.entries(scales)) {
     if (scale !== undefined && (!isFiniteNumber(scale) || scale < 0)) {
@@ -414,11 +426,11 @@ function validateBehavior(
       });
     }
   }
-  if (isFiniteNumber(scales.poseScale) && scales.poseScale > 1) {
-    issues.push({
-      path: "behavior.poseScale",
-      message: "Must be at most 1.",
-    });
+  for (const path of ["poseScale", "idleFaceScale"] as const) {
+    const scale = scales[path];
+    if (isFiniteNumber(scale) && scale > 1) {
+      issues.push({ path: `behavior.${path}`, message: "Must be at most 1." });
+    }
   }
 
   return {
@@ -433,6 +445,9 @@ function validateBehavior(
       : {}),
     ...(isFiniteNumber(scales.poseScale) && scales.poseScale <= 1
       ? { poseScale: scales.poseScale }
+      : {}),
+    ...(isFiniteNumber(scales.idleFaceScale) && scales.idleFaceScale <= 1
+      ? { idleFaceScale: scales.idleFaceScale }
       : {}),
   };
 }
@@ -684,6 +699,13 @@ export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
     });
   }
 
+  const lighting = value.lighting;
+  if (lighting !== undefined && !hasValue(AVATAR_LIGHTINGS, lighting)) {
+    issues.push({
+      path: "lighting",
+      message: `Must be one of: ${AVATAR_LIGHTINGS.join(", ")}.`,
+    });
+  }
   const framing =
     value.framing === undefined
       ? undefined
@@ -712,6 +734,7 @@ export function validateAvatarAsset(value: unknown): AvatarAssetValidation {
       profile: AVATAR_PROFILE_ID,
       ...(hiddenNodes ? { hiddenNodes } : {}),
       ...(dynamicBones ? { dynamicBones } : {}),
+      ...(hasValue(AVATAR_LIGHTINGS, lighting) ? { lighting } : {}),
       ...(framing ? { framing } : {}),
       ...(behavior ? { behavior } : {}),
     },

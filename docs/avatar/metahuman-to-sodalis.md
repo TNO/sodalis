@@ -496,6 +496,7 @@ do not apply.
 | `hair.FBX`, `hair.BASE`, `hair.SCALP_OUT` | with hair | Card FBX (or a list, one per card group), baked texture, output for the scalp-tinted head colour |
 | `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, scalp colour (sRGB 0–1) |
 | `hair.ROOT_FRAC`, `hair.FIT_SCALE` | no (0.15, fitted) | Fraction of each card treated as root when fitting to the scalp; fixed fit scale instead of a fitted one. Long hair: `0.05` and `1.0` |
+| `hair.HUG`, `hair.HUG_RAMP` | no (0, 0.06) | Pull (m) applied to side hair below the cranium centre, towards the face, fading in over `HUG_RAMP` m. Long curtains otherwise hang 1–4 cm out from the cheeks. Odette: 0.03 |
 | `hair.BACK_FILL`, `hair.BACK_FILL_MIN_SIDE` | no (off, 0.06) | Workaround for a missing back card group: copy the long side cards, rotated by these angles (degrees) towards the back. Only cards whose tips hang more than `MIN_SIDE` m beside the head are copied. Odette: `[35, 70, 105]` |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `brows.BROW_EYE_HEIGHT` | no | Mean brow height above the eye centres, in eye spacings (Anna measures 0.26). Replaces `BROW_OFFSET`'s vertical effect. |
@@ -586,8 +587,9 @@ What the build does:
 Place the GLB in the git-ignored `apps/desktop/public/avatars/eval/` folder
 as `<id>-eval.glb`, and add `metahumanEval("<id>", "<Name>")` to
 `EVALUATION_CANDIDATES` in `apps/desktop/src/avatar/avatarCatalogue.ts`. That
-registers `metahuman-<id>-eval` with `behavior.poseScale` 0.35; adjust the
-entry if your character needs other settings. Anna and Odette are examples.
+registers `metahuman-<id>-eval` with `behavior.poseScale` 0.35,
+`behavior.idleFaceScale` 0.3 and `lighting: "portrait"`; adjust the entry if
+your character needs other settings. Anna and Odette are examples.
 With `VITE_SODALIS_EVAL_AVATARS=1`, the entries appear in the assistant
 panel's avatar choice and on the dev-only stage.
 
@@ -799,6 +801,27 @@ uv run -q --with pillow --with numpy python <repo>/tools/avatar-authoring/metahu
   poses (reach up, sit, deep knee, twist and others).
 - The FBX body has no garment. Without an `outfit` section the character is
   in Unreal's default underwear from the body texture.
+
+### Looks plainer than in Unreal
+
+Measure before you tweak: on Odette, the head geometry and Unreal's baked
+face texture matched ours. The differences were:
+
+- **Lighting.** The default `studio` stage rig is bright and flat. MetaHuman
+  entries use `lighting: "portrait"`: low ambient, fill and environment, so
+  the key light models the face. Unreal's mauve lips came from its lighting
+  and lip gloss, not from the texture.
+- **Idle face drift.** TalkingHead adds random drift of up to 0.2 to 20
+  morphs (`mtRandomized`), such as `noseSneer`, `cheekPuff` and
+  `mouthRoll`. On RigLogic shapes that reads as a grimace.
+  `behavior.idleFaceScale` (MetaHumans: 0.3) scales the drift.
+- **Hair standing off the face.** Volume and push-out leave long side hair
+  1–4 cm outside the cheeks, so it frames the face instead of falling over
+  it. Use `hair.HUG` (Odette: 0.03).
+- **Hair colour.** Melanin 0.81 and redness 0.37 baked as near-black looked
+  flat. Odette uses `--root 1c130d --tip 2c1f16`; `2b1d15`/`45301f` was
+  too light (chestnut).
+- **Wide eyes.** Lower `face.rest_lid_lift` (Odette: 0.15).
 
 ### Idle body motion
 
