@@ -261,12 +261,28 @@ For **each selected groom** (normally one hair and one brow groom):
    styles can split their cards over several groups: also export every
    `_CardsMesh_Group1_LOD0`, `_Group2_LOD0`, … that exists, and list them
    all in `hair.FBX`. A missing group leaves part of the head bald (see
-   *Bald back of the head*). To see how many groups exist, double-click
-   the **Groom** asset (not a CardsMesh) and open its **Cards** tab: it
-   has one entry per group. Expand each entry; its **Textures** list names
-   the atlas the group uses. If all groups use the same
-   `_CardsAtlas_Attribute`, export it once. The `_CardsAtlas_Tangent`
-   texture is not needed: it only steers Unreal's strand shading.
+   *Bald back of the head*). The `_CardsAtlas_Tangent` texture is not
+   needed: it only steers Unreal's strand shading.
+
+   To see which groups and atlases exist:
+
+   1. In the Content Drawer, double-click the **Groom** asset: it has a
+      pink icon and the type *Groom*, not a CardsMesh. The Groom editor
+      opens in a new window.
+   2. In the row of icon tabs at the top of its Details panel, click the
+      **Cards** tab (hover over the icons to see their names). It shows
+      a list of coloured bars: **Cards 0**, **Cards 1**, **Cards 2**, …
+   3. Each bar is one card group **at one level of detail**, not one
+      group. Below each bar, read **Group Index** (the group) and
+      **LODIndex** (0 = full detail). Scroll down to see all bars. Only
+      entries with **LODIndex 0** matter; export one
+      `_CardsMesh_Group<N>_LOD0` for each distinct Group Index. The
+      **Mesh** field shows the asset name.
+   4. To see the atlas, click the small **▸** next to **Textures** under
+      a LODIndex 0 entry, then hover over the **Attribute** slot (or open
+      its dropdown) to read the texture name. If every group uses the
+      same `_CardsAtlas_Attribute`, export it once (step 3). Export any
+      other Attribute texture the same way.
 3. Find the **Texture** whose name ends in `_CardsAtlas_Attribute`.
    Right-click it, choose **Asset Actions > Export…**, choose **PNG** in the
    *Save as type* list, and save it with the same name.
