@@ -18,11 +18,11 @@ const SERVER_TTS_CAPABILITIES: TextToSpeechCapabilities = {
 };
 
 const PCM_PARAMETERS = {
-  rate: "22050",
   bits: "16",
   channels: "1",
   endianness: "little",
 };
+const SUPPORTED_PCM_SAMPLE_RATES = new Set(["22050", "24000"]);
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -89,6 +89,9 @@ function validateAudioContentType(value: string): void {
         `Speech server returned an unsupported PCM ${name} parameter.`,
       );
     }
+  }
+  if (!SUPPORTED_PCM_SAMPLE_RATES.has(parameters.get("rate") ?? "")) {
+    throw new Error("Speech server returned an unsupported PCM rate parameter.");
   }
 }
 
@@ -210,5 +213,6 @@ export class ServerTextToSpeechProvider implements TextToSpeechProvider {
       if (readerCancellation) await readerCancellation;
       reader.releaseLock();
     }
+
   }
 }

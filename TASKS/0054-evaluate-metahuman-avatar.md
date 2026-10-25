@@ -131,3 +131,6 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
   ([Licensed avatars](../docs/avatar/licensed-avatars.md)). Next: create the
   private store with Anna's GLB and NOTICE, then rebase
   `mpfb-avatar-pipeline` onto main and register Anna through it.
+- 2026-10-22: Added GUI locations for first-time Unreal users: where the
+  Launcher, Plugins, Content Drawer, Creator categories, Outliner and export
+  dialogs are, and how to identify each required asset.

@@ -141,6 +141,56 @@ describe("positionAvatarConversationCard", () => {
       m.render(host, null);
     });
 
+    it("highlights the active spoken word without changing caption text", () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+
+      m.render(
+        host,
+        m(AvatarConversationCard, {
+          assistantText: "Goedemorgen, allemaal!",
+          activeSpeechWordIndex: 1,
+          onClose: () => undefined,
+        }),
+      );
+
+      const caption = host.querySelector(".avatar-conversation-caption");
+      expect(caption?.textContent).toBe("Goedemorgen, allemaal!");
+      expect(
+        caption?.querySelector(".avatar-conversation-caption-word-active")
+          ?.textContent,
+      ).toBe("allemaal");
+      expect(
+        caption
+          ?.querySelector(".avatar-conversation-caption-word-active")
+          ?.getAttribute("aria-current"),
+      ).toBe("true");
+
+      m.render(host, null);
+    });
+
+    it("distinguishes unavailable word highlighting from speech-output errors", () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+
+      m.render(
+        host,
+        m(AvatarConversationCard, {
+          assistantText: "Een zichtbaar bijschrift.",
+          speechCaptionError: "Local alignment is unavailable.",
+          onClose: () => undefined,
+        }),
+      );
+
+      expect(
+        host.querySelector(".avatar-conversation-caption-status")?.textContent,
+      ).toBe("Word highlighting unavailable: Local alignment is unavailable.");
+      expect(host.querySelector(".avatar-conversation-status")?.textContent)
+        .not.toContain("Speech output error");
+
+      m.render(host, null);
+    });
+
     it("can read the visible assistant caption aloud on request", async () => {
       const host = document.createElement("div");
       document.body.append(host);

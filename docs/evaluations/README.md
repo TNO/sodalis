@@ -29,6 +29,8 @@ a single place to find conclusions.
 
 | Evaluation | Task | Status |
 | --- | --- | --- |
+| [Dutch TTS models on Hugging Face for a Mac host](dutch-tts-hugging-face.md) | 0036 | Research complete; Mac quality and latency unmeasured |
+| [Mac-native STT and TTS options](macos-speech-options.md) | 0035, 0036 | Research complete; no new benchmarks |
 | [Dutch TTS providers](tts-providers.md) | 0036 | Complete |
 | [Alternate STT providers](stt-providers.md) | 0035 | Complete; Azure measured on private clips only, Redux not measured |
 | [Alternate LLM providers](llm-providers.md) | 0037 | Complete |

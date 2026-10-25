@@ -179,15 +179,13 @@ describe("SpeechPlaybackController", () => {
       requestFrame: vi.fn(() => 1),
       cancelFrame: vi.fn(),
     });
-
     const speaking = player.speak(request);
-    await vi.waitFor(() => expect(context.sources).toHaveLength(1));
     await synthStarted;
     player.stopPlayback();
     player.cancelTts();
     await speaking;
 
-    expect(context.sources[0]?.stop).toHaveBeenCalledOnce();
+    expect(context.sources).toHaveLength(0);
     expect(observedSignal?.aborted).toBe(true);
     expect(context.close).toHaveBeenCalledOnce();
     expect(onLatency).toHaveBeenCalledWith(
@@ -205,6 +203,8 @@ describe("SpeechPlaybackController", () => {
       getAvatarController: () => undefined,
       isListening: () => false,
       createAudioContext: () => context as unknown as SpeechAudioContext,
+      requestFrame: vi.fn(() => 1),
+      cancelFrame: vi.fn(),
     });
 
     await expect(player.speak(request)).rejects.toThrow(
@@ -212,5 +212,198 @@ describe("SpeechPlaybackController", () => {
     );
     expect(context.sources).toHaveLength(0);
     expect(context.close).toHaveBeenCalledOnce();
+  });
+
+  it("stops superseded playback before requesting the replacement", async () => {
+    const contexts: FakeAudioContext[] = [];
+    let replacementStartedAfterStop = false;
+    const provider = createProvider(async function* (speechRequest) {
+      if (speechRequest.speechId === "replacement") {
+        replacementStartedAfterStop =
+          contexts[0]?.sources[0]?.stop.mock.calls.length === 1;
+      }
+      yield audioChunk({
+        sessionId: speechRequest.sessionId,
+        speechId: speechRequest.speechId,
+      });
+    });
+    const player = createSpeechPlaybackController({
+      provider,
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext: () => {
+        const context = new FakeAudioContext();
+        contexts.push(context);
+        return context as unknown as SpeechAudioContext;
+      },
+      requestFrame: vi.fn(() => 1),
+      cancelFrame: vi.fn(),
+    });
+    const firstRequest = request;
+    const replacementRequest = { ...request, speechId: "replacement" };
+    const first = player.speak(firstRequest);
+    await vi.waitFor(() => expect(contexts[0]?.sources).toHaveLength(1));
+
+    const replacement = player.speak(replacementRequest);
+    await vi.waitFor(() => expect(contexts[1]?.sources).toHaveLength(1));
+    expect(replacementStartedAfterStop).toBe(true);
+    expect(contexts[0]?.sources[0]?.stop).toHaveBeenCalledOnce();
+
+    contexts[1]?.sources[0]?.finish();
+    await Promise.all([first, replacement]);
+  });
+
+  it("begins playing completed sentence chunks while later chunks synthesize", async () => {
+    const context = new FakeAudioContext();
+    let secondChunkStarted: (() => void) | undefined;
+    const secondStarted = new Promise<void>((resolve) => {
+      secondChunkStarted = resolve;
+    });
+    let chunkCount = 0;
+    const provider = createProvider(async function* (speechRequest, signal) {
+      chunkCount += 1;
+      if (chunkCount === 2) {
+        secondChunkStarted?.();
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) resolve();
+          else signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        signal.throwIfAborted();
+      }
+      yield audioChunk({
+        sessionId: speechRequest.sessionId,
+        speechId: speechRequest.speechId,
+      });
+    });
+    const player = createSpeechPlaybackController({
+      provider,
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext: () => context as unknown as SpeechAudioContext,
+      requestFrame: vi.fn(() => 1),
+      cancelFrame: vi.fn(),
+    });
+    const longRequest = {
+      ...request,
+      text: "First sentence has a few words. ".repeat(15) +
+        "The second sentence is spoken after the first one.",
+    };
+
+    const speaking = player.speak(longRequest);
+    await secondStarted;
+    expect(context.sources).toHaveLength(1);
+    player.stopPlayback();
+    player.cancelTts();
+    await speaking;
+    expect(context.sources[0]?.stop).toHaveBeenCalledOnce();
+  });
+
+  it("uses only configured fallback providers and reports all-source failure", async () => {
+    const context = new FakeAudioContext();
+    const primary = createProvider(async function* () {
+      throw new Error("Primary TTS is unavailable.");
+    });
+    const fallback = createProvider(async function* (speechRequest) {
+      yield audioChunk({
+        sessionId: speechRequest.sessionId,
+        speechId: speechRequest.speechId,
+      });
+    });
+    const player = createSpeechPlaybackController({
+      provider: primary,
+      fallbackProviders: [fallback],
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext: () => context as unknown as SpeechAudioContext,
+      requestFrame: vi.fn(() => 1),
+      cancelFrame: vi.fn(),
+    });
+
+    const speaking = player.speak(request);
+    await vi.waitFor(() => expect(context.sources).toHaveLength(1));
+    context.sources[0]?.finish();
+    await speaking;
+
+    const unavailable = createProvider(async function* () {
+      throw new Error("Only configured source failed.");
+    });
+    const noFallback = createSpeechPlaybackController({
+      provider: unavailable,
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext: () => new FakeAudioContext() as unknown as SpeechAudioContext,
+    });
+    await expect(noFallback.speak(request)).rejects.toThrow(
+      "Only configured source failed.",
+    );
+
+    const backup = createProvider(async function* () {
+      throw new Error("Configured backup also failed.");
+    });
+    const allUnavailable = createSpeechPlaybackController({
+      provider: unavailable,
+      fallbackProviders: [backup],
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext: () => new FakeAudioContext() as unknown as SpeechAudioContext,
+    });
+    await expect(allUnavailable.speak(request)).rejects.toThrow(
+      "test-tts: Only configured source failed.; test-tts: Configured backup also failed.",
+    );
+  });
+
+  it("aligns synthesized audio and reports the active word by playback time", async () => {
+    const context = new FakeAudioContext();
+    const onWordChange = vi.fn();
+    const alignAudio = vi.fn(
+      async (
+        _text: string,
+        _language: string,
+        audio: Blob,
+      ) => {
+        expect(audio.type).toBe("audio/wav");
+        const wav = new Uint8Array(await audio.arrayBuffer());
+        expect(new TextDecoder().decode(wav.subarray(0, 4))).toBe("RIFF");
+        expect(new DataView(wav.buffer).getUint32(24, true)).toBe(22050);
+        return [
+          { word: "Goedemorgen", start: 0.1, end: 0.5 },
+          { word: "allemaal", start: 0.5, end: 0.9 },
+        ];
+      },
+    );
+    let animationFrame: FrameRequestCallback | undefined;
+    const player = createSpeechPlaybackController({
+      provider: createProvider(async function* (speechRequest) {
+        yield audioChunk({
+          sessionId: speechRequest.sessionId,
+          speechId: speechRequest.speechId,
+        });
+      }),
+      alignAudio,
+      onWordChange,
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext: () => context as unknown as SpeechAudioContext,
+      requestFrame: vi.fn((callback) => {
+        animationFrame = callback;
+        return 1;
+      }),
+      cancelFrame: vi.fn(),
+    });
+
+    const speaking = player.speak(request);
+    await vi.waitFor(() => expect(context.sources).toHaveLength(1));
+    context.currentTime = 1.2;
+    animationFrame?.(0);
+    expect(onWordChange).toHaveBeenLastCalledWith(0, request);
+
+    context.currentTime = 1.8;
+    animationFrame?.(16);
+    expect(onWordChange).toHaveBeenLastCalledWith(1, request);
+
+    context.sources[0]?.finish();
+    await speaking;
+    expect(onWordChange).toHaveBeenLastCalledWith(undefined, request);
+    expect(alignAudio).toHaveBeenCalledOnce();
   });
 });

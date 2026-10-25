@@ -58,6 +58,16 @@ minimum speech-segment duration gate (see `SpeechInputControllerOptions.minSegme
 in `packages/speech/src/SpeechInputController.ts`), which keep short noise
 blips from ever reaching Whisper.
 
+The local-only `POST /api/speech/stt/align` endpoint accepts multipart fields
+`sourceText`, `language`, and `audio`. With whisper.cpp selected it requests
+`verbose_json` word timestamps and aligns them to source words by normalized
+content, interpolating missing source words between adjacent timestamps.
+It uses local FFmpeg `silencedetect` to remove leading-silence offset and trims
+unsupported transcript words at the tail. Timestamps are seconds from the
+start of speech. All-silence audio returns `422`; FFmpeg failures return an
+explicit error. Providers without word-level timing support return `503` from
+this endpoint; the existing text-only STT session API is unchanged.
+
 The requested Whistle comparison used two synthetic Dutch utterances. Whistle
 misheard “Anne” as “alle” once and changed “afspraak” to “afspraken” once.
 Whisper.cpp with `ggml-base.bin` also misheard “Anne” (“aan de”) and differed
@@ -91,7 +101,9 @@ pnpm dev:speech
 The endpoint streams mono, signed 16-bit little-endian PCM at 22,050 Hz. The
 desktop's “Read aloud” control plays the response and drives approximate,
 amplitude-based mouth movement; Piper's CLI does not provide phoneme or viseme
-timing. `STT_PROVIDER` defaults to `parakeet-tdt` (requires `PARAKEET_TDT_URL`);
+timing. The Sodalis TTS route removes Markdown formatting from replies before
+passing their readable text to the selected engine. `STT_PROVIDER` defaults to
+`parakeet-tdt` (requires `PARAKEET_TDT_URL`);
 other choices are `whisper-cpp` (`WHISPER_CPP_URL`), `whistle`
 (`WHISTLE_URL`), and opt-in cloud `azure` (`AZURE_STT_ENDPOINT`,
 `AZURE_STT_KEY`; Azure Speech real-time recognition, never selected
@@ -100,6 +112,10 @@ implicitly; requires `ffmpeg` on `PATH` when run natively).
 matching `.onnx.json`). The speech service fails startup for missing settings
 or unknown provider IDs rather than falling back. Either role can instead
 select `mock`, a deterministic fixture with no engine dependencies.
+TTS text is split sentence-first into chunks before synthesis, with long
+sentences split at clauses and whitespace. `TTS_CHUNK_MAX_CHARACTERS` defaults
+to 320 and is clamped to 80–1,000; `TTS_CHUNK_PAUSE_MS` defaults to 120 ms of
+inserted silence and is clamped to 0–1,000 ms.
 `TTS_PROVIDER=piper-http` uses an explicitly configured `PIPER_HTTP_URL`;
 that Piper HTTP service must return standard 22,050 Hz mono PCM16 WAV for a
 JSON `{"text": "..."}` request to `/synthesize`. STT's Whisper.cpp URL can likewise point to
@@ -107,6 +123,16 @@ a remote/native host instance; keep such endpoints private and trusted.
 Piper HTTP's format is specific to that adapter, not a generic engine
 protocol. `TTS_PROVIDER=azure` streams from Azure AI Speech instead. It
 requires `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE`.
+
+`TTS_PROVIDER=pocket-http` selects Pocket TTS only when
+`POCKET_TTS_URL`, `POCKET_TTS_API_KEY`, and `POCKET_TTS_VOICE` are explicitly
+set. The server normalizes Dutch text before sending it to Pocket, and
+streams 24 kHz mono PCM16 to the existing browser speech route. It never
+falls back to a cloud provider. Pocket's native runtime and Q8 GGUF model
+must be installed separately on the Mac host; neither weights nor reference
+audio are part of this repository. See
+[`docs/development-stack.md`](../../docs/development-stack.md#use-pocket-tts-on-the-mac-host)
+for host setup, endpoint security, and voice attribution.
 
 - `AZURE_TTS_URL` is a Speech or Foundry resource endpoint, or a regional
   `/cognitiveservices/v1` endpoint.
