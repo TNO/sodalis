@@ -268,7 +268,7 @@ For **each selected groom** (normally one hair and one brow groom):
 
    1. In the Content Drawer, double-click the **Groom** asset: it has a
       pink icon and the type *Groom*, not a CardsMesh. The Groom editor
-      opens in a new window.
+      opens.
    2. In the row of icon tabs at the top of its Details panel, click the
       **Cards** tab (hover over the icons to see their names). It shows
       a list of coloured bars: **Cards 0**, **Cards 1**, **Cards 2**, …
