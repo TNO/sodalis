@@ -497,7 +497,9 @@ do not apply.
 | `hair.HAIR_OFFSET`, `VOLUME_SIDE`, `VOLUME_CROWN`, `SCALP_TINT` | no | Hair placement (m), volume lift at tips/crown, scalp colour (sRGB 0–1) |
 | `hair.ROOT_FRAC`, `hair.FIT_SCALE` | no (0.15, fitted) | Fraction of each card treated as root when fitting to the scalp; fixed fit scale instead of a fitted one. Long hair: `0.05` and `1.0` |
 | `hair.BACK_FILL`, `hair.BACK_FILL_MIN_SIDE` | no (off, 0.06) | Workaround for a missing back card group: copy the long side cards, rotated by these angles (degrees) towards the back. Only cards whose tips hang more than `MIN_SIDE` m beside the head are copied. Odette: `[35, 70, 105]` |
-| `hair.DRAPE`, `DRAPE_STRAIGHTEN`, `DRAPE_FRONT`, `DRAPE_CLEARANCE`, `DRAPE_BEND`, `DRAPE_PIVOT`, `DRAPE_BLEND`, `DRAPE_BONE` | no (off, 0, 0, 0.012, 0.04, 0.12, 0.06, `Spine2`) | Lay long hair over the shoulders instead of through them. Cards are first bent clear of the body. `STRAIGHTEN` (0–1) removes the groom's backward sweep below `PIVOT` m above the shoulder line, for cards whose tips then fall in front of it (+`FRONT` m). After the outfit is added, front locks are lifted onto the garments' outer surface. Hair below the shoulders is skinned to `BONE`, blended over `BLEND` m. Odette: on, 0.9, 0.03, 0.02 |
+| `hair.DRAPE`, `DRAPE_STRAIGHTEN`, `DRAPE_FRONT`, `DRAPE_CLEARANCE`, `DRAPE_BEND`, `DRAPE_PIVOT`, `DRAPE_BLEND`, `DRAPE_BONE` | no (off, 0, 0, 0.012, 0.04, 0.12, 0.06, `Spine2`) | Lay long hair over the shoulders instead of through them. `STRAIGHTEN` (0–1) removes the groom's backward sweep below `PIVOT` m above the shoulder line, for front locks: cards whose tips then fall in front of the shoulders (+`FRONT` m). Cards are then bent clear of the body. Hair below the shoulders is skinned to `BONE`, blended over `BLEND` m. Odette: on, 1.0, 0.03, 0.02 |
+| `hair.DRAPE_FRONT_ROOT`, `DRAPE_FRONT_PART`, `DRAPE_LEAN` | no (None, None, 0) | Pick front locks by root instead: cards rooted ahead of `FRONT_ROOT` (y, m). Cards rooted within `PART[0]` m of the parting must be rooted ahead of `PART[1]`, else they hang behind the neck. `LEAN` (dy/dz) tilts straightened front locks forward. Odette: 0.0, [0.04, −0.04], 0.25 |
+| `hair.DRAPE_SIM_FRAMES`, `DRAPE_SIM_COMB`, `DRAPE_SIM_BACK`, `DRAPE_SIM_SLIDE`, other `DRAPE_SIM_*` | no (0 = off, 3.0, true, None) | After the outfit is added, settle the hair with a small strand simulation against the body and garments. `COMB` (m/s²) pushes front locks forward over the shoulders. `BACK` false keeps the back hair as `drape()` left it; simulated, it piles on the shoulders. `SLIDE` (m) stops side locks sliding round the front of the neck. Odette: 90, 8.0, false, 0.01 |
 | `brows.FBX`, `brows.TEX`, `brows.BROW_OFFSET` | with brows | Brow cards, texture, offset (m). Brows need hair: they reuse its fit. |
 | `brows.BROW_EYE_HEIGHT` | no | Mean brow height above the eye centres, in eye spacings (Anna measures 0.26). Replaces `BROW_OFFSET`'s vertical effect. |
 | `outfit.glb`, `outfit.garments` | no | Unreal glTF export, and `{glTF mesh name: new mesh name}` for each garment |
@@ -829,8 +831,11 @@ face texture matched ours. The differences were:
   the face, cheek blush, flat lighting and hair hidden behind the shoulders.
 - **Hair behind the shoulders.** The groom is authored swept back, and
   Unreal's hair physics drapes it forward. Without physics, a fifth of the
-  long cards ended inside the blouse. Use `hair.DRAPE` (see the config
-  table) with `DRAPE_STRAIGHTEN` about 0.9.
+  long cards ended inside the blouse. Use `hair.DRAPE` with
+  `DRAPE_SIM_FRAMES` (see the config table and Odette's values). Blender's
+  cloth simulation on the hair cards was slow and unstable, hence the small
+  built-in solver. Expect a narrower front curtain than Unreal's: the groom
+  ends about 2 cm higher.
 
 ### Idle body motion
 

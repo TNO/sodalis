@@ -415,3 +415,13 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
     the blouse). Added `hair.DRAPE` (bend clear of the body, straighten the
     front locks, lift them onto the garments, skin the lower hair to
     `Spine2`). Anna's build is byte-identical.
+- Odette "hair partially inside the body": the geometric drape left tips
+    in the shoulders. Blender cloth on 15k card vertices took 18 min and
+    exploded. Replaced the post-outfit lift with `hair.simulate()`: position
+    based dynamics against a signed-distance field of the body plus garment
+    stand-off, follow-the-leader inextensibility and a forward comb. Pitfalls
+    found by counting near-horizontal card ends: simulating the back hair
+    piles it on the shoulders (keep it as authored), crown-parting cards
+    pulled forward wrap the collar (`DRAPE_FRONT_PART`), and short side locks
+    slide round the neck front (`DRAPE_SIM_SLIDE`). Result: 0 vertices inside,
+    no collar strays. Anna's build is byte-identical.

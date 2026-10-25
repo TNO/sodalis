@@ -504,9 +504,9 @@ def main():
         before = set(bpy.data.objects)
         add_metahuman_outfit.add_outfit(body_arm, body, head, cfg["outfit"]["glb"], cfg["outfit"]["garments"],
                                         cfg["outfit"].get("tuck"), cfg["outfit"].get("textures"))
-        if cfg.get("hair") and hair.DRAPE:
+        if cfg.get("hair") and hair.DRAPE and hair.DRAPE_SIM_FRAMES:
             garments = [o for o in bpy.data.objects if o not in before and o.type == "MESH"]
-            hair.drape_over(cards, garments + [body])
+            hair.simulate(cards, garments + [body, head])
     build_avatar.cap_textures(cfg.get("texture_cap", 2048))
     if blend:
         bpy.ops.wm.save_as_mainfile(filepath=blend, compress=True)

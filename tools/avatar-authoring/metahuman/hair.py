@@ -287,6 +287,22 @@ DRAPE_BEND = 0.04  # m above a contact over which a card starts to bend away
 # to remove, so locks authored sweeping back hang straight as under gravity.
 DRAPE_STRAIGHTEN = 0.0
 DRAPE_PIVOT = 0.12
+DRAPE_FRONT_ROOT = None  # m (y): cards rooted ahead of this are straightened and laid in front; None = judge by tip
+# [|x|, y] m: cards rooted this close to the parting must be rooted ahead of y, else they hang behind the neck
+DRAPE_FRONT_PART = None
+DRAPE_LEAN = 0.0
+DRAPE_SIM_FRAMES = 0  # cloth-simulate the draped hair against body and clothes; 0 = off
+DRAPE_SIM_PIN = [0.03, 0.10]  # m above the shoulder line: free below the first, pinned above the second
+DRAPE_SIM_BEND = 0.5  # stiffness (0-1) of the across-vertex constraints that keep cards from folding
+DRAPE_SIM_ITERS = 8
+DRAPE_SIM_COMB_TO = 0.08  # m ahead of the shoulder ridge where combing stops
+DRAPE_SIM_STRAIGHT = 0.2  # 0-1: how much each strand segment follows the one above it
+DRAPE_SIM_COMB = 3.0  # m/s^2 forward on the locks drape() lays in front, as if combed there
+DRAPE_SIM_COMB_BACK = 0.0  # m/s^2 backward on the other locks, so they fall down the back, not onto the shoulders
+DRAPE_SIM_SLIDE = None  # m a lock may slide towards the mid-plane, so side locks can't wrap round the neck
+DRAPE_SIM_BACK = True  # simulate the back hair too; False keeps it as drape() left it
+DRAPE_SIM_DAMP = 0.85  # velocity kept per frame
+DRAPE_SIM_RES = 0.008  # m: body distance-field lattice
 DRAPE_FRONT = 0.0  # m behind the shoulder ridge a straightened tip may land and still fall in front
 
 
@@ -471,24 +487,39 @@ def drape(cards, body):
     comp = components(cards)
     pivot = ridge[2] + DRAPE_PIVOT
     moved = 0
-    _DRAPED["ridge"], _DRAPED["front"] = ridge, []
+    _DRAPED["ridge"], _DRAPED["front"] = ridge, np.zeros(len(v), bool)
+    if DRAPE_SIM_FRAMES:
+        hang = v[v[:, 2] < ridge[2] + DRAPE_SIM_PIN[1] + 0.02]
+        _DRAPED["sdf"] = _body_sdf(body, hang.min(0) - 0.08, hang.max(0) + 0.08)
     for c in np.unique(comp):
         idx = np.flatnonzero(comp == c)
         if v[idx, 2].min() > ridge[2] + 0.04:
             continue
         below = idx[v[idx, 2] < pivot]
         tip = idx[v[idx, 2].argmin()]
+        # Locks rooted ahead of DRAPE_FRONT_ROOT fall in front however far the groom sweeps them back.
+        if DRAPE_FRONT_ROOT is None:
+            yp = v[idx[np.argmin(np.abs(v[idx, 2] - pivot))], 1]
+            forward = v[tip, 1] - DRAPE_STRAIGHTEN * (v[tip, 1] - yp) < ridge[1] + DRAPE_FRONT
+        else:
+            root = v[idx[v[idx, 2].argmax()]]
+            forward = root[1] < DRAPE_FRONT_ROOT
+            if DRAPE_FRONT_PART is not None and abs(root[0]) < DRAPE_FRONT_PART[0]:
+                forward = root[1] < DRAPE_FRONT_PART[1]
         if DRAPE_STRAIGHTEN and len(below) and len(below) < len(idx):
             yp = v[idx[np.argmin(np.abs(v[idx, 2] - pivot))], 1]
             # Ease in below the pivot so the card bends rather than kinks.
             e = np.clip((pivot - v[below, 2]) / 0.05, 0, 1)
-            dy = DRAPE_STRAIGHTEN * e * (v[below, 1] - yp)
+            # Forward locks straighten towards a line leaning DRAPE_LEAN (dy/dz) forward from the pivot.
+            target = yp - (DRAPE_LEAN if forward else 0.0) * (pivot - v[below, 2])
+            dy = DRAPE_STRAIGHTEN * e * (v[below, 1] - target)
             # Only locks that then fall in front: the back hair rests on the back as authored.
-            if v[tip, 1] - DRAPE_STRAIGHTEN * (v[tip, 1] - yp) < ridge[1] + DRAPE_FRONT:
+            if forward:
                 v[below, 1] -= dy
-        sgn = -1.0 if v[tip, 1] < ridge[1] + DRAPE_FRONT else 1.0
-        if sgn < 0:
-            _DRAPED["front"].append(idx)
+        if DRAPE_FRONT_ROOT is None:
+            forward = v[tip, 1] < ridge[1] + DRAPE_FRONT
+        sgn = -1.0 if forward else 1.0
+        _DRAPED["front"][idx] = sgn < 0
         d = Vector((0, sgn, 0))
         # Probe slightly inset so hair just outside the body still gets clearance.
         need = np.array([_exit_distance([bvh], v[i] - np.array(d) * DRAPE_CLEARANCE, d) for i in idx])
@@ -501,19 +532,11 @@ def drape(cards, body):
         v[idx, 1] += sgn * (f * need[None, :]).max(1)
         moved += 1
     _set_world_verts(cards, v)
-    w = np.clip((v[:, 2] - ridge[2]) / DRAPE_BLEND, 0, 1)
-    w = w * w * (3 - 2 * w)
-    head = cards.vertex_groups["Head"]
-    low = cards.vertex_groups.new(name=DRAPE_BONE)
-    for i, wi in enumerate(w):
-        head.add([i], float(wi), "REPLACE")
-        if wi < 1:
-            low.add([i], float(1 - wi), "REPLACE")
+    _skin_drape(cards, v)
     print(f"HAIR_DRAPE cards={moved} shoulder z={ridge[2]:.3f} y={ridge[1]:.3f} lowest z={v[:, 2].min():.3f}")
 
 
 _DRAPED = {}
-DRAPE_OVER_DEPTH = 0.05
 
 
 def _set_world_verts(o, v):
@@ -523,37 +546,201 @@ def _set_world_verts(o, v):
     o.data.update()
 
 
-def drape_over(cards, colliders):
-    """Lift the locks drape() laid in front onto the garments' outer surface.
+def _body_sdf(body, lo, hi):
+    """Signed distance grid (negative inside) of the closed body, on a DRAPE_SIM_RES lattice."""
+    bv = world_verts(body)
+    bvh = BVHTree.FromPolygons([tuple(p) for p in bv], [tuple(f.vertices) for f in body.data.polygons])
+    axes = [np.arange(lo[k], hi[k] + DRAPE_SIM_RES, DRAPE_SIM_RES) for k in range(3)]
+    g = np.stack(np.meshgrid(*axes, indexing="ij"), -1).reshape(-1, 3)
+    d = Vector((1.0, 0.0123, 0.0071)).normalized()  # skewed so rays rarely graze edges
+    sdf = np.empty(len(g))
+    for n, p in enumerate(g):
+        q = Vector(p)
+        sdf[n] = bvh.find_nearest(q)[3]
+        hits = 0
+        while True:
+            h = bvh.ray_cast(q, d)
+            if h[0] is None:
+                break
+            hits += 1
+            q = h[0] + d * 1e-5
+        if hits % 2:
+            sdf[n] = -sdf[n]
+    return np.array(lo, float), sdf.reshape([len(a) for a in axes])
 
-    Clothes stand off the body (most over the bust), so tips draped against the
-    body can end up inside them. Rays cast from the front hit the outer layer
-    first, which sidesteps the inner/outer layer ambiguity.
+
+def _trilinear(grid, origin, p):
+    """Sample grid at points p (clamped to the grid)."""
+    f = (p - origin) / DRAPE_SIM_RES
+    hi = np.array(grid.shape) - 1.001
+    f = np.clip(f, 0, hi)
+    i = f.astype(int)
+    t = f - i
+    out = 0
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                w = (t[:, 0] if dx else 1 - t[:, 0]) * (t[:, 1] if dy else 1 - t[:, 1]) * (t[:, 2] if dz else 1 - t[:, 2])
+                out = out + w * grid[i[:, 0] + dx, i[:, 1] + dy, i[:, 2] + dz]
+    return out
+
+
+def simulate(cards, garments):
+    """Let the hair below the head settle onto the body and clothes (position-based dynamics).
+
+    Unreal drapes the groom with physics; this bakes one settled frame of it. The
+    collider is the closed body's signed distance (sampled in drape(), before the
+    outfit culls it), raised locally by how far the garments stand off the body.
+    A distance field pushes hair out from any depth, which a cloth solver cannot.
     """
-    if not _DRAPED.get("front"):
-        return
-    v = world_verts(cards)
-    bvhs = []
-    for o in colliders:
-        ov = world_verts(o)
-        bvhs.append(BVHTree.FromPolygons([tuple(p) for p in ov], [tuple(f.vertices) for f in o.data.polygons]))
-    top = _DRAPED["ridge"][2] + 0.04
-    moved = 0
-    for idx in _DRAPED["front"]:
-        need = np.zeros(len(idx))
-        for k, i in enumerate(idx):
-            if v[i, 2] > top:
-                continue
-            o = Vector((v[i, 0], -1.0, v[i, 2]))
-            ys = [h[0].y for h in (b.ray_cast(o, Vector((0, 1, 0))) for b in bvhs) if h[0] is not None]
-            # Deeper than a garment's stand-off means the vertex is behind the body, not in its clothes.
-            if ys and v[i, 1] - min(ys) < DRAPE_OVER_DEPTH:
-                need[k] = max(0.0, v[i, 1] - (min(ys) - DRAPE_CLEARANCE))
-        if not need.any():
-            continue
-        dz = v[idx, 2][:, None] - v[idx, 2][None, :]
-        f = np.where(dz <= 0, 1.0, np.clip(1 - dz / DRAPE_BEND, 0, 1) ** 2)
-        v[idx, 1] -= (f * need[None, :]).max(1)
-        moved += 1
-    _set_world_verts(cards, v)
-    print(f"HAIR_DRAPE_OVER cards={moved} colliders={len(colliders)}")
+    origin, sdf = _DRAPED["sdf"]
+    gb = [world_verts(o) for o in garments]
+    gv = np.concatenate(gb) if gb else np.zeros((0, 3))
+    # Garment stand-off per grid node: the body distance of the outermost garment vertex nearby.
+    axes = [origin[k] + DRAPE_SIM_RES * np.arange(sdf.shape[k]) for k in range(3)]
+    nodes = np.stack(np.meshgrid(*axes, indexing="ij"), -1).reshape(-1, 3)
+    off = np.zeros(len(nodes))
+    if len(gv):
+        kd = KDTree(len(gv))
+        for n, p in enumerate(gv):
+            kd.insert(p, n)
+        kd.balance()
+        gd = np.clip(_trilinear(sdf, origin, gv), 0, 0.06)
+        for n, p in enumerate(nodes):
+            if abs(sdf.flat[n]) < 0.08:
+                _, k, dist = kd.find(p)
+                if dist < 0.04:
+                    off[n] = gd[k]
+    off = off.reshape(sdf.shape)
+    for ax in range(3):  # smooth out folds so hair rests on the garment's overall shape
+        off = (np.roll(off, 1, ax) + off + np.roll(off, -1, ax)) / 3
+    field = sdf - off - DRAPE_CLEARANCE
+    grad = np.stack(np.gradient(field, DRAPE_SIM_RES), -1)
+
+    x0 = world_verts(cards)
+    lo = _DRAPED["ridge"][2] + DRAPE_SIM_PIN[0]
+    w = np.clip((x0[:, 2] - lo) / (DRAPE_SIM_PIN[1] - DRAPE_SIM_PIN[0]), 0, 1)
+    pin = w * w * (3 - 2 * w)
+    if not DRAPE_SIM_BACK:
+        pin[~_DRAPED["front"]] = 1.0
+    free = pin < 1
+    e = np.array([ed.vertices[:] for ed in cards.data.edges])
+    nb = [[] for _ in range(len(x0))]
+    for a, b in e:
+        nb[a].append(b)
+        nb[b].append(a)
+    bend = np.array([(a, c) for b in range(len(x0)) for k, a in enumerate(nb[b]) for c in nb[b][k + 1:]])
+    cons = [(e, np.linalg.norm(x0[e[:, 0]] - x0[e[:, 1]], axis=1), 1.0)]
+    if len(bend):
+        cons.append((bend, np.linalg.norm(x0[bend[:, 0]] - x0[bend[:, 1]], axis=1), DRAPE_SIM_BEND))
+    # Follow-the-leader: every vertex keeps its rest distance to a parent one hop nearer the root.
+    comp = components(cards)
+    anchor = pin > 0.5
+    for c in np.unique(comp[~anchor]):
+        m = np.flatnonzero(comp == c)
+        if not anchor[m].any():
+            top = m[x0[m, 2].argmax()]
+            anchor[top], pin[top] = True, 1.0
+    depth = np.where(anchor, 0, -1)
+    parent = np.full(len(x0), -1)
+    front = list(np.flatnonzero(anchor))
+    levels = []
+    while front:
+        nxt = []
+        for a in front:
+            for b in nb[a]:
+                if depth[b] < 0:
+                    depth[b] = depth[a] + 1
+                    nxt.append(b)
+        for b in nxt:
+            ps = [a for a in nb[b] if depth[a] == depth[b] - 1]
+            parent[b] = min(ps, key=lambda a: np.linalg.norm(x0[a] - x0[b]))
+        if nxt:
+            levels.append(np.array(nxt))
+        front = nxt
+    seg = [np.linalg.norm(x0[l] - x0[parent[l]], axis=1)[:, None] for l in levels]
+
+    gp = [np.where(parent[parent[l]] >= 0, parent[parent[l]], parent[l]) for l in levels]
+
+    def ftl(p, straight=0.0):
+        for l, r, g in zip(levels, seg, gp):
+            d = p[l] - p[parent[l]]
+            d /= np.linalg.norm(d, axis=1, keepdims=True) + 1e-9
+            # Strand stiffness: lean each segment towards its parent's direction.
+            dp = p[parent[l]] - p[g]
+            n = np.linalg.norm(dp, axis=1, keepdims=True)
+            d = np.where(n > 1e-6, (1 - straight) * d + straight * dp / (n + 1e-9), d)
+            p[l] = p[parent[l]] + d / (np.linalg.norm(d, axis=1, keepdims=True) + 1e-9) * r
+
+    side = np.sign(x0[:, 0])
+    inner = np.maximum(np.abs(x0[:, 0]) - (DRAPE_SIM_SLIDE or 0), 0)
+
+    def keep_side(p):
+        if DRAPE_SIM_SLIDE is not None:
+            p[:, 0] = side * np.maximum(side * p[:, 0], inner)
+
+    x = x0.copy()
+    vel = np.zeros_like(x)
+    dt, gvec = 1 / 60, np.array([0, 0, -9.81])
+    n = len(x)
+    comb = np.zeros_like(x)
+    back = ~_DRAPED["front"] & free
+    comb[_DRAPED["front"] & free, 1] = -DRAPE_SIM_COMB
+    comb[back, 1] = DRAPE_SIM_COMB_BACK
+    for _ in range(DRAPE_SIM_FRAMES):
+        vel[free] += gvec * dt
+        # Comb only over the shoulders; below them gravity lays the locks down the chest.
+        # and only until a lock is in front of the shoulders.
+        over = (x[:, 2] > _DRAPED["ridge"][2] - 0.02) & np.where(
+            back, x[:, 1] < _DRAPED["ridge"][1] + DRAPE_SIM_COMB_TO, x[:, 1] > _DRAPED["ridge"][1] - DRAPE_SIM_COMB_TO
+        )
+        vel += comb * over[:, None] * dt
+        p = x + vel * dt
+        for _ in range(DRAPE_SIM_ITERS):
+            for idx, rest, k in cons:
+                d = p[idx[:, 1]] - p[idx[:, 0]]
+                ln = np.linalg.norm(d, axis=1) + 1e-9
+                c = (k * 0.5 * (ln - rest) / ln)[:, None] * d
+                acc = np.zeros((n, 3))
+                cnt = np.bincount(idx.ravel(), minlength=n)[:, None] + 1e-9
+                for ax in range(3):
+                    acc[:, ax] += np.bincount(idx[:, 0], c[:, ax], n) - np.bincount(idx[:, 1], c[:, ax], n)
+                p += acc / cnt * (1 - pin)[:, None]
+            f = _trilinear(field, origin, p)
+            hit = f < 0
+            if hit.any():
+                g = np.stack([_trilinear(grad[..., k], origin, p[hit]) for k in range(3)], 1)
+                g /= np.linalg.norm(g, axis=1, keepdims=True) + 1e-9
+                p[hit] -= g * f[hit, None] * (1 - pin[hit])[:, None]
+            keep_side(p)
+            p = p * (1 - pin)[:, None] + x0 * pin[:, None]
+            ftl(p)
+        ftl(p, DRAPE_SIM_STRAIGHT)
+        keep_side(p)
+        f = _trilinear(field, origin, p)
+        hit = (f < 0) & free
+        if hit.any():
+            g = np.stack([_trilinear(grad[..., k], origin, p[hit]) for k in range(3)], 1)
+            g /= np.linalg.norm(g, axis=1, keepdims=True) + 1e-9
+            p[hit] -= g * f[hit, None]
+        vel = (p - x) / dt * DRAPE_SIM_DAMP
+        x = p
+    inside = (_trilinear(field, origin, x) < -0.002) & free
+    print(f"HAIR_SIM frames={DRAPE_SIM_FRAMES} moved max={np.linalg.norm(x - x0, axis=1).max():.3f} "
+          f"inside={inside.sum()}/{free.sum()} lowest z={x[:, 2].min():.3f}")
+    _set_world_verts(cards, x)
+    _skin_drape(cards, x)
+
+
+def _skin_drape(cards, v):
+    """Hair below the shoulders follows DRAPE_BONE, blending into Head above."""
+    w = np.clip((v[:, 2] - _DRAPED["ridge"][2]) / DRAPE_BLEND, 0, 1)
+    w = w * w * (3 - 2 * w)
+    head = cards.vertex_groups["Head"]
+    low = cards.vertex_groups.get(DRAPE_BONE) or cards.vertex_groups.new(name=DRAPE_BONE)
+    for i, wi in enumerate(w):
+        head.add([i], float(wi), "REPLACE")
+        if wi < 1:
+            low.add([i], float(1 - wi), "REPLACE")
+        else:
+            low.remove([i])
