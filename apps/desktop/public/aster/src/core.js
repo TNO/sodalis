@@ -146,6 +146,8 @@
         async init() {
             try {
                 this.db = await new Promise((resolve, reject) => { const r = indexedDB.open('aster-desktop', 2); r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains('files')) r.result.createObjectStore('files', { keyPath: 'path' }); if (!r.result.objectStoreNames.contains('meta')) r.result.createObjectStore('meta'); if (!r.result.objectStoreNames.contains('history')) r.result.createObjectStore('history', { keyPath: 'id' }); }; let blocked=false;r.onblocked=()=>{blocked=true;reject(Error('Close other Aster tabs, then reload to upgrade storage. This tab is memory-only until then.'));};r.onsuccess = () => {if(blocked)r.result.close();else resolve(r.result);}; r.onerror = () => reject(r.error); });
+                // Sodalis patch: WebKit web views can refuse Blobs, which Aster stores as file contents.
+                await this.request('meta', 'readwrite', s => { s.put(new Blob(['']), 'blob-probe'); return s.delete('blob-probe'); }).catch(e => { this.db.close(); throw Error('This browser cannot store files in IndexedDB (' + (e?.message || e) + '). This tab is memory-only.'); });
                 this.db.onversionchange=()=>{this.db.close();this.problem='Storage changed in another Aster tab. Reload before saving.';console.warn(this.problem);};
                 this.mode = 'IndexedDB';
             }
@@ -167,7 +169,7 @@
                     r.onerror = () => reject(r.error);
                 }
                 tx.oncomplete = () => resolve(result);
-                tx.onerror = () => reject(tx.error);
+                tx.onerror = e => reject(e?.target?.error || tx.error || Error('Storage request failed'));
                 tx.onabort = () => reject(tx.error || Error('Storage transaction aborted'));
             });
         }

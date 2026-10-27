@@ -3,7 +3,7 @@
 ## Integration
 
 Sodalis keeps the pinned Aster browser desktop in
-`apps/desktop/public/aster/`, with one documented compatibility patch. Vite
+`apps/desktop/public/aster/`, with two documented compatibility patches. Vite
 serves it at `/aster/`, while the Sodalis
 Mithril application owns the outer page and the assistant/avatar host region.
 This keeps the initial shell useful without forking Aster internals.
@@ -51,3 +51,12 @@ fixture. The local patch removes its demo, source, and fixture-dependent tests,
 excludes the file from the service-worker precache, and increments the cache
 revision so stale entries are removed. Other Win32 samples remain available;
 no attempt has been made to bypass host protection.
+
+WebKit web views (such as the Copilot app's built-in browser) can refuse to
+store Blobs in IndexedDB. Aster stores file contents as Blobs, so its first-run
+seed failed and startup stopped with "Aster startup failed without an error
+object." The second patch probes Blob storage when the database opens and
+falls back to Aster's memory-only mode with its "Temporary session only"
+warning. `core.js` and `desktop-services.js` now reject failed writes with the
+request's error instead of the still-empty transaction error. The service-worker
+cache revision is incremented. `src/aster-startup.test.ts` covers the fallback.

@@ -30,7 +30,7 @@
             const tx=this.db.transaction(['files','meta','history'],'readwrite'),files=tx.objectStore('files'),meta=tx.objectStore('meta'),history=tx.objectStore('history');
             const read=files.get(entry.path),idx=meta.get('history-index');let pending=2;
             const ready=()=>{if(--pending)return;try{perform(read.result,idx.result||[],row=>history.put(row),id=>history.delete(id),index=>{files.put(entry);meta.put(index,'history-index');});}catch(e){tx.abort();reject(e);}};
-            read.onsuccess=idx.onsuccess=ready;tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||Error('File save aborted; original file unchanged.'));
+            read.onsuccess=idx.onsuccess=ready;tx.oncomplete=()=>resolve();tx.onerror=e=>reject(e?.target?.error||tx.error||Error('File save failed; original file unchanged.'));tx.onabort=()=>reject(tx.error||Error('File save aborted; original file unchanged.'));
         });
     };
     // Read-check-write operations share one transaction across tabs. Never overwrite
