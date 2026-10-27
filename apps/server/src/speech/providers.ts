@@ -4,7 +4,7 @@ import { LocalSpeechHttpEngine } from "./LocalSpeechHttpEngine.js";
 import type { SpeechSynthesisEngine } from "./PiperTtsEngine.js";
 import { PiperTtsEngine } from "./PiperTtsEngine.js";
 import { PiperHttpEngine } from "./PiperHttpEngine.js";
-import { AzureTtsEngine } from "./AzureTtsEngine.js";
+import { AzureTtsEngine, DEFAULT_AZURE_TTS_VOICE } from "./AzureTtsEngine.js";
 import { AzureRealtimeSttEngine } from "./AzureRealtimeSttEngine.js";
 import type { StreamingSpeechRecognitionEngine } from "./StreamingRecognition.js";
 
@@ -80,7 +80,7 @@ export function createSpeechProviders(settings: SpeechProviderSettings): {
         return new AzureTtsEngine({
           endpoint: required(settings.AZURE_TTS_URL, "AZURE_TTS_URL"),
           key: required(settings.AZURE_TTS_KEY, "AZURE_TTS_KEY"),
-          voice: required(settings.AZURE_TTS_VOICE, "AZURE_TTS_VOICE"),
+          voice: settings.AZURE_TTS_VOICE?.trim() || DEFAULT_AZURE_TTS_VOICE,
         });
       case "mock":
         return {

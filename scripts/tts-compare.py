@@ -23,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SENTENCES = json.loads((ROOT / "scripts/tts-sentences.json").read_text(encoding="utf-8"))
+AZURE_DEFAULT_VOICE = "nl-NL-ColetteNeural"  # keep in sync with DEFAULT_AZURE_TTS_VOICE in the server
 BACKENDS = ("piper", "fish", "voxtral", "kugelaudio", "chatterbox", "mms", "parler", "azure")
 PIPER_VOICES = (
     "nl_BE-nathalie-medium", "nl_BE-nathalie-x_low", "nl_BE-rdh-medium", "nl_BE-rdh-x_low",
@@ -87,7 +88,7 @@ def azure_config(environ):
     if not key:
         return None
     url = environ.get("AZURE_TTS_URL", "").strip()
-    voice = environ.get("AZURE_TTS_VOICE", "").strip()
+    voice = environ.get("AZURE_TTS_VOICE", "").strip() or AZURE_DEFAULT_VOICE
     parts = urllib.parse.urlsplit(url)
     host = parts.hostname or ""
     if host.endswith(".services.ai.azure.com"):
@@ -724,7 +725,7 @@ def main():
     if args.azure_preflight:
         config = azure_config(os.environ)
         if not config:
-            parser.error("set AZURE_TTS_KEY, AZURE_TTS_URL, and AZURE_TTS_VOICE first")
+            parser.error("set AZURE_TTS_KEY and AZURE_TTS_URL first")
         report_data = azure_preflight(config)
         print(f"Dutch voices in this region: {', '.join(report_data['dutch_voices']) or 'none'}")
         print(f"Configured voice {report_data['voice']}: "

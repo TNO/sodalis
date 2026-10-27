@@ -34,7 +34,7 @@ Parakeet needs more than a 2 GB Podman VM; see the
 | Role | Local selection | External selection |
 | --- | --- | --- |
 | STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL`; `azure` with `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` (real-time, max 30 s per utterance) |
-| TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
+| TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `azure` with `AZURE_TTS_URL` and `AZURE_TTS_KEY` (`AZURE_TTS_VOICE` defaults to `nl-NL-ColetteNeural`) |
 | LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL` (the example targets host Ollama); `azure` with `AZURE_LLM_URL`, `AZURE_LLM_KEY`, and `AZURE_LLM_DEPLOYMENT` |
 | Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
 
@@ -319,7 +319,8 @@ resource. Set these values in your ignored `.env`, then run
 TTS_PROVIDER=azure
 AZURE_TTS_URL=https://<resource>.cognitiveservices.azure.com/
 AZURE_TTS_KEY=<your Speech or Foundry resource key>
-AZURE_TTS_VOICE=nl-NL-Sander:MAI-Voice-2.1-Flash
+# Optional; blank uses nl-NL-ColetteNeural.
+AZURE_TTS_VOICE=
 ```
 
 **`AZURE_TTS_URL`** accepts either of two endpoints:
@@ -335,8 +336,9 @@ A Foundry **project** endpoint (`https://<resource>.services.ai.azure.com/api/pr
 has no speech route and is rejected. The resource key works with both endpoint
 forms.
 
-**`AZURE_TTS_VOICE`** is any Azure voice name, including model-suffixed
-voices:
+**`AZURE_TTS_VOICE`** is optional. When blank, Sodalis uses
+`nl-NL-ColetteNeural`, the voice the project owner preferred. It accepts any
+Azure voice name, including model-suffixed voices:
 
 - **Native Dutch:** standard voices such as `nl-NL-FennaNeural`, and the
   preview MAI voices such as `nl-NL-Sander:MAI-Voice-2.1-Flash`.
@@ -508,7 +510,7 @@ a command line, in `.env.example`, or in chat:
 ```dotenv
 AZURE_TTS_URL=https://<resource>.cognitiveservices.azure.com/
 AZURE_TTS_KEY=<your resource key>
-AZURE_TTS_VOICE=nl-NL-Sander:MAI-Voice-2.1-Flash
+AZURE_TTS_VOICE=nl-NL-ColetteNeural
 ```
 
 ```sh

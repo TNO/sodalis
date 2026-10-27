@@ -106,12 +106,13 @@ JSON `{"text": "..."}` request to `/synthesize`. STT's Whisper.cpp URL can likew
 a remote/native host instance; keep such endpoints private and trusted.
 Piper HTTP's format is specific to that adapter, not a generic engine
 protocol. `TTS_PROVIDER=azure` streams from Azure AI Speech instead. It
-requires `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE`.
+requires `AZURE_TTS_URL` and `AZURE_TTS_KEY`.
 
 - `AZURE_TTS_URL` is a Speech or Foundry resource endpoint, or a regional
   `/cognitiveservices/v1` endpoint.
 - `AZURE_TTS_VOICE` is any Azure voice name, such as
-  `nl-NL-Sander:MAI-Voice-2.1-Flash`.
+  `nl-NL-Sander:MAI-Voice-2.1-Flash`. When blank, it defaults to
+  `nl-NL-ColetteNeural`.
 
 Azure is only ever an explicit choice, never a fallback. See the
 [configuration guide](../../docs/development-stack.md#use-azure-ai-speech-opt-in).

@@ -198,6 +198,12 @@ describe("development stack selection", () => {
       TTS_PROVIDER: "azure",
       AZURE_TTS_VOICE: "nl-NL-ColetteNeural",
     });
+    expect(resolveStack({
+      ...base,
+      TTS_PROVIDER: "azure",
+      AZURE_TTS_URL: "https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1",
+      AZURE_TTS_KEY: "test-key",
+    }).environment.AZURE_TTS_VOICE).toBe("nl-NL-ColetteNeural");
     expect(() => resolveStack({
       ...base, TTS_PROVIDER: "azure",
     })).toThrow("AZURE_TTS_URL");

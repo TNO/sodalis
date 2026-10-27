@@ -7,7 +7,7 @@ viseme events:
 
     set -a; . ./.env.azure-eval; set +a
     uv run --with azure-cognitiveservices-speech python scripts/azure-visemes.py \
-        --voice nl-NL-FennaNeural --limit 1
+        --voice nl-NL-ColetteNeural --limit 1
 
 Output (default apps/desktop/public/avatars/eval/speech-nl, git-ignored):
 NN.mp3, NN.json with {text, voice, durationMs, visemes: [{id, offsetMs}],
@@ -57,7 +57,7 @@ def synthesize(speechsdk, config, text, voice, language):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--voice", default="nl-NL-FennaNeural")
+    parser.add_argument("--voice", default="nl-NL-ColetteNeural")
     parser.add_argument("--language", default="nl-NL")
     parser.add_argument("--sentences", type=Path, default=ROOT / "scripts/tts-sentences.json")
     parser.add_argument("--out", type=Path, default=ROOT / "apps/desktop/public/avatars/eval/speech-nl")

@@ -221,6 +221,8 @@ class TtsCompareTest(unittest.TestCase):
                               "AZURE_TTS_VOICE": "nl-NL-FennaNeural"})
         with self.assertRaises(ValueError):
             tts.azure_config({"AZURE_TTS_KEY": "k", "AZURE_TTS_URL": url, "AZURE_TTS_VOICE": "Aria"})
+        self.assertEqual(tts.azure_config({"AZURE_TTS_KEY": "k", "AZURE_TTS_URL": url})["voice"],
+                         "nl-NL-ColetteNeural")
         self.assertIn("&lt;b&gt;", tts.azure_ssml("<b>", "nl-NL-FennaNeural"))
 
     def test_azure_accepts_a_foundry_resource_and_a_multilingual_voice_but_not_a_project_endpoint(self):

@@ -19,6 +19,9 @@ function xmlText(value: string): string {
 }
 
 /** An Azure voice short name, optionally with a model suffix such as `:DragonHDLatestNeural`. */
+/** Used when AZURE_TTS_VOICE is blank. */
+export const DEFAULT_AZURE_TTS_VOICE = "nl-NL-ColetteNeural";
+
 const AZURE_VOICE = /^[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9]+(?::[A-Za-z0-9.-]+)?$/;
 
 /** The text-to-speech URL for a regional Speech endpoint or a Foundry resource endpoint. */

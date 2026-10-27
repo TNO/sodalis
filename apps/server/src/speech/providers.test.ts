@@ -44,7 +44,7 @@ describe("speech provider selection", () => {
     })).toThrow("AZURE_TTS_URL");
   });
 
-  it("selects Azure TTS only when its HTTPS endpoint, key and voice are explicit", () => {
+  it("selects Azure TTS only with an explicit HTTPS endpoint and key, defaulting to Colette", () => {
     const { tts } = createSpeechProviders({
       STT_PROVIDER: "mock",
       TTS_PROVIDER: "azure",
@@ -53,6 +53,13 @@ describe("speech provider selection", () => {
       AZURE_TTS_VOICE: "nl-NL-ColetteNeural",
     });
     expect(tts.voiceId).toBe("nl-NL-ColetteNeural");
+    expect(createSpeechProviders({
+      STT_PROVIDER: "mock",
+      TTS_PROVIDER: "azure",
+      AZURE_TTS_URL: "https://westeurope.tts.speech.microsoft.com/cognitiveservices/v1",
+      AZURE_TTS_KEY: "test-key",
+      AZURE_TTS_VOICE: " ",
+    }).tts.voiceId).toBe("nl-NL-ColetteNeural");
     expect(() => createSpeechProviders({
       STT_PROVIDER: "mock",
       TTS_PROVIDER: "azure",

@@ -1,4 +1,5 @@
 import { azureLlmSettings } from "../apps/server/src/assistant/providers.js";
+import { DEFAULT_AZURE_TTS_VOICE } from "../apps/server/src/speech/AzureTtsEngine.js";
 
 export interface StackSelection {
   readonly profiles: readonly string[];
@@ -149,11 +150,10 @@ export function resolveStack(settings: Settings): StackSelection {
       throw new Error("AZURE_TTS_URL must be an HTTPS Azure Speech resource or /cognitiveservices/v1 endpoint.");
     }
     if (!settings.AZURE_TTS_KEY?.trim()) throw new Error("Set AZURE_TTS_KEY.");
-    if (!settings.AZURE_TTS_VOICE?.trim()) throw new Error("Set AZURE_TTS_VOICE.");
     environment.TTS_PROVIDER = tts;
     environment.AZURE_TTS_URL = url;
     environment.AZURE_TTS_KEY = settings.AZURE_TTS_KEY;
-    environment.AZURE_TTS_VOICE = settings.AZURE_TTS_VOICE;
+    environment.AZURE_TTS_VOICE = settings.AZURE_TTS_VOICE?.trim() || DEFAULT_AZURE_TTS_VOICE;
   } else throw new Error(`Unsupported TTS_PROVIDER "${tts}".`);
 
   // Compose prefers shell variables over --env-file, so blank the unselected
