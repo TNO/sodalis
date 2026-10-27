@@ -4,6 +4,14 @@ export const MAX_TTS_CHUNK_CHARACTERS = 1000;
 export const DEFAULT_TTS_CHUNK_PAUSE_MS = 120;
 export const MAX_TTS_CHUNK_PAUSE_MS = 1000;
 
+export function isSpeechRate(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0.75 && value <= 1.25;
+}
+
+export function isSpeechPauseMs(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAX_TTS_CHUNK_PAUSE_MS;
+}
+
 const CLOSING_QUOTES = new Set(["'", '"', "’", "”", "»", ")", "]", "}"]);
 const ABBREVIATION_ENDING =
   /(?:\b(?:mr|mrs|ms|dr|prof|etc|e\.g|i\.e|a\.m|p\.m|dhr|mevr|mw|nr|enz|bijv|a\.u\.b|d\.w\.z|m\.a\.w|m\.b\.t|o\.a|ca)\.)$/i;
@@ -103,10 +111,13 @@ function splitWords(text: string, maxCharacters: number): string[] {
   return chunks;
 }
 
-export function splitSpeechText(text: string, maxCharacters: number): string[] {
+export function splitSpeechText(text: string, maxCharacters: number, sentenceBoundaries = false): string[] {
   const limit = clampSpeechChunkSize(maxCharacters);
   const trimmedText = text.trim();
   if (!trimmedText) return [];
+  if (sentenceBoundaries) {
+    return splitSentences(trimmedText).flatMap((sentence) => splitSpeechText(sentence, limit));
+  }
   if (trimmedText.length <= limit) return [trimmedText];
 
   const segments: { readonly text: string; readonly separator: string }[] = [];

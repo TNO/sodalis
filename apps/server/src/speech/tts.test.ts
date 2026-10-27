@@ -16,6 +16,31 @@ const sttEngine: SpeechRecognitionEngine = {
 };
 
 describe("speech synthesis API", () => {
+  it.each([true, false])("validates pacing, preserves sentence boundaries and reports native rate support %s", async (supportsRate) => {
+    const synthesize = vi.fn<SpeechSynthesisEngine["synthesize"]>(async function* () { yield new Uint8Array([1, 0]); });
+    const app = createSpeechApp(sttEngine, {
+      ttsEngine: { synthesize, supportsRate },
+      ttsChunkPauseMs: 120,
+    });
+    const post = (body: object) => app.request("/api/speech/tts", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    for (const invalid of [{ rate: 0 }, { rate: "0.8" }, { rate: 2 }, { sentencePauseMs: -1 }, { sentencePauseMs: 1.5 }, { sentencePauseMs: 1001 }]) {
+      expect((await post({ ...request, ...invalid })).status).toBe(400);
+    }
+    expect(synthesize).not.toHaveBeenCalled();
+    const response = await post({ ...request, text: "Dr. Smit komt. Hij is op tijd.", rate: 0.8, sentencePauseMs: 400 });
+    expect(response.status).toBe(200);
+    const pcm = await response.arrayBuffer();
+    expect(synthesize.mock.calls.map((call) => call[0]?.text)).toEqual(["Dr. Smit komt.", "Hij is op tijd."]);
+    expect(pcm.byteLength).toBe(4 + Math.round(22050 * 0.4) * 2);
+    expect(response.headers.get("x-sodalis-applied-rate")).toBe(supportsRate ? "0.8" : "1");
+    expect(synthesize).toHaveBeenCalledWith(
+      expect.objectContaining({ rate: 0.8, sentencePauseMs: 400 }), expect.any(AbortSignal),
+    );
+  });
+
   it("streams PCM audio with IDs that let clients reject stale playback", async () => {
     let continueSynthesis: (() => void) | undefined;
     const synthesisPaused = new Promise<void>((resolve) => {

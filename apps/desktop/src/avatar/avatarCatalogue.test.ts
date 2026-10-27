@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AVATAR_PROFILE_ID } from "@sodalis/avatar";
 import {
   AVATAR_CATALOGUE,
   LICENSED_AVATAR_PATH,
@@ -8,8 +9,9 @@ import {
 
 const licensed: AvatarCatalogueEntry = {
   asset: {
-    ...AVATAR_CATALOGUE[0]!.asset,
     id: "licensed-test",
+    name: "Licensed test",
+    profile: AVATAR_PROFILE_ID,
     modelUrl: `${LICENSED_AVATAR_PATH}licensed-test.glb`,
   },
   attribution: AVATAR_CATALOGUE[0]!.attribution,

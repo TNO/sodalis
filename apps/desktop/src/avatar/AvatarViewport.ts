@@ -1,7 +1,8 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
-import type { AttentionTargetRegistry, AvatarAsset } from "@sodalis/avatar";
+import type { AttentionTargetRegistry } from "@sodalis/avatar";
+import { isDotsAsset, type CompanionAsset } from "./avatarCatalogue.js";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -13,7 +14,9 @@ export interface AvatarSwitchOption {
 }
 
 export interface AvatarViewportAttrs {
-  asset: AvatarAsset;
+  asset: CompanionAsset;
+  activity?: "idle" | "listening" | "thinking" | "speaking" | "error";
+  reducedMotion?: boolean;
   /** Offered alongside Retry when the selected avatar cannot be shown. */
   switchTo?: AvatarSwitchOption;
   targetRegistry?: AttentionTargetRegistry;
@@ -53,6 +56,11 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
     m.redraw();
 
     try {
+      if (isDotsAsset(asset)) {
+        ready = true;
+        status = "Three dots ready.";
+        return;
+      }
       const { createAvatarScene } = await import("@sodalis/avatar/internal/scene");
       if (removed || attempt !== generation) return;
       if (!canvas) throw new Error("The avatar canvas could not be created.");
@@ -89,17 +97,19 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
   return {
     oncreate(vnode: VnodeDOM<AvatarViewportAttrs>) {
       const element = vnode.dom.querySelector("canvas");
-      if (!(element instanceof HTMLCanvasElement)) {
+      if (!isDotsAsset(vnode.attrs.asset) && !(element instanceof HTMLCanvasElement)) {
         status = "The avatar canvas could not be created.";
         m.redraw();
         return;
       }
-      canvas = element;
+      canvas = element instanceof HTMLCanvasElement ? element : undefined;
       void initialize(vnode.attrs);
     },
 
     onupdate(vnode: VnodeDOM<AvatarViewportAttrs>) {
-      if (canvas && vnode.attrs.asset.id !== loadedAssetId) {
+      const element = vnode.dom.querySelector("canvas");
+      canvas = element instanceof HTMLCanvasElement ? element : undefined;
+      if (vnode.attrs.asset.id !== loadedAssetId) {
         void initialize(vnode.attrs, true);
       }
     },
@@ -113,14 +123,29 @@ export const AvatarViewport = (): m.Component<AvatarViewportAttrs> => {
     },
 
     view(vnode: Vnode<AvatarViewportAttrs>) {
+      const dots = isDotsAsset(vnode.attrs.asset);
+      const activity = vnode.attrs.activity ?? "idle";
+      const activityLabel = {
+        idle: "Ready",
+        listening: "Listening",
+        thinking: "Thinking",
+        speaking: "Speaking",
+        error: "Needs attention",
+      }[activity];
       return m(
         ".avatar-viewport",
         {
           role: "group",
           "aria-label": "Avatar viewer",
+          "data-presentation": dots ? "dots" : "human",
+          "data-activity": activity,
+          "data-reduced-motion": String(vnode.attrs.reducedMotion ?? false),
         },
         [
-          m("canvas.avatar-canvas[aria-hidden=true]"),
+          dots
+            ? m(".avatar-dots[aria-hidden=true]", [m("span"), m("span"), m("span")])
+            : m("canvas.avatar-canvas[aria-hidden=true]"),
+          dots ? m("p.avatar-dots-label[role=status][aria-live=polite]", activityLabel) : null,
           import.meta.env.DEV && vnode.attrs.showGazeTarget
             ? m(
                 "output.avatar-gaze-overlay[aria-live=polite]",

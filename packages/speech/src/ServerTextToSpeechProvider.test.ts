@@ -29,6 +29,24 @@ function createResponse(
 }
 
 describe("ServerTextToSpeechProvider", () => {
+  it("carries native synthesis speed metadata and rejects invalid values", async () => {
+    let appliedRate = "0.8";
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      const reply = createResponse(new ReadableStream({
+        start(controller) { controller.enqueue(new Uint8Array([0, 0])); controller.close(); },
+      }));
+      reply.headers.set("x-sodalis-applied-rate", appliedRate);
+      return reply;
+    });
+    const provider = new ServerTextToSpeechProvider({ fetch: fetcher });
+    const chunks = [];
+    for await (const chunk of provider.speak({ ...request, rate: 0.8, sentencePauseMs: 400 }, new AbortController().signal)) chunks.push(chunk);
+    expect(chunks[0]).toMatchObject({ appliedRate: 0.8 });
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({ rate: 0.8, sentencePauseMs: 400 });
+    appliedRate = "0";
+    await expect(provider.speak(request, new AbortController().signal)[Symbol.asyncIterator]().next()).rejects.toThrow("speech rate");
+  });
+
   it("streams audio chunks tagged with the request IDs and sequence", async () => {
     const fetcher = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>

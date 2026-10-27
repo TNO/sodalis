@@ -427,6 +427,32 @@ Keep `PIPER_HTTP_URL` blank.
   missing or failing service never falls back to Piper.
 - **Browser:** receives none of these settings.
 
+**Desktop speech pacing:** the Assistant sidebar's **Speech and subtitles**
+controls send validated `rate` (0.75–1.25) and `sentencePauseMs` (integer,
+0–1000) fields on TTS requests. Standard Azure neural voices, including
+`nl-NL-ColetteNeural`, use escaped SSML `<prosody rate="…%">` for speed.
+Model-suffixed voices conservatively use the browser playback fallback,
+as do local engines; this fallback can alter pitch. The API reports the
+synthesis speed in `x-sodalis-applied-rate`, so clients do not apply speed
+twice. Direct API callers must handle that header and playback fallback
+themselves when their engine does not support native rate control.
+
+When sentence pacing is explicitly supplied, even short responses are split
+at sentence boundaries before synthesis. The server inserts exactly the
+requested additional PCM silence for its boundaries; desktop playback adds
+silence only between its separately requested chunks. Natural voice pauses
+and synthesis/alignment latency remain additional to that silence. Long
+sentences still split at safe clause/word boundaries for bounded requests.
+Omitting the new fields preserves the existing chunk-size/pause defaults.
+See [Microsoft's prosody documentation](https://learn.microsoft.com/en-us/azure/ai-services/speech-service/speech-synthesis-markup-voice#adjust-prosody).
+Colette SSML is covered by mocked tests, not a new live voice evaluation.
+
+The short-sentence option sends a validated boolean `shortSentences` to the
+assistant endpoint, adding a fixed server-side instruction without changing
+confirmation, uncertainty or safety requirements. It is not a guarantee of
+sentence length. Subtitle display preferences stay in browser storage and
+are not sent to speech/LLM providers.
+
 Never put a real key in `.env.example` or commit your `.env`.
 
 #### Compare the fifty Dutch avatar utterances

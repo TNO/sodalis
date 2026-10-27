@@ -29,6 +29,7 @@ const capabilities: TextToSpeechCapabilities = {
 };
 
 class FakeSource {
+  readonly playbackRate = { value: 1 };
   buffer: AudioBuffer | null = null;
   onended: AudioBufferSourceNode["onended"] = null;
   readonly connect = vi.fn();
@@ -106,6 +107,64 @@ function audioChunk(
 }
 
 describe("SpeechPlaybackController", () => {
+  it.each([undefined, 0.8])("paces sentences and captions without double-applying native rate %s", async (appliedRate) => {
+    const context = new FakeAudioContext();
+    let tick: FrameRequestCallback | undefined;
+    const onWordChange = vi.fn();
+    let count = 0;
+    const provider = createProvider(async function* (speech) {
+      if (count++ === 0) context.currentTime = 5;
+      yield {
+        ...audioChunk({ sessionId: speech.sessionId, speechId: speech.speechId }),
+        data: new Uint8Array(44_100),
+        ...(appliedRate !== undefined ? { appliedRate } : {}),
+      };
+      yield {
+        type: "timing" as const, kind: "word" as const, value: count === 1 ? "Eerst" : "Dan",
+        startMs: 100, endMs: 500,
+        sessionId: speech.sessionId, speechId: speech.speechId, sequence: 1,
+      };
+    });
+    const player = createSpeechPlaybackController({
+      provider,
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext: () => context as unknown as SpeechAudioContext,
+      requestFrame: (callback) => { tick = callback; return 1; },
+      cancelFrame: vi.fn(),
+      onWordChange,
+      getSpeechPreferences: () => ({ rate: 0.8, sentencePauseMs: 400 }),
+    });
+    const speaking = player.speak({ ...request, text: "Eerst rustig. Dan verder." });
+    await vi.waitFor(() => expect(context.sources).toHaveLength(2));
+    const expectedRate = appliedRate === undefined ? 0.8 : 1;
+    expect(context.sources[0]?.playbackRate.value).toBe(expectedRate);
+    expect(context.sources[1]?.start).toHaveBeenCalledWith(5 + 1 / expectedRate + 0.4);
+    context.currentTime = 5.2;
+    tick?.(0);
+    expect(onWordChange).toHaveBeenLastCalledWith(0, expect.anything());
+    context.currentTime = 5 + 1 / expectedRate + 0.6;
+    tick?.(0);
+    expect(onWordChange).toHaveBeenLastCalledWith(2, expect.anything());
+    for (const source of context.sources) source.finish();
+    await speaking;
+  });
+
+  it("rejects invalid pacing before creating audio or calling providers", async () => {
+    const createAudioContext = vi.fn();
+    const speak = vi.fn(async function* () { yield audioChunk(); });
+    const player = createSpeechPlaybackController({
+      provider: createProvider(speak),
+      getAvatarController: () => undefined,
+      isListening: () => false,
+      createAudioContext,
+    });
+    await expect(player.speak({ ...request, rate: 0 })).rejects.toThrow("pacing");
+    await expect(player.speak({ ...request, sentencePauseMs: 1001 })).rejects.toThrow("pacing");
+    expect(createAudioContext).not.toHaveBeenCalled();
+    expect(speak).not.toHaveBeenCalled();
+  });
+
   it("starts avatar speaking at first playback and returns to neutral when audio ends", async () => {
     const context = new FakeAudioContext();
     const avatar = { setState: vi.fn(), setViseme: vi.fn() };

@@ -33,6 +33,31 @@ async function unhandledRejections(action: () => Promise<unknown>): Promise<unkn
 }
 
 describe("Azure TTS engine", () => {
+  it.each([0.75, 0.85, 1.25])("applies validated Colette prosody at rate %s and still escapes text", async (rate) => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([0, 0])));
+    const engine = new AzureTtsEngine({
+      endpoint: "https://example.cognitiveservices.azure.com/",
+      key: "test-key", voice: "nl-NL-ColetteNeural", fetch: fetcher,
+    });
+    for await (const _chunk of engine.synthesize({ ...request, rate }, new AbortController().signal)) { /* drain */ }
+    expect(engine.supportsRate).toBe(true);
+    expect(fetcher.mock.calls[0]?.[1]?.body).toContain(`<prosody rate="${Math.round((rate - 1) * 100)}%">`);
+    expect(fetcher.mock.calls[0]?.[1]?.body).toContain("&lt;Anne&gt;");
+    await expect(engine.synthesize({ ...request, rate: 0 }, new AbortController().signal)[Symbol.asyncIterator]().next()).rejects.toThrow("rate");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("leaves HD prosody to the documented playback fallback", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(new Uint8Array([0, 0])));
+    const engine = new AzureTtsEngine({
+      endpoint: "https://example.cognitiveservices.azure.com/",
+      key: "test-key", voice: "en-US-Adam:DragonHDLatestNeural", fetch: fetcher,
+    });
+    for await (const _chunk of engine.synthesize({ ...request, rate: 0.8 }, new AbortController().signal)) { /* drain */ }
+    expect(engine.supportsRate).toBe(false);
+    expect(fetcher.mock.calls[0]?.[1]?.body).not.toContain("<prosody");
+  });
+
   it("streams Dutch PCM through the selected Azure endpoint", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(
       new ReadableStream({

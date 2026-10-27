@@ -23,6 +23,7 @@ describe("avatar selection", () => {
     expect(selection.entries.map((entry) => entry.asset.name)).toEqual([
       "Male",
       "Brunette",
+      "Three dots",
     ]);
   });
 
@@ -37,6 +38,14 @@ describe("avatar selection", () => {
       }),
     );
     expect(createAvatarSelection({ storage }).selected.asset.name).toBe("Brunette");
+  });
+
+  it("persists the dot presentation without requiring a model URL", () => {
+    const storage = memoryStorage();
+    createAvatarSelection({ storage }).select("sodalis-dots");
+    const asset = createAvatarSelection({ storage }).selected.asset;
+    expect(asset).toMatchObject({ presentation: "dots", name: "Three dots" });
+    expect(asset).not.toHaveProperty("modelUrl");
   });
 
   it("falls back to the default for an unknown stored avatar without overwriting it", () => {
@@ -93,7 +102,7 @@ describe("AvatarChoice", () => {
     const group = mounted.querySelector("fieldset");
     expect(group?.querySelector("legend")?.textContent).toBe("Avatar");
     const radios = [...mounted.querySelectorAll<HTMLInputElement>("input[type=radio]")];
-    expect(radios.map((radio) => radio.checked)).toEqual([true, false]);
+    expect(radios.map((radio) => radio.checked)).toEqual([true, false, false]);
     expect(mounted.textContent).toContain(
       "Sodalis male, built from CC0 MakeHuman assets",
     );
@@ -103,10 +112,15 @@ describe("AvatarChoice", () => {
     m.redraw.sync();
 
     expect(selection.selected.asset.name).toBe("Brunette");
-    expect(radios.map((radio) => radio.checked)).toEqual([false, true]);
+    expect(radios.map((radio) => radio.checked)).toEqual([false, true, false]);
     expect(mounted.textContent).toContain(
       "Ready Player Me brunette (TalkingHead example)",
     );
     expect(mounted.textContent).toContain("CC BY-NC 4.0");
+    radios[2]?.click();
+    m.redraw.sync();
+    expect(selection.selected.asset.name).toBe("Three dots");
+    expect(mounted.textContent).toContain("Sodalis abstract companion");
+    expect(mounted.textContent).not.toContain("CC BY-NC 4.0");
   });
 });

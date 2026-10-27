@@ -7,6 +7,8 @@ import { createAttentionManager } from "./avatar/AttentionManager.js";
 import { createAvatarPresentationController } from "./avatar/AvatarPresentationController.js";
 import { createAvatarSelection } from "./avatar/avatarCatalogue.js";
 import { AvatarChoice } from "./avatar/AvatarChoice.js";
+import { CompanionSettings } from "./avatar/CompanionSettings.js";
+import { createCompanionPreferences } from "./avatar/companionPreferences.js";
 import type { SpeechInputController } from "@sodalis/speech";
 import {
   createAvatarLab,
@@ -49,6 +51,13 @@ const DesktopShell = () => {
     sampleNotesFocused: false,
   };
   const avatarSelection = createAvatarSelection({
+    onChange: () => m.redraw(),
+    onError(error) {
+      state.presentationError = error.message;
+      m.redraw();
+    },
+  });
+  const companionPreferences = createCompanionPreferences({
     onChange: () => m.redraw(),
     onError(error) {
       state.presentationError = error.message;
@@ -182,6 +191,8 @@ const DesktopShell = () => {
                 ),
                 m(DesktopAvatarOverlay, {
                   asset: avatarSelection.selected.asset,
+                  preferences: companionPreferences,
+                  reducedMotion: state.avatarLab.reducedMotion,
                   switchTo: avatarSwitchOption(),
                   targetRegistry: avatarTargetRegistry,
                   onGeometryChange: () => attention.refresh(),
@@ -221,6 +232,7 @@ const DesktopShell = () => {
                 m("h2#assistant-title", "Assistant"),
               ]),
               m(AvatarChoice, { selection: avatarSelection }),
+              m(CompanionSettings, { store: companionPreferences }),
               import.meta.env.DEV
                 ? m(AvatarLab, {
                     scene: state.avatarScene,

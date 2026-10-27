@@ -54,6 +54,59 @@ describe("AvatarViewport", () => {
     document.body.replaceChildren();
   });
 
+  it("shows three dots, state and conversation/notification controls without WebGL", async () => {
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const activate = vi.fn();
+    const notify = vi.fn();
+    let activity: "thinking" | "speaking" = "thinking";
+    m.mount(host, {
+      view: () => m(AvatarViewport, {
+        asset: assetById("sodalis-dots")!,
+        activity,
+        reducedMotion: true,
+        interactive: true,
+        onActivate: activate,
+        notificationCount: 2,
+        onNotificationsActivate: notify,
+      }),
+    });
+    await vi.waitFor(() => expect(host.querySelector(".avatar-interaction-target")).not.toBeNull());
+    expect(host.querySelectorAll(".avatar-dots span")).toHaveLength(3);
+    expect(host.querySelector("canvas")).toBeNull();
+    expect(createAvatarScene).not.toHaveBeenCalled();
+    expect(host.querySelector(".avatar-dots-label")?.textContent).toBe("Thinking");
+    expect(host.querySelector(".avatar-viewport")?.getAttribute("data-reduced-motion")).toBe("true");
+    host.querySelector<HTMLButtonElement>(".avatar-interaction-target")?.click();
+    host.querySelector<HTMLButtonElement>(".avatar-notification-indicator")?.click();
+    expect(activate).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenCalledOnce();
+    activity = "speaking";
+    m.redraw.sync();
+    expect(host.querySelector(".avatar-dots-label")?.textContent).toBe("Speaking");
+  });
+
+  it("disposes the human scene when switching to dots and reloads when switching back", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    let asset = MALE!;
+    m.mount(host, { view: () => m(AvatarViewport, { asset }) });
+    await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
+    asset = assetById("sodalis-dots")!;
+    m.redraw.sync();
+    await vi.waitFor(() => expect(host.querySelector(".avatar-dots")).not.toBeNull());
+    expect(scene.dispose).toHaveBeenCalledOnce();
+    asset = BRUNETTE!;
+    m.redraw.sync();
+    await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledTimes(2));
+    expect(host.querySelector("canvas")).not.toBeNull();
+    expect(host.querySelector(".avatar-dots")).toBeNull();
+  });
+
   it("loads the given avatar and reports when it is ready", async () => {
     const scene = createSceneHandle();
     vi.mocked(createAvatarScene).mockReturnValue(scene);

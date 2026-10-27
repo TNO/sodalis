@@ -2,6 +2,8 @@ import type { AvatarController } from "@sodalis/avatar";
 import {
   DEFAULT_TTS_CHUNK_CHARACTERS,
   DEFAULT_TTS_CHUNK_PAUSE_MS,
+  isSpeechPauseMs,
+  isSpeechRate,
   splitSpeechText,
 } from "@sodalis/speech";
 import type {
@@ -25,6 +27,7 @@ export interface SpeechPlaybackLatency {
 }
 
 export interface SpeechPlaybackControllerOptions {
+  readonly getSpeechPreferences?: () => Pick<SpeechRequest, "rate" | "sentencePauseMs">;
   readonly provider: TextToSpeechProvider;
   readonly fallbackProviders?: readonly TextToSpeechProvider[];
   readonly alignAudio?: (
@@ -84,6 +87,7 @@ interface TimedSpeechWord extends SpeechWordTimestamp {
 }
 
 interface SynthesizedSpeechChunk {
+  readonly playbackRate: number;
   readonly pcm: Uint8Array;
   readonly sampleRate: number;
   readonly wordTimestamps: readonly SpeechWordTimestamp[];
@@ -164,6 +168,7 @@ async function synthesizeSpeechChunk(
     let sampleRate: number | undefined;
     let firstAudioReceivedAt: number | undefined;
     let expectedSequence = 0;
+    let appliedRate: number | undefined;
     try {
       for await (const chunk of provider.speak(request, signal)) {
         signal.throwIfAborted();
@@ -197,6 +202,11 @@ async function synthesizeSpeechChunk(
         }
 
         const chunkSampleRate = pcmSampleRate(chunk.mimeType);
+        const chunkRate = chunk.appliedRate ?? 1;
+        if (!isSpeechRate(chunkRate) || (appliedRate !== undefined && appliedRate !== chunkRate)) {
+          throw new SpeechChunkProtocolError("Speech provider returned inconsistent or invalid speech rate metadata.");
+        }
+        appliedRate = chunkRate;
         if (sampleRate !== undefined && sampleRate !== chunkSampleRate) {
           throw new Error("Speech provider changed PCM sample rate mid-stream.");
         }
@@ -213,6 +223,7 @@ async function synthesizeSpeechChunk(
         sampleRate,
         wordTimestamps,
         firstAudioReceivedAt,
+        playbackRate: (request.rate ?? 1) / (appliedRate ?? 1),
       };
     } catch (error) {
       signal.throwIfAborted();
@@ -372,6 +383,13 @@ export function createSpeechPlaybackController(
   ): Promise<void> => {
     if (disposed) throw new Error("Speech playback has been disposed.");
     signal?.throwIfAborted();
+    request = { ...request, ...options.getSpeechPreferences?.() };
+    if (
+      (request.rate !== undefined && !isSpeechRate(request.rate)) ||
+      (request.sentencePauseMs !== undefined && !isSpeechPauseMs(request.sentencePauseMs))
+    ) {
+      throw new RangeError("Speech pacing settings are outside the supported range.");
+    }
     if (active) {
       stopPlayback();
       cancelTts();
@@ -412,12 +430,12 @@ export function createSpeechPlaybackController(
       const textChunks = splitSpeechText(
         request.text,
         DEFAULT_TTS_CHUNK_CHARACTERS,
+        request.sentencePauseMs !== undefined,
       );
       if (!textChunks.length) {
         throw new Error("Speech request contains no speakable text.");
       }
       const providers = [options.provider, ...(options.fallbackProviders ?? [])];
-      const playbackStartTime = context.currentTime;
       let sourceWordOffset = 0;
       let firstAudioPlayed = false;
 
@@ -462,18 +480,19 @@ export function createSpeechPlaybackController(
         if (playback.audioStartTime === undefined) {
           playback.audioStartTime = startAt;
         }
-        const elapsedBeforeChunk = startAt - playbackStartTime;
+        const elapsedBeforeChunk = startAt - playback.audioStartTime;
         playback.wordTimestamps = [
           ...playback.wordTimestamps,
           ...wordTimestamps.map((timestamp, index) => ({
             ...timestamp,
-            start: timestamp.start + elapsedBeforeChunk,
-            end: timestamp.end + elapsedBeforeChunk,
+            start: timestamp.start / synthesized.playbackRate + elapsedBeforeChunk,
+            end: timestamp.end / synthesized.playbackRate + elapsedBeforeChunk,
             wordIndex: sourceWordOffset + index,
           })),
         ];
         const source = context.createBufferSource();
         source.buffer = buffer;
+        source.playbackRate.value = synthesized.playbackRate;
         source.connect(playback.analyser);
         const sourceEnded = new Promise<void>((resolve) => {
           source.onended = () => {
@@ -483,9 +502,9 @@ export function createSpeechPlaybackController(
         });
         playback.sources.add(source);
         source.start(startAt);
-        playback.nextStartTime = startAt + buffer.duration +
+        playback.nextStartTime = startAt + buffer.duration / synthesized.playbackRate +
           (chunkIndex < textChunks.length - 1
-            ? DEFAULT_TTS_CHUNK_PAUSE_MS / 1000
+            ? (request.sentencePauseMs ?? DEFAULT_TTS_CHUNK_PAUSE_MS) / 1000
             : 0);
         playback.endedSources.push(sourceEnded);
         sourceWordOffset += countSpeechWords(text);

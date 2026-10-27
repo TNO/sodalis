@@ -6,8 +6,10 @@ import type {
 } from "@sodalis/assistant";
 import type { SpeechInputController } from "@sodalis/speech";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
+import type { CompanionPreferences } from "./companionPreferences.js";
 
 interface AvatarConversationCardAttrs {
+  preferences?: CompanionPreferences;
   speechInput?: SpeechInputController;
   speechActivityMessage?: string;
   /** Display name of a cloud recognizer that receives microphone audio. */
@@ -72,6 +74,37 @@ export const AvatarConversationCard =
     let caption = "Select Reply in the message toolbar. I can highlight it for you.";
     let actionError: string | undefined;
     let pushToTalkActive = false;
+    let revealedContentKey: string | undefined;
+    let currentAttrs: AvatarConversationCardAttrs | undefined;
+
+    const revealContent = (attrs: AvatarConversationCardAttrs) => {
+      const content = card?.querySelector<HTMLElement>(".avatar-conversation-content");
+      if (!content?.clientHeight) return;
+      const error = attrs.conversationError ?? attrs.speechError ?? attrs.speechOutputError ?? actionError;
+      const key = JSON.stringify([
+        attrs.assistantText ?? caption, attrs.activeSpeechWordIndex,
+        attrs.preferences?.subtitleSize, attrs.preferences?.subtitles,
+        attrs.pendingConfirmation?.id, error,
+      ]);
+      if (key === revealedContentKey) return;
+      revealedContentKey = key;
+      const selector = error
+        ? ".avatar-conversation-status"
+        : attrs.pendingConfirmation
+          ? ".avatar-conversation-confirmation"
+          : attrs.preferences?.subtitles === false
+            ? ".avatar-response-transcript summary"
+            : attrs.activeSpeechWordIndex !== undefined
+              ? '[aria-current="true"]'
+              : ".avatar-conversation-caption";
+      const target = content.querySelector<HTMLElement>(selector);
+      if (!target) return;
+      const bounds = content.getBoundingClientRect();
+      const targetBounds = target.getBoundingClientRect();
+      if (targetBounds.top < bounds.top || targetBounds.bottom > bounds.bottom) {
+        content.scrollTop += targetBounds.top - bounds.top;
+      }
+    };
 
     const handleActionError = (
       error: unknown,
@@ -105,7 +138,12 @@ export const AvatarConversationCard =
       const avatarBounds = avatar.getBoundingClientRect();
       const cardBounds = card.getBoundingClientRect();
       if (!layerBounds.width || !layerBounds.height || !cardBounds.width) return;
-      const naturalHeight = Math.max(cardBounds.height, card.scrollHeight + 2);
+      const content = card.querySelector<HTMLElement>(".avatar-conversation-content");
+      const contentOverflow = content ? content.scrollHeight - content.clientHeight : 0;
+      const naturalHeight = Math.max(
+        cardBounds.height,
+        card.scrollHeight + contentOverflow + 2,
+      );
 
       const dock = layer.dataset.effectiveDock === "left" ? "left" : "right";
       const clipBottom = Number.parseFloat(
@@ -132,8 +170,13 @@ export const AvatarConversationCard =
       oncreate(vnode: VnodeDOM<AvatarConversationCardAttrs>) {
         card = vnode.dom as HTMLElement;
         updatePosition();
+        revealContent(vnode.attrs);
         if (typeof ResizeObserver === "function") {
-          resizeObserver = new ResizeObserver(updatePosition);
+          resizeObserver = new ResizeObserver(() => {
+            updatePosition();
+            revealedContentKey = undefined;
+            if (currentAttrs) revealContent(currentAttrs);
+          });
           resizeObserver.observe(card);
           const layer = card.closest<HTMLElement>(".desktop-avatar-layer");
           const avatar = layer?.querySelector<HTMLElement>(".avatar-viewport");
@@ -142,8 +185,9 @@ export const AvatarConversationCard =
         }
       },
 
-      onupdate() {
+      onupdate(vnode) {
         updatePosition();
+        revealContent(vnode.attrs);
       },
 
       onremove() {
@@ -153,6 +197,7 @@ export const AvatarConversationCard =
       },
 
       view(vnode: Vnode<AvatarConversationCardAttrs>) {
+        currentAttrs = vnode.attrs;
         const speechInput = vnode.attrs.speechInput;
         const pendingConfirmation = vnode.attrs.pendingConfirmation;
         const speechState = speechInput?.state;
@@ -239,211 +284,200 @@ export const AvatarConversationCard =
                 "Close",
               ),
             ]),
-            m("div.avatar-conversation-transcript[aria-live=polite][aria-atomic=true]", [
-              m("p.avatar-conversation-speaker", "You"),
-              m(
-                "p.avatar-conversation-user-text",
-                vnode.attrs.userTranscript ?? transcript,
-              ),
-              m("p.avatar-conversation-speaker", "Sodalis"),
-              m(
-                "p.avatar-conversation-caption",
-                renderCaption(
-                  vnode.attrs.assistantText ?? caption,
-                  vnode.attrs.activeSpeechWordIndex,
+            m(".avatar-conversation-content[tabindex=0][role=region][aria-label='Conversation transcript and status']", [
+              m("div.avatar-conversation-transcript[aria-live=polite][aria-atomic=true]", [
+                m("p.avatar-conversation-speaker", "You"),
+                m(
+                  "p.avatar-conversation-user-text",
+                  vnode.attrs.userTranscript ?? transcript,
                 ),
-              ),
-              vnode.attrs.speechCaptionError
-                ? m(
+                m("p.avatar-conversation-speaker", "Sodalis"),
+                m(
+                  vnode.attrs.preferences?.subtitles === false ? "details.avatar-response-transcript" : "div",
+                  [
+                    vnode.attrs.preferences?.subtitles === false ? m("summary", "Read response") : null,
+                    m(
+                      "p.avatar-conversation-caption",
+                      vnode.attrs.preferences?.subtitles !== false && vnode.attrs.preferences
+                        ? {
+                          class: "avatar-conversation-caption-custom",
+                          style: {
+                            fontSize: `${vnode.attrs.preferences.subtitleSize}px`,
+                            color: vnode.attrs.preferences.subtitleColor,
+                            backgroundColor: vnode.attrs.preferences.subtitleBackground,
+                          },
+                        }
+                        : {},
+                      renderCaption(
+                        vnode.attrs.assistantText ?? caption,
+                        vnode.attrs.preferences?.subtitles === false ? undefined : vnode.attrs.activeSpeechWordIndex,
+                      ),
+                    ),
+                  ],
+                ),
+                vnode.attrs.speechCaptionError && vnode.attrs.preferences?.subtitles !== false
+                  ? m(
                     "p.avatar-conversation-caption-status[role=status]",
                     `Word highlighting unavailable: ${vnode.attrs.speechCaptionError}`,
                   )
-                : null,
-            ]),
-            m(
-              "p.avatar-conversation-status[role=status][aria-live=polite]",
-              statusMessage,
-            ),
-            listening && vnode.attrs.cloudSpeechRecognizer
-              ? m(
+                  : null,
+              ]),
+              m(
+                "p.avatar-conversation-status[role=status][aria-live=polite]",
+                statusMessage,
+              ),
+              listening && vnode.attrs.cloudSpeechRecognizer
+                ? m(
                   "p.avatar-conversation-cloud-notice",
                   `Speech recognized by ${vnode.attrs.cloudSpeechRecognizer} (cloud)`,
                 )
-              : null,
-            m(
-              "button.avatar-conversation-listening[type=button]",
-              {
-                disabled: requestingPermission,
-                onclick: () => {
-                  runInputAction(
-                    speechInput
-                      ? listening
-                        ? () => speechInput.stop()
-                        : () => speechInput.start()
-                      : undefined,
-                    vnode.attrs,
-                  );
-                },
-              },
-              listening ? "Stop listening" : "Start microphone",
-            ),
-            m(
-              "button.avatar-conversation-push-to-talk[type=button]",
-              {
-                disabled: requestingPermission,
-                "aria-pressed": String(pushToTalkActive),
-                onpointerdown: (event: PointerEvent) => {
-                  event.preventDefault();
-                  const button = event.currentTarget as HTMLButtonElement;
-                  if (typeof button.setPointerCapture === "function") {
-                    button.setPointerCapture(event.pointerId);
-                  }
-                  startPushToTalk();
-                },
-                onpointerup: stopPushToTalk,
-                onpointercancel: stopPushToTalk,
-                onlostpointercapture: stopPushToTalk,
-                onkeydown: (event: KeyboardEvent) => {
-                  if (
-                    event.repeat ||
-                    (event.key !== " " && event.key !== "Enter")
-                  ) {
-                    return;
-                  }
-                  event.preventDefault();
-                  startPushToTalk();
-                },
-                onkeyup: (event: KeyboardEvent) => {
-                  if (event.key === " " || event.key === "Enter") {
+                : null,
+              m(
+                "button.avatar-conversation-push-to-talk[type=button]",
+                {
+                  disabled: requestingPermission,
+                  "aria-pressed": String(pushToTalkActive),
+                  onpointerdown: (event: PointerEvent) => {
                     event.preventDefault();
-                    stopPushToTalk();
-                  }
-                },
-                onblur: stopPushToTalk,
-              },
-              pushToTalkActive ? "Release to stop" : "Hold to talk",
-            ),
-            m(
-              "button.avatar-conversation-speak[type=button]",
-              {
-                disabled: vnode.attrs.speechOutputActive
-                  ? !vnode.attrs.onStopSpeaking
-                  : !vnode.attrs.onSpeak,
-                onclick: () => {
-                  if (vnode.attrs.speechOutputActive) {
-                    vnode.attrs.onStopSpeaking?.();
-                    return;
-                  }
-                  const text = (
-                    vnode.attrs.assistantText ?? caption
-                  ).trim();
-                  if (!text) return;
-                  const speak = vnode.attrs.onSpeak;
-                  if (!speak) return;
-                  void speak(text).catch((error: unknown) => {
-                    const normalized =
-                      error instanceof Error
-                        ? error
-                        : new Error(String(error));
-                    if (vnode.attrs.onSpeechOutputError) {
-                      vnode.attrs.onSpeechOutputError(normalized);
-                    } else {
-                      handleActionError(normalized, vnode.attrs);
+                    const button = event.currentTarget as HTMLButtonElement;
+                    if (typeof button.setPointerCapture === "function") {
+                      button.setPointerCapture(event.pointerId);
                     }
-                  });
-                },
-              },
-              vnode.attrs.speechOutputActive ? "Stop speaking" : "Read aloud",
-            ),
-            vnode.attrs.conversationState === "thinking"
-              ? m(
-                  "button.avatar-conversation-cancel[type=button]",
-                  {
-                    onclick: vnode.attrs.onCancelTurn,
-                    disabled: !vnode.attrs.onCancelTurn,
+                    startPushToTalk();
                   },
-                  "Cancel response",
-                )
-              : null,
-            pendingConfirmation
-              ? m(
+                  onpointerup: stopPushToTalk,
+                  onpointercancel: stopPushToTalk,
+                  onlostpointercapture: stopPushToTalk,
+                  onkeydown: (event: KeyboardEvent) => {
+                    if (event.repeat || (event.key !== " " && event.key !== "Enter")) return;
+                    event.preventDefault();
+                    startPushToTalk();
+                  },
+                  onkeyup: (event: KeyboardEvent) => {
+                    if (event.key === " " || event.key === "Enter") {
+                      event.preventDefault();
+                      stopPushToTalk();
+                    }
+                  },
+                  onblur: stopPushToTalk,
+                },
+                pushToTalkActive ? "Release to stop" : "Hold to talk",
+              ),
+              pendingConfirmation
+                ? m(
                   "section.avatar-conversation-confirmation[role=group][aria-labelledby=avatar-action-confirmation-title]",
                   [
-                    m(
-                      "h3#avatar-action-confirmation-title",
-                      "Confirm this action",
-                    ),
-                    m(
-                      "p.avatar-conversation-confirmation-summary",
-                      pendingConfirmation.summary,
-                    ),
-                    m(
-                      "p.avatar-conversation-confirmation-phrase",
-                      `By voice, say "${pendingConfirmation.confirmationPhrase}" to approve.`,
-                    ),
-                    m(
-                      "div.avatar-conversation-confirmation-actions",
-                      [
-                        m(
-                          "button[type=button]",
-                          {
-                            onclick: () => {
-                              const confirm = vnode.attrs.onConfirmAction;
-                              if (!confirm) return;
-                              void confirm(pendingConfirmation.id).catch(
-                                (error: unknown) => {
-                                  const normalized =
-                                    error instanceof Error
-                                      ? error
-                                      : new Error(String(error));
-                                  vnode.attrs.onConversationError?.(
-                                    normalized,
-                                  );
-                                },
-                              );
-                            },
-                            disabled: !vnode.attrs.onConfirmAction,
-                          },
-                          "Confirm action",
-                        ),
-                        m(
-                          "button[type=button]",
-                          {
-                            onclick: () =>
-                              vnode.attrs.onCancelAction?.(
-                                pendingConfirmation.id,
-                              ),
-                            disabled: !vnode.attrs.onCancelAction,
-                          },
-                          "Cancel action",
-                        ),
-                      ],
-                    ),
+                    m("h3#avatar-action-confirmation-title", "Confirm this action"),
+                    m("p.avatar-conversation-confirmation-summary", pendingConfirmation.summary),
+                    m("p.avatar-conversation-confirmation-phrase",
+                      `By voice, say "${pendingConfirmation.confirmationPhrase}" to approve.`),
+                    m("div.avatar-conversation-confirmation-actions", [
+                      m("button[type=button]", {
+                        onclick: () => {
+                          const confirm = vnode.attrs.onConfirmAction;
+                          if (!confirm) return;
+                          void confirm(pendingConfirmation.id).catch((error: unknown) => {
+                            vnode.attrs.onConversationError?.(
+                              error instanceof Error ? error : new Error(String(error)),
+                            );
+                          });
+                        },
+                        disabled: !vnode.attrs.onConfirmAction,
+                      }, "Confirm action"),
+                      m("button[type=button]", {
+                        onclick: () => vnode.attrs.onCancelAction?.(pendingConfirmation.id),
+                        disabled: !vnode.attrs.onCancelAction,
+                      }, "Cancel action"),
+                    ]),
                   ],
                 )
-              : null,
-            m(
-              "form.avatar-conversation-form",
-              { onsubmit: sendMessage },
-              [
-                m("label.avatar-conversation-input-label", {
-                  for: "avatar-conversation-input",
-                }, "Or type a message"),
-                m("div.avatar-conversation-input-row", [
-                  m("input#avatar-conversation-input[type=text]", {
-                    value: draft,
-                    placeholder: "Type a message",
-                    autocomplete: "off",
-                    oninput: (event: Event) => {
-                      draft = (event.currentTarget as HTMLInputElement).value;
+                : null,
+            ]),
+            m("footer.avatar-conversation-footer", [
+              m(".avatar-conversation-controls", [
+                m(
+                  "button.avatar-conversation-listening[type=button]",
+                  {
+                    disabled: requestingPermission,
+                    onclick: () => {
+                      runInputAction(
+                        speechInput
+                          ? listening
+                            ? () => speechInput.stop()
+                            : () => speechInput.start()
+                          : undefined,
+                        vnode.attrs,
+                      );
                     },
-                  }),
-                  m("button[type=submit]", {
-                    disabled: !draft.trim(),
-                  }, "Send"),
-                ]),
-              ],
-            ),
+                  },
+                  listening ? "Stop listening" : "Start microphone",
+                ),
+                vnode.attrs.conversationState !== "thinking" ? m(
+                  "button.avatar-conversation-speak[type=button]",
+                  {
+                    disabled: vnode.attrs.speechOutputActive
+                      ? !vnode.attrs.onStopSpeaking
+                      : !vnode.attrs.onSpeak,
+                    onclick: () => {
+                      if (vnode.attrs.speechOutputActive) {
+                        vnode.attrs.onStopSpeaking?.();
+                        return;
+                      }
+                      const text = (
+                        vnode.attrs.assistantText ?? caption
+                      ).trim();
+                      if (!text) return;
+                      const speak = vnode.attrs.onSpeak;
+                      if (!speak) return;
+                      void speak(text).catch((error: unknown) => {
+                        const normalized =
+                          error instanceof Error
+                            ? error
+                            : new Error(String(error));
+                        if (vnode.attrs.onSpeechOutputError) {
+                          vnode.attrs.onSpeechOutputError(normalized);
+                        } else {
+                          handleActionError(normalized, vnode.attrs);
+                        }
+                      });
+                    },
+                  },
+                  vnode.attrs.speechOutputActive ? "Stop speaking" : "Read aloud",
+                ) : null,
+                vnode.attrs.conversationState === "thinking"
+                  ? m(
+                    "button.avatar-conversation-cancel[type=button]",
+                    {
+                      onclick: vnode.attrs.onCancelTurn,
+                      disabled: !vnode.attrs.onCancelTurn,
+                    },
+                    "Cancel response",
+                  )
+                  : null,
+              ]),
+              m(
+                "form.avatar-conversation-form",
+                { onsubmit: sendMessage },
+                [
+                  m("label.avatar-conversation-input-label", {
+                    for: "avatar-conversation-input",
+                  }, "Or type a message"),
+                  m("div.avatar-conversation-input-row", [
+                    m("input#avatar-conversation-input[type=text]", {
+                      value: draft,
+                      placeholder: "Type a message",
+                      autocomplete: "off",
+                      oninput: (event: Event) => {
+                        draft = (event.currentTarget as HTMLInputElement).value;
+                      },
+                    }),
+                    m("button[type=submit]", {
+                      disabled: !draft.trim(),
+                    }, "Send"),
+                  ]),
+                ],
+              ),
+            ]),
           ],
         );
       },
