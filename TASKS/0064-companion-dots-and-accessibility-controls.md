@@ -57,3 +57,5 @@ Keep existing human avatars and the desktop integration.
   used a fresh reviewer of the same role. This is not whole-surface approval.
   The documentation handoff confirmed README/development guide coverage and
   preservation of the incumbent design; no new design-system files were needed.
+- User-directed follow-up: Three dots is now the default for devices without a
+  valid saved avatar choice. Saved human-avatar choices remain unchanged.

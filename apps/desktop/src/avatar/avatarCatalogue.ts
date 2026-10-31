@@ -98,7 +98,7 @@ export const AVATAR_CATALOGUE: readonly AvatarCatalogueEntry[] = availableAvatar
   __SODALIS_LICENSED_AVATARS__,
 );
 
-export const DEFAULT_AVATAR_ID = MALE_THUISZORG.asset.id;
+export const DEFAULT_AVATAR_ID = DOTS.asset.id;
 
 const SELECTION_KEY = "sodalis.avatar.selection";
 

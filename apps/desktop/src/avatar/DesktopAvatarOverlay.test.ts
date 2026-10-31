@@ -19,6 +19,13 @@ import {
 } from "@sodalis/avatar/internal/scene";
 import { createAvatarPresentationController } from "./AvatarPresentationController.js";
 import { DesktopAvatarOverlay } from "./DesktopAvatarOverlay.js";
+import { AVATAR_CATALOGUE } from "./avatarCatalogue.js";
+
+const humanEntry = AVATAR_CATALOGUE.find(
+  (entry) => entry.asset.id === "sodalis-male-thuiszorg",
+);
+if (!humanEntry) throw new Error("The human test avatar is unavailable.");
+const humanAsset = humanEntry.asset;
 
 vi.mock("@sodalis/avatar/internal/scene", () => ({
   createAvatarScene: vi.fn(),
@@ -61,6 +68,29 @@ describe("DesktopAvatarOverlay", () => {
     document.body.replaceChildren();
   });
 
+  it("shows three dots by default without loading a 3D scene", async () => {
+    const presentation = createAvatarPresentationController({
+      storage: { getItem: () => null, setItem: vi.fn() },
+    });
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(DesktopAvatarOverlay, { presentation }) });
+
+    expect(host.querySelector(".avatar-dots")).not.toBeNull();
+    expect(host.querySelector("canvas")).toBeNull();
+    expect(createAvatarScene).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(host.querySelector(".avatar-interaction-target")).not.toBeNull();
+    });
+    host.querySelector<HTMLButtonElement>(
+      '[aria-label="Start a conversation with Sodalis"]',
+    )?.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector("#avatar-conversation-card")).not.toBeNull();
+    });
+  });
+
   it("keeps the avatar scene mounted while desktop applications open and close", async () => {
     const scene = createSceneHandle();
     vi.mocked(createAvatarScene).mockReturnValue(scene);
@@ -78,7 +108,7 @@ describe("DesktopAvatarOverlay", () => {
               activeApplication = activeApplication ? undefined : "Mail";
             },
           }, activeApplication ? `Close ${activeApplication}` : "Open Mail"),
-          m(DesktopAvatarOverlay, { onScene }),
+          m(DesktopAvatarOverlay, { asset: humanAsset, onScene }),
         ]),
     });
 
@@ -138,7 +168,7 @@ describe("DesktopAvatarOverlay", () => {
     const host = document.createElement("div");
     mountedHost = host;
     document.body.append(host);
-    m.mount(host, { view: () => m(DesktopAvatarOverlay, { presentation }) });
+    m.mount(host, { view: () => m(DesktopAvatarOverlay, { asset: humanAsset, presentation }) });
     await vi.waitFor(() => expect(callbacks?.onSpeechStart).toBeDefined());
     await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
     host.querySelector<HTMLButtonElement>(
@@ -184,7 +214,7 @@ describe("DesktopAvatarOverlay", () => {
     document.body.append(host);
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { frame }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, frame }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();
@@ -266,7 +296,7 @@ describe("DesktopAvatarOverlay", () => {
     });
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { frame, presentation }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, frame, presentation }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();
@@ -301,7 +331,7 @@ describe("DesktopAvatarOverlay", () => {
       view: () =>
         m(".desktop-shell", [
           m("button", { onclick: openApplication }, "Open Mail"),
-          m(DesktopAvatarOverlay, {}),
+          m(DesktopAvatarOverlay, { asset: humanAsset }),
         ]),
     });
 
@@ -324,7 +354,7 @@ describe("DesktopAvatarOverlay", () => {
     });
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { presentation }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, presentation }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();
@@ -438,7 +468,7 @@ describe("DesktopAvatarOverlay", () => {
     );
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { presentation, onSpeechInput }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, presentation, onSpeechInput }),
     });
     await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(onSpeechInput).toHaveBeenCalled());
@@ -557,7 +587,7 @@ describe("DesktopAvatarOverlay", () => {
     );
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { presentation, actionRuntime }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, presentation, actionRuntime }),
     });
     await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
     host
@@ -619,7 +649,7 @@ describe("DesktopAvatarOverlay", () => {
     });
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { presentation }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, presentation }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();
@@ -651,7 +681,7 @@ describe("DesktopAvatarOverlay", () => {
     });
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { presentation }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, presentation }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();
@@ -719,7 +749,7 @@ describe("DesktopAvatarOverlay", () => {
 
     m.mount(host, {
       view: () =>
-        m(DesktopAvatarOverlay, { presentation, onOpenApplication }),
+        m(DesktopAvatarOverlay, { asset: humanAsset, presentation, onOpenApplication }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();
@@ -759,7 +789,7 @@ describe("DesktopAvatarOverlay", () => {
 
     m.mount(host, {
       view: () =>
-        m(DesktopAvatarOverlay, { presentation, onOpenApplication }),
+        m(DesktopAvatarOverlay, { asset: humanAsset, presentation, onOpenApplication }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();
@@ -795,7 +825,7 @@ describe("DesktopAvatarOverlay", () => {
     });
 
     m.mount(host, {
-      view: () => m(DesktopAvatarOverlay, { presentation }),
+      view: () => m(DesktopAvatarOverlay, { asset: humanAsset, presentation }),
     });
     await vi.waitFor(() => {
       expect(scene.controller.load).toHaveBeenCalledOnce();

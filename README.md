@@ -102,7 +102,8 @@ Docker/Podman setup, individual-service development, and troubleshooting.
 The **Avatar** picker also offers **Three dots**, a lightweight alternative
 that needs no 3D viewer. Large dots move sequentially while thinking and
 pulse while speaking; a text label conveys the state even with reduced
-motion. Human avatars and the existing default remain available.
+motion. Three dots is the default when no valid avatar choice is saved.
+Saved choices are preserved, and human avatars remain available.
 Expand **Speech and subtitles** in the Assistant sidebar to set speech speed
 (0.75–1.25x), additional sentence pauses (0–1000 ms), short-sentence responses,
 and subtitle visibility, size and text/background colors. Settings are saved

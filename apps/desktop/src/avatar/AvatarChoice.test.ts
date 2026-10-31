@@ -16,10 +16,10 @@ function memoryStorage(initial: Record<string, string> = {}) {
 }
 
 describe("avatar selection", () => {
-  it("defaults to the male avatar when no choice is stored", () => {
+  it("defaults to three dots when no choice is stored", () => {
     const selection = createAvatarSelection({ storage: memoryStorage() });
 
-    expect(selection.selected.asset.id).toBe("sodalis-male-thuiszorg");
+    expect(selection.selected.asset.id).toBe("sodalis-dots");
     expect(selection.entries.map((entry) => entry.asset.name)).toEqual([
       "Male",
       "Brunette",
@@ -41,18 +41,31 @@ describe("avatar selection", () => {
   });
 
   it("persists the dot presentation without requiring a model URL", () => {
-    const storage = memoryStorage();
+    const storage = memoryStorage({
+      "sodalis.avatar.selection": "sodalis-male-thuiszorg",
+    });
     createAvatarSelection({ storage }).select("sodalis-dots");
     const asset = createAvatarSelection({ storage }).selected.asset;
     expect(asset).toMatchObject({ presentation: "dots", name: "Three dots" });
     expect(asset).not.toHaveProperty("modelUrl");
   });
 
+  it("preserves a saved human avatar instead of replacing it with the default", () => {
+    const storage = memoryStorage({
+      "sodalis.avatar.selection": "sodalis-male-thuiszorg",
+    });
+
+    expect(createAvatarSelection({ storage }).selected.asset.id).toBe(
+      "sodalis-male-thuiszorg",
+    );
+    expect(storage.setItem).not.toHaveBeenCalled();
+  });
+
   it("falls back to the default for an unknown stored avatar without overwriting it", () => {
     const storage = memoryStorage({ "sodalis.avatar.selection": "retired-avatar" });
 
     expect(createAvatarSelection({ storage }).selected.asset.id).toBe(
-      "sodalis-male-thuiszorg",
+      "sodalis-dots",
     );
     expect(storage.setItem).not.toHaveBeenCalled();
   });
@@ -61,7 +74,7 @@ describe("avatar selection", () => {
     const selection = createAvatarSelection({ storage: memoryStorage() });
 
     expect(() => selection.select("missing")).toThrow('Unknown avatar "missing".');
-    expect(selection.selected.asset.id).toBe("sodalis-male-thuiszorg");
+    expect(selection.selected.asset.id).toBe("sodalis-dots");
   });
 
   it("still switches when storage is unavailable and reports the failure", () => {
@@ -102,9 +115,9 @@ describe("AvatarChoice", () => {
     const group = mounted.querySelector("fieldset");
     expect(group?.querySelector("legend")?.textContent).toBe("Avatar");
     const radios = [...mounted.querySelectorAll<HTMLInputElement>("input[type=radio]")];
-    expect(radios.map((radio) => radio.checked)).toEqual([true, false, false]);
+    expect(radios.map((radio) => radio.checked)).toEqual([false, false, true]);
     expect(mounted.textContent).toContain(
-      "Sodalis male, built from CC0 MakeHuman assets",
+      "Sodalis abstract companion",
     );
     expect(mounted.textContent).not.toContain("CC BY-NC 4.0");
 
