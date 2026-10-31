@@ -98,6 +98,19 @@ requested on activation, never on page load. You can type a message first
 to test AI and TTS without STT. See the
 [development stack guide](docs/development-stack.md) for model downloads,
 Docker/Podman setup, individual-service development, and troubleshooting.
+
+The **Avatar** picker also offers **Three dots**, a lightweight alternative
+that needs no 3D viewer. Large dots move sequentially while thinking and
+pulse while speaking; a text label conveys the state even with reduced
+motion. Three dots is the default when no valid avatar choice is saved.
+Saved choices are preserved, and human avatars remain available.
+Expand **Speech and subtitles** in the Assistant sidebar to set speech speed
+(0.75–1.25x), additional sentence pauses (0–1000 ms), short-sentence responses,
+and subtitle visibility, size and text/background colors. Settings are saved
+on this device and pacing changes apply to the next response. Hidden
+subtitles remain available under **Read response**; action confirmations and
+errors are never hidden. Low-contrast color choices show a warning.
+
 To select a different STT service, set `STT_PROVIDER=whisper-cpp` (download
 its model as described in the guide), `STT_PROVIDER=whistle`, or the
 explicit cloud opt-in `STT_PROVIDER=azure` in `.env`,

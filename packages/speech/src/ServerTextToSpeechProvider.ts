@@ -6,6 +6,7 @@ import type {
   TextToSpeechCapabilities,
   TextToSpeechProvider,
 } from "./index.js";
+import { isSpeechRate } from "./speechChunking.js";
 
 const SERVER_TTS_CAPABILITIES: TextToSpeechCapabilities = {
   runtime: "server",
@@ -143,6 +144,11 @@ export class ServerTextToSpeechProvider implements TextToSpeechProvider {
     if (!response.ok) throw await responseError(response);
 
     const mimeType = verifySpeechHeaders(response, request);
+    const rawAppliedRate = response.headers.get("x-sodalis-applied-rate");
+    const appliedRate = rawAppliedRate === null ? undefined : Number(rawAppliedRate);
+    if (appliedRate !== undefined && !isSpeechRate(appliedRate)) {
+      throw new Error("Speech server returned an invalid applied speech rate.");
+    }
     if (!response.body) {
       throw new Error("Speech server returned no audio stream.");
     }
@@ -196,6 +202,7 @@ export class ServerTextToSpeechProvider implements TextToSpeechProvider {
           type: "audio",
           data,
           mimeType,
+          ...(appliedRate !== undefined ? { appliedRate } : {}),
           sessionId: request.sessionId,
           speechId: request.speechId,
           sequence: sequence++,

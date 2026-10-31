@@ -40,6 +40,19 @@ function response(
 }
 
 describe("ServerLlmProvider", () => {
+  it("reads the current short-sentence preference for each turn", async () => {
+    let shortSentences = true;
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => response(new ReadableStream({
+      start(controller) { controller.close(); },
+    })));
+    const provider = new ServerLlmProvider({ fetch: fetcher, getShortSentences: () => shortSentences });
+    for await (const _delta of provider.stream(request)) { /* drain */ }
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({ shortSentences: true });
+    shortSentences = false;
+    for await (const _delta of provider.stream(request)) { /* drain */ }
+    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toMatchObject({ shortSentences: false });
+  });
+
   it("streams sequenced deltas and reports first-token latency", async () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
       response(

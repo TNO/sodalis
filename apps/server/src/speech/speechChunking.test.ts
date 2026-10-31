@@ -6,6 +6,21 @@ import {
 } from "@sodalis/speech";
 
 describe("speech chunking", () => {
+  it("can preserve short sentence boundaries without splitting abbreviations or decimals", () => {
+    expect(splitSpeechText("Dr. Smit komt om 3.5 uur. Neem rustig de tijd! \"Goed?\" Ja.", 320, true)).toEqual([
+      "Dr. Smit komt om 3.5 uur.",
+      "Neem rustig de tijd!",
+      "\"Goed?\"",
+      "Ja.",
+    ]);
+    expect(splitSpeechText("Eerste zin. Tweede zin.", 320)).toEqual(["Eerste zin. Tweede zin."]);
+    expect(splitSpeechText("", 320, true)).toEqual([]);
+    const long = `${"Een langere zin zonder punt ".repeat(20)}klaar.`;
+    const parts = splitSpeechText(long, 80, true);
+    expect(parts.every((part) => part.length <= 80)).toBe(true);
+    expect(parts.join(" ")).toBe(long);
+  });
+
   it("keeps closing quotes with their sentence and prefers sentence boundaries", () => {
     expect(
       splitSpeechText(

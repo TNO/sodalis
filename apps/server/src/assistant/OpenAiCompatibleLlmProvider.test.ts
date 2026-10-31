@@ -29,6 +29,24 @@ async function collect(
 }
 
 describe("OpenAiCompatibleLlmProvider", () => {
+  it("adds a controlled short-sentence instruction without weakening the action policy", async () => {
+    let body = "";
+    const provider = new OpenAiCompatibleLlmProvider({
+      baseUrl: "http://localhost:1234/v1", model: "test",
+      fetch: async (_input, init) => {
+        body = String(init?.body);
+        return eventStream("[DONE]");
+      },
+    });
+    for await (const _chunk of provider.generate({
+      messages: [{ role: "user", content: "Hallo." }],
+      shortSentences: true, signal: new AbortController().signal,
+    })) { /* drain */ }
+    expect(body).toContain("short, clear sentences");
+    expect(body).toContain("Do not omit necessary warnings");
+    expect(body).toContain("never claim user confirmation");
+  });
+
   it("sends a key-header credential and provider-specific body fields when configured", async () => {
     let headers: Record<string, string> = {};
     let body: Record<string, unknown> = {};

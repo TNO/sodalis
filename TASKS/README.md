@@ -140,3 +140,4 @@ result.
 - [x] 0061 Aligning transcript words to audio *(needs 0024)*
 - [x] 0062 Repairing transcript tails and onset timing *(needs 0061)*
 - [x] 0063 Adding speech captions and playback fallback *(needs 0058, 0061, 0062)*
+- [x] 0064 Companion dots and accessibility controls

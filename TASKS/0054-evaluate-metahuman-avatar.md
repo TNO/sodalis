@@ -134,3 +134,7 @@ Licensing (Unreal Engine EULA, read 2026-10-19):
 - 2026-10-22: Added GUI locations for first-time Unreal users: where the
   Launcher, Plugins, Content Drawer, Creator categories, Outliner and export
   dialogs are, and how to identify each required asset.
+- 2026-10-27: Linked the
+  [older-adult memory and embodiment research](../docs/evaluations/personal-assistant-memory-and-embodiment.md).
+  This is separate from the asset/pipeline evaluation and does not complete
+  its acceptance criteria.

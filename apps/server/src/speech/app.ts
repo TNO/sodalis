@@ -20,6 +20,8 @@ import {
   clampSpeechChunkSize,
   DEFAULT_TTS_CHUNK_CHARACTERS,
   DEFAULT_TTS_CHUNK_PAUSE_MS,
+  isSpeechPauseMs,
+  isSpeechRate,
   splitSpeechText,
 } from "@sodalis/speech";
 import {
@@ -551,6 +553,14 @@ export function createSpeechApp(
     const text = "text" in payload ? payload.text : undefined;
     const language = "language" in payload ? payload.language : undefined;
     const voice = "voice" in payload ? payload.voice : undefined;
+    const rate = "rate" in payload ? payload.rate : undefined;
+    const sentencePauseMs = "sentencePauseMs" in payload ? payload.sentencePauseMs : undefined;
+    if (
+      (rate !== undefined && !isSpeechRate(rate)) ||
+      (sentencePauseMs !== undefined && !isSpeechPauseMs(sentencePauseMs))
+    ) {
+      return jsonError(context, "Speech rate must be 0.75–1.25 and sentence pause must be an integer from 0–1000 ms.", 400);
+    }
     if (
       typeof sessionId !== "string" ||
       !SESSION_ID_PATTERN.test(sessionId) ||
@@ -585,13 +595,16 @@ export function createSpeechApp(
     if (!cleanedText) {
       return jsonError(context, "Speech text must not be empty after cleanup.", 400);
     }
-    const chunks = splitSpeechText(cleanedText, maxTtsChunkCharacters);
+    const chunks = splitSpeechText(cleanedText, maxTtsChunkCharacters, sentencePauseMs !== undefined);
+    const pauseMs = sentencePauseMs ?? ttsChunkPauseMs;
     const speechRequest: SpeechRequest = {
       sessionId,
       speechId,
       text: cleanedText,
       language,
       ...(voice ? { voice } : {}),
+      ...(rate !== undefined ? { rate } : {}),
+      ...(sentencePauseMs !== undefined ? { sentencePauseMs } : {}),
     };
     const abortController = new AbortController();
     const requestSignal = context.req.raw.signal;
@@ -609,9 +622,9 @@ export function createSpeechApp(
         try {
           for (const [index, textChunk] of chunks.entries()) {
             abortController.signal.throwIfAborted();
-            if (index > 0 && ttsChunkPauseMs > 0) {
+            if (index > 0 && pauseMs > 0) {
               const silenceSamples = Math.round(
-                ((engine.sampleRate ?? 22_050) * ttsChunkPauseMs) / 1000,
+                ((engine.sampleRate ?? 22_050) * pauseMs) / 1000,
               );
               streamController.enqueue(new Uint8Array(silenceSamples * 2));
             }
@@ -651,6 +664,7 @@ export function createSpeechApp(
         "cache-control": "no-store",
         "x-sodalis-session-id": sessionId,
         "x-sodalis-speech-id": speechId,
+        "x-sodalis-applied-rate": String(engine.supportsRate ? rate ?? 1 : 1),
       },
     });
   });

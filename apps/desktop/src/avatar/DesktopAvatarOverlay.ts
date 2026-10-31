@@ -12,7 +12,7 @@ import type {
   ConversationSnapshot,
   ConversationState,
 } from "@sodalis/assistant";
-import type { AttentionTargetRegistry, AvatarAsset } from "@sodalis/avatar";
+import type { AttentionTargetRegistry } from "@sodalis/avatar";
 import type { AvatarSceneHandle } from "@sodalis/avatar/internal/scene";
 import {
   createEnergyVoiceActivityDetector,
@@ -32,7 +32,8 @@ import { AvatarConversationCard } from "./AvatarConversationCard.js";
 import { AvatarNotificationPanel } from "./AvatarNotificationPanel.js";
 import type { AvatarNotification } from "./AvatarNotificationPanel.js";
 import { AvatarViewport, type AvatarSwitchOption } from "./AvatarViewport.js";
-import { AVATAR_CATALOGUE, DEFAULT_AVATAR_ID } from "./avatarCatalogue.js";
+import { AVATAR_CATALOGUE, DEFAULT_AVATAR_ID, type CompanionAsset } from "./avatarCatalogue.js";
+import { DEFAULT_COMPANION_PREFERENCES, type CompanionPreferenceStore } from "./companionPreferences.js";
 import type { AvatarPresentationController } from "./AvatarPresentationController.js";
 import {
   createSpeechPlaybackController,
@@ -41,7 +42,9 @@ import {
 
 interface DesktopAvatarOverlayAttrs {
   /** The avatar to show; defaults to the catalogue default. */
-  asset?: AvatarAsset;
+  asset?: CompanionAsset;
+  preferences?: CompanionPreferenceStore;
+  reducedMotion?: boolean;
   switchTo?: AvatarSwitchOption;
   targetRegistry?: AttentionTargetRegistry;
   onGeometryChange?: () => void;
@@ -119,6 +122,7 @@ interface ActiveSpeechRecognition {
 
 export const DesktopAvatarOverlay =
   (): m.Component<DesktopAvatarOverlayAttrs> => {
+    let preferences = DEFAULT_COMPANION_PREFERENCES;
     let layer: HTMLElement | undefined;
     let frame: HTMLIFrameElement | undefined;
     let outerWindow: Window | undefined;
@@ -192,6 +196,7 @@ export const DesktopAvatarOverlay =
       : [];
     const llmProvider = new ServerLlmProvider({
       baseUrl: speechApiBaseUrl,
+      getShortSentences: () => preferences.shortSentences,
       onLatency(metric) {
         if (import.meta.env.DEV) {
           console.debug("Assistant generation latency:", metric);
@@ -458,6 +463,10 @@ export const DesktopAvatarOverlay =
     const createSpeechPlayback = (): SpeechPlaybackController =>
       createSpeechPlaybackController({
         provider: textToSpeechProvider,
+        getSpeechPreferences: () => ({
+          rate: preferences.speechRate,
+          sentencePauseMs: preferences.sentencePauseMs,
+        }),
         fallbackProviders: fallbackTextToSpeechProviders,
         alignAudio: (text, language, audio, signal) =>
           speechToTextProvider.alignAudio(text, language, audio, signal),
@@ -856,6 +865,7 @@ export const DesktopAvatarOverlay =
       },
 
       view(vnode: Vnode<DesktopAvatarOverlayAttrs>) {
+        preferences = vnode.attrs.preferences?.value ?? DEFAULT_COMPANION_PREFERENCES;
         const viewportAttrs = {
           asset: vnode.attrs.asset ?? DEFAULT_ASSET,
           ...(vnode.attrs.switchTo ? { switchTo: vnode.attrs.switchTo } : {}),
@@ -870,6 +880,16 @@ export const DesktopAvatarOverlay =
           gazeOverlay: vnode.attrs.gazeOverlay,
           showGazeTarget: vnode.attrs.showGazeTarget,
           interactive: true,
+          reducedMotion: vnode.attrs.reducedMotion,
+          activity: speechIsPlaying
+            ? "speaking" as const
+            : conversationState === "thinking" || speechOutputActive || conversationState === "transcribing"
+              ? "thinking" as const
+              : microphoneWasActive
+                ? "listening" as const
+                : conversationState === "error"
+                  ? "error" as const
+                  : "idle" as const,
           conversationOpen,
           notificationCount: conversationOpen
             ? 0
@@ -950,6 +970,7 @@ export const DesktopAvatarOverlay =
               : null,
             conversationOpen
               ? m(AvatarConversationCard, {
+                  preferences,
                   speechInput,
                   speechActivityMessage,
                   cloudSpeechRecognizer,

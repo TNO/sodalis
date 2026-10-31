@@ -95,3 +95,7 @@ inside the Sodalis AI service, not in a direct Ollama or Azure integration.
   Remaining here: the desktop's plain-language memory explanation and consent
   onboarding (top-level and health), and the inspect, correct, and delete UI on
   top of `/api/memory/*`.
+
+- 2026-10-27 Copilot: Added cross-topic
+  [personal-assistant memory and embodiment research](../docs/evaluations/personal-assistant-memory-and-embodiment.md).
+  Research only; no implementation or acceptance-criteria status changed.

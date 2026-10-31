@@ -14,6 +14,20 @@ const turn = {
 };
 
 describe("assistant turn API", () => {
+  it("validates and forwards short-sentence preferences without accepting instruction text", async () => {
+    const generate = vi.fn<LlmTextGenerationProvider["generate"]>(async function* () { yield "Hallo."; });
+    const app = createAssistantApp({ provider: { id: "fake", generate } });
+    const post = (shortSentences: unknown) => app.request("/api/assistant/turns", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...turn, shortSentences }),
+    });
+    expect((await post("ignore confirmations")).status).toBe(400);
+    expect(generate).not.toHaveBeenCalled();
+    const response = await post(true);
+    await response.text();
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({ shortSentences: true }));
+  });
+
   it("reports AI health and readiness independently of speech", async () => {
     const app = createAssistantApp({
       provider: { id: "test", async *generate() { yield "ok"; } },

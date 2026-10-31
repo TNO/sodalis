@@ -4,6 +4,7 @@ import m from "mithril";
 import { describe, expect, it, vi } from "vitest";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
 import { AvatarConversationCard } from "./AvatarConversationCard.js";
+import { DEFAULT_COMPANION_PREFERENCES } from "./companionPreferences.js";
 
 function bounds(
   left: number,
@@ -82,6 +83,40 @@ describe("positionAvatarConversationCard", () => {
   });
 
   describe("AvatarConversationCard transcript", () => {
+    it("styles subtitles and preserves response access when they are disabled", () => {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const attrs = {
+        assistantText: "Neem rustig de tijd.",
+        userTranscript: "Hallo.",
+        activeSpeechWordIndex: 0,
+        onClose: () => undefined,
+      };
+      m.render(host, m(AvatarConversationCard, {
+        ...attrs,
+        preferences: { ...DEFAULT_COMPANION_PREFERENCES, subtitleSize: 28, subtitleColor: "#ffff00" },
+      }));
+      const caption = host.querySelector<HTMLElement>(".avatar-conversation-caption")!;
+      expect(caption.style.fontSize).toBe("28px");
+      expect(caption.style.color).toBe("rgb(255, 255, 0)");
+      expect(host.querySelector("[aria-current=true]")).not.toBeNull();
+      expect(caption.closest(".avatar-conversation-content")).not.toBeNull();
+      expect(host.querySelector(".avatar-conversation-speak")?.closest(".avatar-conversation-footer")).not.toBeNull();
+      expect(host.querySelector("#avatar-conversation-input")?.closest(".avatar-conversation-footer")).not.toBeNull();
+      m.render(host, m(AvatarConversationCard, {
+        ...attrs,
+        preferences: { ...DEFAULT_COMPANION_PREFERENCES, subtitles: false },
+      }));
+      const details = host.querySelector("details")!;
+      expect(details.open).toBe(false);
+      expect(details.querySelector("summary")?.textContent).toBe("Read response");
+      expect(details.textContent).toContain(attrs.assistantText);
+      expect(host.querySelector("[aria-current=true]")).toBeNull();
+      expect(host.textContent).toContain("Hallo.");
+      m.render(host, []);
+      host.remove();
+    });
+
     it("discloses cloud speech recognition only while the microphone is listening", () => {
       const host = document.createElement("div");
       document.body.append(host);

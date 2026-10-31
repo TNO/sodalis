@@ -7,8 +7,20 @@ export interface AvatarAttribution {
   licenseUrl: string;
 }
 
+export interface DotsAvatarAsset {
+  readonly id: "sodalis-dots";
+  readonly name: string;
+  readonly presentation: "dots";
+}
+
+export type CompanionAsset = AvatarAsset | DotsAvatarAsset;
+
+export function isDotsAsset(asset: CompanionAsset): asset is DotsAvatarAsset {
+  return "presentation" in asset && asset.presentation === "dots";
+}
+
 export interface AvatarCatalogueEntry {
-  asset: AvatarAsset;
+  asset: CompanionAsset;
   attribution: AvatarAttribution;
   /**
    * GLB file name for an avatar whose licence forbids publishing it in this
@@ -71,12 +83,22 @@ const MALE_THUISZORG: AvatarCatalogueEntry = {
   },
 };
 
+const DOTS: AvatarCatalogueEntry = {
+  asset: { id: "sodalis-dots", name: "Three dots", presentation: "dots" },
+  attribution: {
+    title: "Sodalis abstract companion",
+    sourceUrl: "https://github.com/TNO/sodalis",
+    license: "MIT",
+    licenseUrl: "https://opensource.org/license/mit",
+  },
+};
+
 export const AVATAR_CATALOGUE: readonly AvatarCatalogueEntry[] = availableAvatars(
-  [MALE_THUISZORG, BRUNETTE],
+  [MALE_THUISZORG, BRUNETTE, DOTS],
   __SODALIS_LICENSED_AVATARS__,
 );
 
-export const DEFAULT_AVATAR_ID = MALE_THUISZORG.asset.id;
+export const DEFAULT_AVATAR_ID = DOTS.asset.id;
 
 const SELECTION_KEY = "sodalis.avatar.selection";
 
