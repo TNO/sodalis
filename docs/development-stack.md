@@ -346,7 +346,11 @@ The test needs `ffmpeg` on `PATH`.
   hour on standard S1 pricing in West Europe, October 2026).
 
 The API image contains a minimal LGPL FFmpeg build (about 2 MB; see
-`services/api/Dockerfile`). When you run `pnpm dev:speech` natively, install
+[`services/api/Dockerfile`](../services/api/Dockerfile)). Its source is fetched
+from FFmpeg's official GitHub tag archive with bounded retries and timeouts,
+then verified against a pinned SHA-256 before extraction. When updating
+FFmpeg, update the version and archive checksum together.
+When you run `pnpm dev:speech` natively, install
 `ffmpeg` and keep it on `PATH`.
 
 Contract tests use fakes. `AzureRealtimeSttEngine.live.test.ts` is skipped
