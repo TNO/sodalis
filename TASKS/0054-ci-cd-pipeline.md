@@ -20,7 +20,8 @@ analysis is in
 - Run typecheck, tests, and build on Ubuntu and macOS for every pull request,
   with FFmpeg on Linux so the FFmpeg-dependent tests run.
 - Run the Python tests, Compose config validation, image build checks,
-  actionlint, and dependency review. Summarize all jobs in one `ci-ok` check.
+  actionlint, and `pnpm audit:dependencies` (high/critical npm advisories).
+  Summarize all jobs in one `ci-ok` check.
 - Discover root script tests automatically; type-check `scripts/`; add
   `pnpm test:python`.
 - Enable `noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, and
@@ -30,7 +31,8 @@ analysis is in
   OCI licence and attribution metadata.
 - Pull Parakeet TDT in Compose by default, keep an opt-in local build, and let
   the local API and gateway builds reuse the registry cache.
-- Add CodeQL and Dependabot, and document the test-tier policy in `AGENTS.md`.
+- Add Dependabot and a free-tool quality baseline without CodeQL or Dependency
+  Review; document the test-tier policy in `AGENTS.md`.
 - Never send data to cloud providers from CI, and configure no provider
   secrets.
 
@@ -54,9 +56,15 @@ analysis is in
   - require the status check `ci-ok`;
   - require branches to be up to date;
   - block force pushes.
-- Optional: require the `CodeQL` checks as well.
 
 ## Agent Notes
+
+- 2026-11-03 Copilot: Replaced CodeQL and Dependency Review with a plain pnpm
+  dependency audit at the user's request. No paid scanning service or
+  Dependency graph setup is needed. Updated Vite to 8.3.3 and constrained
+  jsdom's Undici to 8.12.2 to satisfy the new high/critical gate. The audit now
+  passes (one moderate advisory remains); typecheck, tests, build, Python tests,
+  and actionlint pass locally. FFmpeg-dependent tests skip on this host.
 
 - 2026-10-19 Copilot: Implemented the workflows, test-gate fixes, stricter
   `tsc`, Compose pull, and documentation. Verified locally:

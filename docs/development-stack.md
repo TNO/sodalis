@@ -1039,10 +1039,21 @@ has no provider secrets, so live tests such as
 | Python | speech-http and TTS comparison `unittest` suites with FFmpeg | `pnpm test:python` |
 | Compose config | `pnpm stack:config` for `.env.example`, with and without `SODALIS_LOCAL_IMAGES=true` | the same command |
 | Image build | Builds `api` and `gateway`, and `parakeet-tdt` when its service files change | `docker build -f services/<image>/Dockerfile .` |
-| Quality | actionlint; dependency review blocks high-severity vulnerabilities | `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12` |
+| Quality | actionlint; npm dependency audit blocks high/critical vulnerabilities | `pnpm audit:dependencies`; `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12` |
 
-[`codeql.yml`](../.github/workflows/codeql.yml) scans TypeScript, Python, and
-the workflows. Dependabot proposes weekly action, npm, and base-image updates.
+Strict TypeScript checks, behaviour tests, actionlint, and the npm audit form
+the free-tool quality baseline. Dependabot proposes weekly action, npm, and
+base-image updates. CodeQL and Dependency Review are not configured; no paid
+code-security licence or Dependency graph setting is required.
+
+The audit queries the npm registry with package metadata (not source code or
+provider data), includes runtime and development dependencies, and fails on
+high/critical advisories or registry errors. It does not audit Python/container
+dependencies or source-code vulnerabilities, or enforce licence policies.
+Tool licensing is separate from Actions compute and storage billing; standard
+hosted runners are free for public repositories, but private-repository usage
+can be billable.
+
 Without FFmpeg installed locally, the FFmpeg-dependent vitest and Python tests
 skip; CI always runs them. The decision record is
 [ADR 0006](adr/0006-ci-cd.md).

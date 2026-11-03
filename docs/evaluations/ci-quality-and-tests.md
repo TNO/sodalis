@@ -2,6 +2,7 @@
 
 - **Status:** Complete
 - **Date:** 2026-10-19
+- **Updated:** 2026-11-03 (free-tool baseline)
 - **Task:** [0054](../../TASKS/0054-ci-cd-pipeline.md); follow-up
   [0055](../../TASKS/0055-formatter-and-dead-code.md)
 
@@ -17,8 +18,7 @@
   reliably, but they work around noisy rules (suppression comments, churn).
   - **Phase 1 (adopted):**
     - stricter `tsc` flags;
-    - CodeQL;
-    - dependency review;
+    - pnpm dependency audit (high/critical npm advisories);
     - actionlint;
     - Dependabot.
   - **Phase 2 (task 0055):**
@@ -98,6 +98,13 @@ the live Azure test, which has no credentials.
 
 ### Static analysis
 
+The 2026-11-03 dependency audit found five high-severity advisories: one
+affecting Vite 8.3.2 and four affecting Undici 8.11.2 through jsdom.
+Updating Vite to 8.3.3 and using a jsdom-scoped override for Undici 8.12.2
+cleared the blocking findings. The resulting audit passes with one moderate
+advisory remaining; the TypeScript, test, and build gates also pass. These are
+known-dependency findings, not a source-code vulnerability assessment.
+
 | Check | Findings | Assessment |
 | --- | --- | --- |
 | Biome lint (recommended) | About 300 findings. Most (277) are `noNonNullAssertion`, about half of them in tests. The rest: 5 `useTemplate`, 4 `noAssignInExpressions`, 4 `useIterableCallbackReturn`, 2 unused imports, 1 duplicate CSS property, 1 `eval` in a test, and a few single findings | Few real defects; strict `tsc` already covers most of them |
@@ -127,17 +134,26 @@ the live Azure test, which has no credentials.
   - **ruff.** There are five Python files.
   - **Coverage thresholds.** Agents easily satisfy them with low-value tests.
     The tier policy states which behaviour must be tested instead.
-- **CodeQL and dependency review** cost no maintenance on a public repository:
-  - CodeQL covers the server's upload parsing and provider proxies.
-  - Dependency review also flags licence problems, which matter because the
-    repository bundles the MIT-licensed Aster and a CC BY-NC avatar.
+- **Free-tool baseline (2026-11-03).** CodeQL and Dependency Review were
+  removed at the user's request to avoid reliance on GitHub security-product
+  entitlements. `pnpm audit:dependencies` now checks known npm advisories
+  across runtime and development dependencies and blocks high/critical
+  findings. Network/registry errors also fail; findings are not suppressed.
+  It needs no account, token, paid service, or Dependency graph setting.
+  GitHub documents free standard hosted runners for public repositories;
+  compute/storage billing is separate and private usage can be billable.
+  See [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+  and [code scanning](https://docs.github.com/en/code-security/concepts/code-scanning/code-scanning).
+  This is not equivalent to source-code scanning or licence-policy review.
+  The MIT Aster and CC BY-NC avatar licence boundaries still need manual review.
 
 ## Limitations
 
 - Timings come from one workstation; hosted runners are slower.
 - The Biome and knip results come from default configurations, without
   repository-specific entries or ignores.
-- CodeQL was not run locally, so its findings are not yet known.
+- No source-code security scanner is part of the selected baseline. The npm
+  audit does not check Python/container dependencies or licence policies.
 - The Aster browser suite (54 checks at the pinned commit) still runs
   manually only.
 
@@ -147,4 +163,5 @@ the live Azure test, which has no credentials.
   `.git-blame-ignore-revs`.
 - Optionally run the Aster smoke suite in a path-filtered workflow when the
   vendored snapshot changes.
-- Review the first CodeQL results and triage any alerts.
+- If source-code scanning is required later, evaluate a locally runnable
+  open-source scanner separately; do not assume dependency auditing replaces it.

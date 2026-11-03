@@ -1,7 +1,6 @@
 # Sodalis
 
 [![CI](https://github.com/TNO/sodalis/actions/workflows/publish-images.yml/badge.svg?branch=main)](https://github.com/TNO/sodalis/actions/workflows/publish-images.yml)
-[![CodeQL](https://github.com/TNO/sodalis/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/TNO/sodalis/actions/workflows/codeql.yml)
 
 The name comes from Latin *sodalis*, meaning a companion, friend, or
 associate: an assistant that accompanies you at your desktop.
@@ -182,10 +181,12 @@ pnpm test
 pnpm typecheck
 pnpm build
 pnpm test:python   # speech-http and TTS comparison tests
+pnpm audit:dependencies   # fail on high/critical npm advisories
 ```
 
 CI runs these checks on Ubuntu and macOS for every pull request, together
-with Compose validation, image builds, CodeQL, and dependency review. Pushes
+with Compose validation, image builds, actionlint, and a dependency audit. No
+paid code-security service or Dependency graph setup is required. Pushes
 to `main` and `v*` tags publish multi-arch images to GHCR. See
 [Published images and CI](docs/development-stack.md#published-images-and-ci)
 and [ADR 0006](docs/adr/0006-ci-cd.md).

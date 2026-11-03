@@ -1,6 +1,9 @@
 packages:
   - apps/*
   - packages/*
+overrides:
+  # jsdom's HTTP client must include the fixes for the 8.12.2 advisories.
+  jsdom>undici: 8.12.2
 allowBuilds:
   esbuild: false
   onnxruntime-node: false
