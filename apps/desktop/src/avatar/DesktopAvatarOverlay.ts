@@ -841,7 +841,7 @@ export const DesktopAvatarOverlay =
         }
       },
 
-      onremove(vnode) {
+      onremove() {
         if (conversationOpen || notificationOpen) {
           presentation?.setMode("ambient");
         }

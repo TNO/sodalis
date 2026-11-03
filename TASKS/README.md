@@ -124,6 +124,15 @@ tasks 0045–0048 deliver version 1 and tasks 0049–0053 are follow-ups.
 - [x] 0041 Fixing STT transcription accuracy and silence hallucination *(needs 0023, 0024)*
 - [ ] 0042 Improving live STT captions *(needs 0035)*
 
+## Continuous integration and delivery
+
+CI, image publishing, and the test-tier policy are recorded in
+[ADR 0006](../docs/adr/0006-ci-cd.md); the analysis is in
+[evaluations/ci-quality-and-tests.md](../docs/evaluations/ci-quality-and-tests.md).
+
+- [ ] 0065 Adding CI and published images *(needs 0034)*
+- [ ] 0066 Adding a formatter and dead-code checks *(needs 0065)*
+
 ## TTS processing and Pocket TTS
 
 Tasks 0056–0058 prepare text and audio delivery for long responses. Pocket

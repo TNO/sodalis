@@ -26,6 +26,10 @@ FROM node:24-bookworm-slim
 COPY --from=ffmpeg /src/ffmpeg /usr/local/bin/ffmpeg
 WORKDIR /app
 RUN npm install -g pnpm@12.4.1
+# Fetching from the lockfile alone keeps the dependency layer cached across
+# source changes.
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm fetch
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --offline
 ENV HOST=0.0.0.0

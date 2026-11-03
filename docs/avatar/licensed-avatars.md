@@ -89,3 +89,7 @@ Build a release that should include licensed avatars from a checkout that
 ran `pnpm avatars:licensed`. Distribute that build only as the Sodalis app,
 with its `avatars/licensed/NOTICE.md`; do not publish its GLBs separately or
 in a public repository.
+
+Public GHCR images never include these assets. `.dockerignore` excludes both
+the licensed and evaluation-only avatar folders before any Docker build stage
+can copy them. Public CI needs no private-store checkout or access token.

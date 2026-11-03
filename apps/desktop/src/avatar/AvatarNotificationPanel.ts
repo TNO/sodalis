@@ -1,7 +1,6 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
 import { positionAvatarCompanionCard } from "./AvatarCompanionCardPosition.js";
-import type { AvatarDockSide } from "./AvatarPresentationController.js";
 
 export type AvatarNotificationAction = "read" | "open" | "dismiss";
 

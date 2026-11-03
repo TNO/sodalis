@@ -100,6 +100,7 @@ export async function createPocketTtsHostService(
       return context.json({ error: "Pocket TTS authorization required." }, 401);
     }
     await next();
+    return;
   });
   app.get("/v1/voices", async () => {
     const response = await fetcher(voicesUrl, { method: "GET" });

@@ -40,7 +40,6 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
   private stream: MediaStream | undefined;
   private context: AudioContext | undefined;
   private recorder: MediaRecorder | undefined;
-  private analyser: AnalyserNode | undefined;
   private frameHandle: number | undefined;
   private abortSignal: AbortSignal | undefined;
   private abortHandler: (() => void) | undefined;
@@ -112,7 +111,6 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
       const analyser = context.createAnalyser();
       analyser.fftSize = 1024;
       context.createMediaStreamSource(stream).connect(analyser);
-      this.analyser = analyser;
 
       for (const track of stream.getAudioTracks()) {
         const onEnded = () =>
@@ -280,7 +278,6 @@ export class BrowserMicrophoneCapture implements MicrophoneCapture {
     }
 
     this.callbacks = undefined;
-    this.analyser = undefined;
     const context = this.context;
     this.context = undefined;
     if (context && context.state !== "closed") {

@@ -1,5 +1,6 @@
 import io
 import json
+import shutil
 import threading
 import unittest
 import urllib.error
@@ -8,6 +9,8 @@ import wave
 from http.server import ThreadingHTTPServer
 
 from server import create_handler
+
+requires_ffmpeg = unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg is not installed")
 
 
 def silence(seconds):
@@ -51,14 +54,17 @@ class SpeechHttpTest(unittest.TestCase):
         with response:
             return response.status, json.load(response)
 
+    @requires_ffmpeg
     def test_silence_has_empty_transcript(self):
         self.assertEqual(self.transcribe(silence(3)), (200, {"text": ""}))
 
+    @requires_ffmpeg
     def test_invalid_audio_is_rejected(self):
         status, payload = self.transcribe(b"not audio")
         self.assertEqual(status, 422)
         self.assertIn("error", payload)
 
+    @requires_ffmpeg
     def test_long_audio_is_rejected_before_inference(self):
         status, payload = self.transcribe(silence(31))
         self.assertEqual(status, 413)

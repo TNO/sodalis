@@ -1,0 +1,167 @@
+# CI test tiers and code quality tooling
+
+- **Status:** Complete
+- **Date:** 2026-10-19
+- **Updated:** 2026-11-03 (free-tool baseline)
+- **Task:** [0065](../../TASKS/0065-ci-cd-pipeline.md); follow-up
+  [0066](../../TASKS/0066-formatter-and-dead-code.md)
+
+## Summary and recommendation
+
+- **Run every deterministic test in CI and block merges on all of them.**
+  The suite takes about 30 s, so skipping tests saves no meaningful time.
+  Classify tests by what they protect instead. That classification decides
+  which changes *need* new tests:
+  - security, privacy, and API code needs them;
+  - benchmark scripts do not.
+- **Adopt only low-noise quality checks.** AI agents fix a failing check
+  reliably, but they work around noisy rules (suppression comments, churn).
+  - **Phase 1 (adopted):**
+    - stricter `tsc` flags;
+    - pnpm dependency audit (high/critical npm advisories);
+    - actionlint;
+    - Dependabot.
+  - **Phase 2 (task 0066):**
+    - Biome as a formatter, with a minimal lint set;
+    - knip for dead code;
+    - both in a separate change, to isolate the reformat.
+  - **Not adopted:**
+    - ESLint + Prettier;
+    - ruff;
+    - coverage thresholds.
+
+## Scope
+
+- All vitest suites in the workspace and in `scripts/`.
+- The two Python `unittest` suites.
+- Candidate static analysis for TypeScript, Python, and workflows.
+
+The vendored Aster browser suite is out of scope; it stays unchanged upstream
+code.
+
+## Method and hardware
+
+On a Linux x86-64 workstation (Node 25, pnpm 12.4.1), every vitest project
+ran with the JSON reporter and with all cloud-provider variables unset.
+
+Static analysis ran read-only:
+
+| Check | Configuration |
+| --- | --- |
+| Biome 2 lint | Recommended rules |
+| Biome 2 format | Default formatter |
+| knip 5 | Default configuration |
+| `tsc` | `noUnusedLocals` and `noUnusedParameters` enabled |
+
+Biome and `tsc` ran over the first-party sources. knip ran from the repository
+root, so its file report also lists the vendored Aster sources. The
+measurements below come from that pass.
+
+The Python suites ran:
+
+- on the host, without FFmpeg;
+- in `python:3.12-slim` with FFmpeg.
+
+The server suite also ran inside the built API image, which includes FFmpeg.
+
+## Results
+
+### Tests
+
+| Measure | Result |
+| --- | --- |
+| vitest | 392 tests in 59 files; ~26 s wall time; all pass |
+| Slowest file | `DesktopAvatarOverlay.test.ts`, 2.3 s |
+| Root `scripts/` tests | 33 tests, < 0.1 s |
+| Python | 23 tests, ~1 s |
+
+Gaps found and fixed in task 0065:
+
+| Gap | Effect | Fix |
+| --- | --- | --- |
+| Root `pnpm test` listed script tests by hand | `scripts/stt-benchmark.test.ts` never ran | Root `vitest.config.ts` discovers `scripts/**/*.test.ts` |
+| `pnpm typecheck` used `pnpm -r`, which excludes the workspace root | `scripts/` was never type-checked | `tsc -p scripts` added |
+| Python tests were in no script | No gate | `pnpm test:python` |
+| No FFmpeg on the host | 2 vitest tests skipped silently; 3 of 4 `speech-http` tests **failed** | Python tests skip without FFmpeg; CI installs it, so all run |
+
+In the API image with FFmpeg, the server suite ran 95 tests and skipped one:
+the live Azure test, which has no credentials.
+
+### Test tiers
+
+| Tier | Tests | Policy |
+| --- | --- | --- |
+| 1 Critical | `apps/server` (speech, assistant, home, memory routes, provider engines, FFmpeg); `packages/desktop-host` (untrusted apps and context); `packages/assistant` (confirmed actions, utterance parsing); `packages/app-sdk`; `packages/speech`; `packages/memory/src` (consent, hard delete, provenance); desktop assistant actions and Aster startup; `scripts/stack-config.test.ts` (no silent cloud selection, path traversal); `services/speech-http` (413/422 limits in a published image) | Blocking; changes need behaviour tests |
+| 2 Product UX | `packages/avatar`, `apps/desktop/src/avatar` | Blocking; changes need behaviour tests |
+| 3 Evaluation tooling | `scripts/{llm-compare,stt-benchmark,tts-intelligibility,tts-live-check,stt-live-captions}`, `scripts/test_tts_compare.py`, `packages/memory/eval` | Kept while cheap (< 0.3 s); new benchmark code needs no tests |
+| 4 Live cloud | `*.live.test.ts`, live checks, comparison runs | Self-skip without credentials; never in CI |
+
+### Static analysis
+
+The 2026-11-03 dependency audit found five high-severity advisories: one
+affecting Vite 8.3.2 and four affecting Undici 8.11.2 through jsdom.
+Updating Vite to 8.3.3 and using a jsdom-scoped override for Undici 8.12.2
+cleared the blocking findings. The resulting audit passes with one moderate
+advisory remaining; the TypeScript, test, and build gates also pass. These are
+known-dependency findings, not a source-code vulnerability assessment.
+
+| Check | Findings | Assessment |
+| --- | --- | --- |
+| Biome lint (recommended) | About 300 findings. Most (277) are `noNonNullAssertion`, about half of them in tests. The rest: 5 `useTemplate`, 4 `noAssignInExpressions`, 4 `useIterableCallbackReturn`, 2 unused imports, 1 duplicate CSS property, 1 `eval` in a test, and a few single findings | Few real defects; strict `tsc` already covers most of them |
+| Biome format | 144 of 160 files would change | No consistent style; needs a one-time reformat |
+| `tsc --noUnusedLocals/Parameters` | 4 sites (2 unused imports, 1 write-only field, 1 unused parameter) | Adopted; fixed in 0065 |
+| knip | 11 unused exports, 30 unused exported types, 1 false-positive entry file (`scripts/llm-live-check.ts`) | Typical leftovers of iterative edits; worth gating once configured |
+
+## Analysis
+
+- **Value with AI-written code.** Checks matter more when every change comes
+  from an agent:
+  - Agents follow a red CI check more consistently than prose in `AGENTS.md`.
+  - Several models and sessions edit the same code, so formatting drifts and
+    diffs bloat. A formatter removes that drift.
+  - Iterative edits leave unused exports behind.
+  
+  Noisy rules have the opposite effect. Agents add suppressions or churn code
+  to satisfy them, and reviewers learn to ignore warnings. Every adopted rule
+  should therefore catch real defects:
+  - `noNonNullAssertion` would mostly produce churn in tests.
+  - Unused code, assignments in expressions, and duplicate CSS properties are
+    real defects.
+- **Not adopted:**
+  - **ESLint + Prettier.** Two tools and slower. The extra ESLint value is
+    type-aware rules such as `no-floating-promises`; revisit only if those
+    bugs appear.
+  - **ruff.** There are five Python files.
+  - **Coverage thresholds.** Agents easily satisfy them with low-value tests.
+    The tier policy states which behaviour must be tested instead.
+- **Free-tool baseline (2026-11-03).** CodeQL and Dependency Review were
+  removed at the user's request to avoid reliance on GitHub security-product
+  entitlements. `pnpm audit:dependencies` now checks known npm advisories
+  across runtime and development dependencies and blocks high/critical
+  findings. Network/registry errors also fail; findings are not suppressed.
+  It needs no account, token, paid service, or Dependency graph setting.
+  GitHub documents free standard hosted runners for public repositories;
+  compute/storage billing is separate and private usage can be billable.
+  See [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+  and [code scanning](https://docs.github.com/en/code-security/concepts/code-scanning/code-scanning).
+  This is not equivalent to source-code scanning or licence-policy review.
+  The MIT Aster and CC BY-NC avatar licence boundaries still need manual review.
+
+## Limitations
+
+- Timings come from one workstation; hosted runners are slower.
+- The Biome and knip results come from default configurations, without
+  repository-specific entries or ignores.
+- No source-code security scanner is part of the selected baseline. The npm
+  audit does not check Python/container dependencies or licence policies.
+- The Aster browser suite (54 checks at the pinned commit) still runs
+  manually only.
+
+## Open items
+
+- Task 0066: Biome formatter and minimal lint set, knip, and
+  `.git-blame-ignore-revs`.
+- Optionally run the Aster smoke suite in a path-filtered workflow when the
+  vendored snapshot changes.
+- If source-code scanning is required later, evaluate a locally runnable
+  open-source scanner separately; do not assume dependency auditing replaces it.

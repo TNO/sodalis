@@ -8,10 +8,10 @@ const root = resolve(import.meta.dirname, "..");
 const envPath = resolve(root, ".env");
 if (!existsSync(envPath)) throw new Error("Copy .env.example to .env and select LLM and Home providers.");
 const [operation, ...options] = process.argv.slice(2);
-if (!["up", "down", "config", "ps"].includes(operation ?? "") ||
+if (!["up", "down", "config", "ps", "pull"].includes(operation ?? "") ||
     (options.length && (options.length !== 2 || options[0] !== "--env"))) {
   throw new Error(
-    "Usage: pnpm stack:up | stack:down | stack:config (or dev-stack.ts ps) [--env <overlay file>].",
+    "Usage: pnpm stack:up | stack:down | stack:config | stack:pull (or dev-stack.ts ps) [--env <overlay file>].",
   );
 }
 // An explicit overlay (for example .env.azure) replaces matching .env settings.
@@ -58,6 +58,9 @@ const baseArgs = [
   ...compose.prefix,
   "--env-file", envPath,
   "-f", resolve(root, "compose.yaml"),
+  ...(settings.SODALIS_LOCAL_IMAGES === "true"
+    ? ["-f", resolve(root, "compose.local-images.yaml")]
+    : []),
 ];
 function run(args: readonly string[]): void {
   const result = spawnSync(compose.command, [...baseArgs, ...args], {
@@ -77,6 +80,9 @@ if (operation === "up") {
 } else if (operation === "config") {
   run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
     "config", "--quiet"]);
+} else if (operation === "pull") {
+  run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
+    "pull", "--ignore-buildable"]);
 } else if (operation === "ps") {
   run([...allProfiles, "ps"]);
 }

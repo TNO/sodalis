@@ -152,6 +152,7 @@ packages/memory/eval/.data/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+__pycache__/
 # Evaluation-only avatars that must not be redistributed (TASKS/0054)
 apps/desktop/public/avatars/eval/
 # Licensed avatars: copied from the private asset store, bundled only in builds
