@@ -6,6 +6,7 @@ import type {
   SpeechToTextProvider,
   SpeechToTextSession,
   SpeechToTextSessionConfig,
+  SpeechWordTimestamp,
 } from "./index.js";
 
 const SERVER_STT_CAPABILITIES: SpeechToTextCapabilities = {
@@ -142,6 +143,46 @@ function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return buffer;
 }
 
+function readWordAlignment(value: unknown): readonly SpeechWordTimestamp[] {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("wordTimestamps" in value) ||
+    !Array.isArray(value.wordTimestamps)
+  ) {
+    throw new Error("Speech server returned invalid word alignment.");
+  }
+  const timestamps: SpeechWordTimestamp[] = [];
+  let previousStart = -1;
+  for (const timestamp of value.wordTimestamps) {
+    if (
+      typeof timestamp !== "object" ||
+      timestamp === null ||
+      !("word" in timestamp) ||
+      typeof timestamp.word !== "string" ||
+      !timestamp.word.trim() ||
+      !("start" in timestamp) ||
+      typeof timestamp.start !== "number" ||
+      !("end" in timestamp) ||
+      typeof timestamp.end !== "number" ||
+      !Number.isFinite(timestamp.start) ||
+      !Number.isFinite(timestamp.end) ||
+      timestamp.start < 0 ||
+      timestamp.end < timestamp.start ||
+      timestamp.start < previousStart
+    ) {
+      throw new Error("Speech server returned invalid word alignment.");
+    }
+    previousStart = timestamp.start;
+    timestamps.push({
+      word: timestamp.word,
+      start: timestamp.start,
+      end: timestamp.end,
+    });
+  }
+  return timestamps;
+}
+
 export interface ServerSpeechToTextProviderOptions {
   readonly baseUrl?: string;
   readonly fetch?: FetchLike;
@@ -172,6 +213,34 @@ export class ServerSpeechToTextProvider implements SpeechToTextProvider {
     this.now = options.now ?? (() => performance.now());
     this.onLatency = options.onLatency;
     this.onPartialError = options.onPartialError;
+  }
+
+  async alignAudio(
+    sourceText: string,
+    language: string,
+    audio: Blob,
+    signal: AbortSignal,
+  ): Promise<readonly SpeechWordTimestamp[]> {
+    signal.throwIfAborted();
+    const form = new FormData();
+    form.append("sourceText", sourceText);
+    form.append("language", language);
+    form.append("audio", audio, "speech.wav");
+    const response = await this.fetcher(`${this.baseUrl}/speech/stt/align`, {
+      method: "POST",
+      body: form,
+      signal,
+    });
+    let details: unknown;
+    try {
+      details = await readJson(response);
+    } catch (error) {
+      if (response.ok) throw error;
+      details = undefined;
+    }
+    signal.throwIfAborted();
+    if (!response.ok) throw errorFromResponse(response, details);
+    return readWordAlignment(details);
   }
 
   async createSession(

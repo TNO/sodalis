@@ -6,6 +6,8 @@ node_modules
 **/node_modules
 dist
 models
+apps/desktop/public/avatars/licensed
+apps/desktop/public/avatars/eval
 .playwright-mcp
 services/homeassistant/.storage
 services/homeassistant/home-assistant_v2.db*

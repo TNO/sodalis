@@ -1,9 +1,9 @@
-# 0055 Adding a formatter and dead-code checks
+# 0066 Adding a formatter and dead-code checks
 
 Status: open
 Priority: low
 Subsystem: devops
-Depends on: 0054
+Depends on: 0065
 
 ## Context
 

@@ -13,6 +13,9 @@ The user wants to preview and choose among several avatars inside Sodalis,
 rather than choosing a model only from a written list. This task starts after
 the native Sodalis avatar collection in 0014 is available as local,
 profile-validated assets.
+The two-option prototype switch and its local persistence are tracked in
+[0055](./0055-add-male-thuiszorg-avatar-option.md). Reuse that behavior where
+appropriate; this task remains responsible for the full gallery.
 
 ## Acceptance Criteria
 
@@ -25,7 +28,8 @@ profile-validated assets.
   unless its non-commercial restriction is explicitly acceptable.
 - Invalid or unavailable assets do not prevent the rest of the desktop from
   working.
-- Decide whether selection persists across reloads before implementing storage.
+- Decide whether the full gallery retains the prototype's device-local
+  selection behavior or needs a different persistence policy.
 
 ## Implementation Notes
 

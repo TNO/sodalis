@@ -55,6 +55,43 @@ describe("WhisperCppHttpEngine", () => {
     expect(form.get("no_speech_thold")).toBe("0.8");
   });
 
+  it("requests verbose word timestamps and aligns them to source words", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        text: "Hello um world.",
+        duration: 1,
+        segments: [{
+          words: [
+            { word: " Hello,", start: 0, end: 0.4 },
+            { word: "um", start: 0.4, end: 0.5 },
+            { word: "WORLD!", start: 0.6, end: 0.9 },
+          ],
+        }],
+      }),
+    );
+    const engine = new WhisperCppHttpEngine({
+      serverUrl: "http://whisper.local:8081",
+      fetch: fetcher,
+    });
+
+    await expect(engine.transcribeWithWordTimestamps({
+      audio: new Uint8Array([1, 2]),
+      mimeType: "audio/wav",
+      language: "en-US",
+      signal: new AbortController().signal,
+    }, "Hello, brave world!")).resolves.toEqual({
+      text: "Hello um world.",
+      wordTimestamps: [
+        { word: "Hello", start: 0, end: 0.4 },
+        { word: "brave", start: 0.4, end: 0.6 },
+        { word: "world", start: 0.6, end: 0.9 },
+      ],
+    });
+    const form = fetcher.mock.calls[0]?.[1]?.body as FormData;
+    expect(form.get("response_format")).toBe("verbose_json");
+    expect(form.get("token_timestamps")).toBe("true");
+  });
+
   it("rejects unsupported languages and invalid engine responses", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ result: "No text field." })),

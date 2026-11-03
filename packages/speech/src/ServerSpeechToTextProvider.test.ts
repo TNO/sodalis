@@ -9,6 +9,40 @@ function jsonResponse(value: unknown, status = 200): Response {
 }
 
 describe("ServerSpeechToTextProvider", () => {
+  it("sends generated WAV audio to the local word-alignment endpoint", async () => {
+    const timestamps = [
+      { word: "Goedemorgen", start: 0.1, end: 0.7 },
+      { word: "allemaal", start: 0.8, end: 1.2 },
+    ];
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({ text: "Goedemorgen allemaal.", wordTimestamps: timestamps }),
+    );
+    const provider = new ServerSpeechToTextProvider({
+      baseUrl: "http://localhost:3000/api/",
+      fetch: fetcher,
+    });
+    const audio = new Blob([new Uint8Array([1, 2])], { type: "audio/wav" });
+
+    await expect(
+      provider.alignAudio(
+        "Goedemorgen allemaal.",
+        "nl-NL",
+        audio,
+        new AbortController().signal,
+      ),
+    ).resolves.toEqual(timestamps);
+
+    const [url, init] = fetcher.mock.calls[0] ?? [];
+    expect(String(url)).toBe("http://localhost:3000/api/speech/stt/align");
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect((init?.body as FormData).get("sourceText")).toBe(
+      "Goedemorgen allemaal.",
+    );
+    expect((init?.body as FormData).get("language")).toBe("nl-NL");
+    expect((init?.body as FormData).get("audio")).toBeInstanceOf(File);
+  });
+
   it("streams audio to the server and emits a normalized final transcript", async () => {
     const fetcher = vi
       .fn<typeof fetch>()

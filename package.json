@@ -13,6 +13,7 @@
     "stack:config": "tsx scripts/dev-stack.ts config",
     "stack:pull": "tsx scripts/dev-stack.ts pull",
     "stack:smoke": "tsx scripts/smoke-stack.ts",
+    "avatars:licensed": "tsx scripts/licensed-avatars.ts",
     "build": "pnpm --recursive build",
     "test": "vitest run && pnpm --recursive test",
     "test:python": "python3 -m unittest scripts/test_tts_compare.py && cd services/speech-http && python3 -m unittest test_server.py",

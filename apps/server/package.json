@@ -9,6 +9,8 @@
     "dev:ai": "tsx watch src/assistant/main.ts",
     "dev:home": "tsx watch src/home/main.ts",
     "start:speech": "tsx src/speech/main.ts",
+    "start:pocket-tts-host": "tsx src/speech/pocketTtsHostMain.ts",
+    "preprocess:voice-reference": "tsx src/speech/preprocessVoiceReferenceMain.ts",
     "start:ai": "tsx src/assistant/main.ts",
     "start:home": "tsx src/home/main.ts",
     "test": "vitest run",
@@ -20,7 +22,8 @@
     "@sodalis/memory": "workspace:*",
     "@sodalis/speech": "workspace:*",
     "hono": "^4.11.7",
-    "microsoft-cognitiveservices-speech-sdk": "1.52.0"
+    "microsoft-cognitiveservices-speech-sdk": "1.52.0",
+    "to-words": "^7.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.4",

@@ -16,6 +16,31 @@ const sttEngine: SpeechRecognitionEngine = {
 };
 
 describe("speech synthesis API", () => {
+  it.each([true, false])("validates pacing, preserves sentence boundaries and reports native rate support %s", async (supportsRate) => {
+    const synthesize = vi.fn<SpeechSynthesisEngine["synthesize"]>(async function* () { yield new Uint8Array([1, 0]); });
+    const app = createSpeechApp(sttEngine, {
+      ttsEngine: { synthesize, supportsRate },
+      ttsChunkPauseMs: 120,
+    });
+    const post = (body: object) => app.request("/api/speech/tts", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    for (const invalid of [{ rate: 0 }, { rate: "0.8" }, { rate: 2 }, { sentencePauseMs: -1 }, { sentencePauseMs: 1.5 }, { sentencePauseMs: 1001 }]) {
+      expect((await post({ ...request, ...invalid })).status).toBe(400);
+    }
+    expect(synthesize).not.toHaveBeenCalled();
+    const response = await post({ ...request, text: "Dr. Smit komt. Hij is op tijd.", rate: 0.8, sentencePauseMs: 400 });
+    expect(response.status).toBe(200);
+    const pcm = await response.arrayBuffer();
+    expect(synthesize.mock.calls.map((call) => call[0]?.text)).toEqual(["Dr. Smit komt.", "Hij is op tijd."]);
+    expect(pcm.byteLength).toBe(4 + Math.round(22050 * 0.4) * 2);
+    expect(response.headers.get("x-sodalis-applied-rate")).toBe(supportsRate ? "0.8" : "1");
+    expect(synthesize).toHaveBeenCalledWith(
+      expect.objectContaining({ rate: 0.8, sentencePauseMs: 400 }), expect.any(AbortSignal),
+    );
+  });
+
   it("streams PCM audio with IDs that let clients reject stale playback", async () => {
     let continueSynthesis: (() => void) | undefined;
     const synthesisPaused = new Promise<void>((resolve) => {
@@ -78,6 +103,10 @@ describe("speech synthesis API", () => {
       ...request,
       voice: "nl_NL-pim-medium",
     });
+    const emptyAfterCleanup = await post({
+      ...request,
+      text: "**",
+    });
     const invalidSpeechId = await post({
       ...request,
       speechId: "../old",
@@ -93,6 +122,7 @@ describe("speech synthesis API", () => {
 
     expect(unsupportedLanguage.status).toBe(400);
     expect(unsupportedVoice.status).toBe(400);
+    expect(emptyAfterCleanup.status).toBe(400);
     expect(invalidSpeechId.status).toBe(400);
     expect(missingEngine.status).toBe(503);
     expect(synthesize).not.toHaveBeenCalled();
@@ -119,6 +149,88 @@ describe("speech synthesis API", () => {
       expect.objectContaining({ voice: "nl-NL-ColetteNeural" }),
       expect.any(AbortSignal),
     );
+  });
+
+  it("sends Markdown-cleaned text to the configured engine", async () => {
+    const synthesize = vi.fn(async function* () {
+      yield new Uint8Array([1, 0]);
+    });
+    const app = createSpeechApp(sttEngine, { ttsEngine: { synthesize } });
+    const response = await app.request("/api/speech/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...request,
+        text: [
+          "# Welkom",
+          "",
+          "- Lees [deze link](https://example.test) en ![foto](foto.png).",
+          "- Gebruik `dit` en **vetgedrukte** tekst.",
+          "> Met *nadruk*.",
+          "```text",
+          "code blijft leesbaar",
+          "```",
+        ].join("\n"),
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await response.arrayBuffer();
+    expect(synthesize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: [
+          "Welkom",
+          "",
+          "Lees deze link en foto.",
+          "Gebruik dit en vetgedrukte tekst.",
+          "Met nadruk.",
+          "code blijft leesbaar",
+        ].join("\n"),
+      }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("synthesizes long replies sequentially and inserts a PCM pause between chunks", async () => {
+    const spokenTexts: string[] = [];
+    const engine: SpeechSynthesisEngine = {
+      sampleRate: 24_000,
+      mimeType:
+        "audio/pcm;rate=24000;bits=16;channels=1;endianness=little",
+      async *synthesize(speech) {
+        spokenTexts.push(speech.text);
+        yield new Uint8Array([1, 0]);
+      },
+    };
+    const pauseMs = 10;
+    const app = createSpeechApp(sttEngine, {
+      ttsEngine: engine,
+      maxTtsChunkCharacters: 80,
+      ttsChunkPauseMs: pauseMs,
+    });
+    const response = await app.request("/api/speech/tts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...request,
+        text: [
+          "This first sentence has enough words to make a substantial spoken chunk.",
+          "This second sentence also has enough words to require a separate spoken chunk.",
+        ].join(" "),
+      }),
+    });
+    const audio = new Uint8Array(await response.arrayBuffer());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "audio/pcm;rate=24000;bits=16;channels=1;endianness=little",
+    );
+    expect(spokenTexts).toEqual([
+      "This first sentence has enough words to make a substantial spoken chunk.",
+      "This second sentence also has enough words to require a separate spoken chunk.",
+    ]);
+    const silenceByteLength = Math.round((24_000 * pauseMs) / 1000) * 2;
+    expect(audio.byteLength).toBe(4 + silenceByteLength);
   });
 
   it("aborts the engine when the client cancels the audio stream", async () => {

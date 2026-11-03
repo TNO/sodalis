@@ -150,6 +150,18 @@ export {
   type ServerTextToSpeechLatency,
   type ServerTextToSpeechProviderOptions,
 } from "./ServerTextToSpeechProvider.js";
+export {
+  clampSpeechChunkPauseMs,
+  clampSpeechChunkSize,
+  DEFAULT_TTS_CHUNK_CHARACTERS,
+  DEFAULT_TTS_CHUNK_PAUSE_MS,
+  MAX_TTS_CHUNK_CHARACTERS,
+  MAX_TTS_CHUNK_PAUSE_MS,
+  MIN_TTS_CHUNK_CHARACTERS,
+  isSpeechRate,
+  isSpeechPauseMs,
+  splitSpeechText,
+} from "./speechChunking.js";
 
 export type SpeechId = string;
 
@@ -169,6 +181,16 @@ export interface SpeechRequest {
   readonly language: string;
   readonly voice?: string;
   readonly style?: string;
+  /** Requested speed multiplier, 0.75–1.25. */
+  readonly rate?: number;
+  /** Additional silence at sentence/chunk boundaries, 0–1000 ms. */
+  readonly sentencePauseMs?: number;
+}
+
+export interface SpeechWordTimestamp {
+  readonly word: string;
+  readonly start: number;
+  readonly end: number;
 }
 
 export type SpeechOutputPayload =
@@ -176,6 +198,8 @@ export type SpeechOutputPayload =
       readonly type: "audio";
       readonly data: Uint8Array;
       readonly mimeType: string;
+      /** Speed already applied during synthesis; omitted means normal speed. */
+      readonly appliedRate?: number;
     }
   | {
       readonly type: "timing";

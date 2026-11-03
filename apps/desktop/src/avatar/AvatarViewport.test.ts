@@ -8,6 +8,12 @@ import {
   type AvatarSceneHandle,
 } from "@sodalis/avatar/internal/scene";
 import { AvatarViewport } from "./AvatarViewport.js";
+import { AVATAR_CATALOGUE } from "./avatarCatalogue.js";
+
+const assetById = (id: string) =>
+  AVATAR_CATALOGUE.find((entry) => entry.asset.id === id)?.asset;
+const BRUNETTE = assetById("talkinghead-brunette");
+const MALE = assetById("sodalis-male-thuiszorg");
 
 vi.mock("@sodalis/avatar/internal/scene", () => ({
   createAvatarScene: vi.fn(),
@@ -48,14 +54,67 @@ describe("AvatarViewport", () => {
     document.body.replaceChildren();
   });
 
-  it("loads the selected default avatar and reports when it is ready", async () => {
+  it("shows three dots, state and conversation/notification controls without WebGL", async () => {
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    const activate = vi.fn();
+    const notify = vi.fn();
+    let activity: "thinking" | "speaking" = "thinking";
+    m.mount(host, {
+      view: () => m(AvatarViewport, {
+        asset: assetById("sodalis-dots")!,
+        activity,
+        reducedMotion: true,
+        interactive: true,
+        onActivate: activate,
+        notificationCount: 2,
+        onNotificationsActivate: notify,
+      }),
+    });
+    await vi.waitFor(() => expect(host.querySelector(".avatar-interaction-target")).not.toBeNull());
+    expect(host.querySelectorAll(".avatar-dots span")).toHaveLength(3);
+    expect(host.querySelector("canvas")).toBeNull();
+    expect(createAvatarScene).not.toHaveBeenCalled();
+    expect(host.querySelector(".avatar-dots-label")?.textContent).toBe("Thinking");
+    expect(host.querySelector(".avatar-viewport")?.getAttribute("data-reduced-motion")).toBe("true");
+    host.querySelector<HTMLButtonElement>(".avatar-interaction-target")?.click();
+    host.querySelector<HTMLButtonElement>(".avatar-notification-indicator")?.click();
+    expect(activate).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenCalledOnce();
+    activity = "speaking";
+    m.redraw.sync();
+    expect(host.querySelector(".avatar-dots-label")?.textContent).toBe("Speaking");
+  });
+
+  it("disposes the human scene when switching to dots and reloads when switching back", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    let asset = MALE!;
+    m.mount(host, { view: () => m(AvatarViewport, { asset }) });
+    await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledOnce());
+    asset = assetById("sodalis-dots")!;
+    m.redraw.sync();
+    await vi.waitFor(() => expect(host.querySelector(".avatar-dots")).not.toBeNull());
+    expect(scene.dispose).toHaveBeenCalledOnce();
+    asset = BRUNETTE!;
+    m.redraw.sync();
+    await vi.waitFor(() => expect(scene.controller.load).toHaveBeenCalledTimes(2));
+    expect(host.querySelector("canvas")).not.toBeNull();
+    expect(host.querySelector(".avatar-dots")).toBeNull();
+  });
+
+  it("loads the given avatar and reports when it is ready", async () => {
     const scene = createSceneHandle();
     vi.mocked(createAvatarScene).mockReturnValue(scene);
     const host = document.createElement("div");
     mountedHost = host;
     document.body.append(host);
     m.mount(host, {
-      view: () => m(AvatarViewport, {}),
+      view: () => m(AvatarViewport, { asset: BRUNETTE! }),
     });
 
     await vi.waitFor(() => {
@@ -91,6 +150,7 @@ describe("AvatarViewport", () => {
     m.mount(host, {
       view: () =>
         m(AvatarViewport, {
+          asset: BRUNETTE!,
           showGazeTarget: true,
           gazeOverlay: "Gaze target: Read message",
         }),
@@ -114,7 +174,7 @@ describe("AvatarViewport", () => {
     mountedHost = host;
     document.body.append(host);
     m.mount(host, {
-      view: () => m(AvatarViewport, {}),
+      view: () => m(AvatarViewport, { asset: BRUNETTE! }),
     });
 
     await vi.waitFor(() => {
@@ -143,7 +203,7 @@ describe("AvatarViewport", () => {
     mountedHost = host;
     document.body.append(host);
     m.mount(host, {
-      view: () => m(AvatarViewport, {}),
+      view: () => m(AvatarViewport, { asset: BRUNETTE! }),
     });
 
     await vi.waitFor(() => {
@@ -160,5 +220,99 @@ describe("AvatarViewport", () => {
     m.mount(host, null);
     mountedHost = undefined;
     expect(scene.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("reloads the viewer when a different avatar is selected", async () => {
+    const first = createSceneHandle();
+    const second = createSceneHandle();
+    vi.mocked(createAvatarScene)
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
+    let asset = BRUNETTE!;
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(AvatarViewport, { asset }) });
+
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Brunette avatar ready.");
+    });
+    asset = MALE!;
+    m.redraw.sync();
+
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Male avatar ready.");
+    });
+    expect(first.dispose).toHaveBeenCalledOnce();
+    expect(second.controller.load).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "sodalis-male-thuiszorg",
+        modelUrl: expect.stringContaining("avatars/sodalis-male-thuiszorg.glb"),
+      }),
+    );
+  });
+
+  it("does not show a stale avatar when the choice changes during loading", async () => {
+    const first = createSceneHandle();
+    let finishFirstLoad: (() => void) | undefined;
+    vi.mocked(first.controller.load).mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        finishFirstLoad = resolve;
+      }),
+    );
+    const second = createSceneHandle();
+    vi.mocked(createAvatarScene)
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
+    let asset = BRUNETTE!;
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(AvatarViewport, { asset }) });
+
+    await vi.waitFor(() => expect(finishFirstLoad).toBeDefined());
+    asset = MALE!;
+    m.redraw.sync();
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain("Male avatar ready.");
+    });
+    finishFirstLoad?.();
+    await vi.waitFor(() => expect(first.dispose).toHaveBeenCalledOnce());
+
+    expect(host.textContent).not.toContain("Brunette avatar ready.");
+    expect(second.controller.load).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the failed choice visible and offers a switch to the other avatar", async () => {
+    const scene = createSceneHandle();
+    vi.mocked(scene.controller.load).mockRejectedValueOnce(
+      new Error("The GLB could not be loaded"),
+    );
+    vi.mocked(createAvatarScene).mockReturnValue(scene);
+    const select = vi.fn();
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, {
+      view: () =>
+        m(AvatarViewport, {
+          asset: MALE!,
+          switchTo: { name: "Brunette", select },
+        }),
+    });
+
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain(
+        "3D avatar unavailable: The GLB could not be loaded",
+      );
+    });
+    const buttons = [...host.querySelectorAll("button")];
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Retry avatar",
+      "Switch to Brunette",
+    ]);
+    expect(select).not.toHaveBeenCalled();
+    buttons[1]?.click();
+    expect(select).toHaveBeenCalledOnce();
   });
 });

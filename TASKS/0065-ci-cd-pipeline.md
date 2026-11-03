@@ -1,4 +1,4 @@
-# 0054 Adding CI and published images
+# 0065 Adding CI and published images
 
 Status: in progress
 Priority: high
@@ -58,6 +58,14 @@ analysis is in
   - block force pushes.
 
 ## Agent Notes
+
+- 2026-11-03 Copilot: Merged `main` at `f9599cf`, preserving the new speech
+  providers, companion settings, and licensed-avatar workflow. Renumbered this
+  task and the formatter follow-up to 0065/0066 to avoid collisions. Added
+  Docker-context exclusions and a synthetic behaviour test proving private
+  licensed/evaluation avatars do not enter public images. All local gates pass:
+  503 tests pass (three FFmpeg/live tests skip), the audit has no high/critical
+  findings, actionlint passes, and the merged gateway image builds.
 
 - 2026-11-03 Copilot: Replaced CodeQL and Dependency Review with a plain pnpm
   dependency audit at the user's request. No paid scanning service or

@@ -17,10 +17,11 @@ function createResponse(
   body: ReadableStream<Uint8Array>,
   sessionId = request.sessionId,
   speechId = request.speechId,
+  mimeType = AUDIO_MIME_TYPE,
 ): Response {
   return new Response(body, {
     headers: {
-      "content-type": AUDIO_MIME_TYPE,
+      "content-type": mimeType,
       "x-sodalis-session-id": sessionId,
       "x-sodalis-speech-id": speechId,
     },
@@ -28,6 +29,24 @@ function createResponse(
 }
 
 describe("ServerTextToSpeechProvider", () => {
+  it("carries native synthesis speed metadata and rejects invalid values", async () => {
+    let appliedRate = "0.8";
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      const reply = createResponse(new ReadableStream({
+        start(controller) { controller.enqueue(new Uint8Array([0, 0])); controller.close(); },
+      }));
+      reply.headers.set("x-sodalis-applied-rate", appliedRate);
+      return reply;
+    });
+    const provider = new ServerTextToSpeechProvider({ fetch: fetcher });
+    const chunks = [];
+    for await (const chunk of provider.speak({ ...request, rate: 0.8, sentencePauseMs: 400 }, new AbortController().signal)) chunks.push(chunk);
+    expect(chunks[0]).toMatchObject({ appliedRate: 0.8 });
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toMatchObject({ rate: 0.8, sentencePauseMs: 400 });
+    appliedRate = "0";
+    await expect(provider.speak(request, new AbortController().signal)[Symbol.asyncIterator]().next()).rejects.toThrow("speech rate");
+  });
+
   it("streams audio chunks tagged with the request IDs and sequence", async () => {
     const fetcher = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
@@ -80,6 +99,35 @@ describe("ServerTextToSpeechProvider", () => {
       language: "nl-NL",
       voice: "nl_NL-ronnie-medium",
     });
+  });
+
+  it("accepts Pocket's 24 kHz PCM response format", async () => {
+    const mimeType =
+      "audio/pcm;rate=24000;bits=16;channels=1;endianness=little";
+    const provider = new ServerTextToSpeechProvider({
+      fetch: async () =>
+        createResponse(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array([1, 2]));
+              controller.close();
+            },
+          }),
+          request.sessionId,
+          request.speechId,
+          mimeType,
+        ),
+    });
+    const chunks = [];
+
+    for await (const chunk of provider.speak(
+      request,
+      new AbortController().signal,
+    )) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks[0]).toMatchObject({ mimeType });
   });
 
   it("reports request-to-first-audio latency once", async () => {

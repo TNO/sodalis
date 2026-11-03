@@ -29,8 +29,12 @@ a single place to find conclusions.
 
 | Evaluation | Task | Status |
 | --- | --- | --- |
+| [Dutch TTS models on Hugging Face for a Mac host](dutch-tts-hugging-face.md) | 0036 | Research complete; Mac quality and latency unmeasured |
+| [Mac-native STT and TTS options](macos-speech-options.md) | 0035, 0036 | Research complete; no new benchmarks |
 | [Dutch TTS providers](tts-providers.md) | 0036 | Complete |
 | [Alternate STT providers](stt-providers.md) | 0035 | Complete; Azure measured on private clips only, Redux not measured |
 | [Alternate LLM providers](llm-providers.md) | 0037 | Complete |
 | [Long-term memory](memory.md) | 0048, 0049, 0050, 0051 | Local evaluation complete; Azure ceiling deferred pending configuration and consent |
-| [CI test tiers and code quality tooling](ci-quality-and-tests.md) | 0054, 0055 | Complete |
+| [CI test tiers and code quality tooling](ci-quality-and-tests.md) | 0065, 0066 | Complete |
+| [MetaHuman and Fab licensing](metahuman-fab-licensing.md) | 0054 | Research note; distribution questions open |
+| [Personal-assistant memory and embodiment for older adults](personal-assistant-memory-and-embodiment.md) | 0039, 0054 | Research complete; implementation and user validation remain |

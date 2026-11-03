@@ -27,6 +27,9 @@ and avatar foundation; later work is sequenced by explicit dependencies.
 - [ ] 0014 Building the native Sodalis avatar asset pipeline
   *(needs 0010, 0012)*
 - [ ] 0015 Building in-app avatar selection *(needs 0014)*
+- [ ] 0054 Evaluating a MetaHuman avatar export *(needs 0014)*
+- [x] 0055 Adding a male thuiszorg-style avatar option
+  *(needs 0010, 0012, 0013, 0016; precedes 0014/0015)*
 
 ## Desktop avatar presentation
 
@@ -127,5 +130,23 @@ CI, image publishing, and the test-tier policy are recorded in
 [ADR 0006](../docs/adr/0006-ci-cd.md); the analysis is in
 [evaluations/ci-quality-and-tests.md](../docs/evaluations/ci-quality-and-tests.md).
 
-- [ ] 0054 Adding CI and published images *(needs 0034)*
-- [ ] 0055 Adding a formatter and dead-code checks *(needs 0054)*
+- [ ] 0065 Adding CI and published images *(needs 0034)*
+- [ ] 0066 Adding a formatter and dead-code checks *(needs 0065)*
+
+## TTS processing and Pocket TTS
+
+Tasks 0056–0058 prepare text and audio delivery for long responses. Pocket
+TTS stays an explicitly selected host-local provider; its runtime and model
+weights are external and must never be bundled. Word timing and transcript
+repair build on the local STT seam before playback captions consume the
+result.
+
+- [x] 0056 Cleaning Markdown before speech
+- [x] 0057 Normalizing Dutch and English speech text *(needs 0056)*
+- [x] 0058 Chunking speech by sentence *(needs 0056)*
+- [x] 0059 Adding the local Pocket TTS provider *(needs 0057, 0058)*
+- [x] 0060 Preprocessing reference voices *(needs 0059)*
+- [x] 0061 Aligning transcript words to audio *(needs 0024)*
+- [x] 0062 Repairing transcript tails and onset timing *(needs 0061)*
+- [x] 0063 Adding speech captions and playback fallback *(needs 0058, 0061, 0062)*
+- [x] 0064 Companion dots and accessibility controls

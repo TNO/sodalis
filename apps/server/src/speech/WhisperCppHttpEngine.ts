@@ -1,3 +1,5 @@
+import { alignSpeechWords, type SpeechWordTimestamp } from "./speechWordAlignment.js";
+
 export interface SpeechRecognitionRequest {
   readonly audio: Uint8Array;
   readonly mimeType: string;
@@ -13,6 +15,19 @@ export interface SpeechRecognitionEngine {
   transcribe(
     request: SpeechRecognitionRequest,
   ): Promise<SpeechRecognitionResult>;
+}
+
+export interface SpeechWordAlignmentResult {
+  readonly text: string;
+  readonly wordTimestamps: readonly SpeechWordTimestamp[];
+}
+
+export interface WordTimestampSpeechRecognitionEngine
+  extends SpeechRecognitionEngine {
+  transcribeWithWordTimestamps(
+    request: SpeechRecognitionRequest,
+    sourceText: string,
+  ): Promise<SpeechWordAlignmentResult>;
 }
 
 export interface WhisperCppHttpEngineOptions {
@@ -54,7 +69,8 @@ function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return buffer;
 }
 
-export class WhisperCppHttpEngine implements SpeechRecognitionEngine {
+export class WhisperCppHttpEngine
+  implements WordTimestampSpeechRecognitionEngine {
   private readonly endpoint: URL;
   private readonly fetcher: typeof fetch;
   private readonly noSpeechThreshold: number;
@@ -73,6 +89,42 @@ export class WhisperCppHttpEngine implements SpeechRecognitionEngine {
   async transcribe(
     request: SpeechRecognitionRequest,
   ): Promise<SpeechRecognitionResult> {
+    const payload = await this.requestTranscription(request, "json");
+    return { text: readTranscript(payload) };
+  }
+
+  async transcribeWithWordTimestamps(
+    request: SpeechRecognitionRequest,
+    sourceText: string,
+  ): Promise<SpeechWordAlignmentResult> {
+    if (!sourceText.trim()) throw new Error("Source text must not be empty.");
+    const payload = await this.requestTranscription(request, "verbose_json");
+    const text = readTranscript(payload);
+    const recognizedWords = readWordTimestamps(payload);
+    if (!recognizedWords.length) {
+      throw new Error("Whisper.cpp returned no word timestamps.");
+    }
+    const duration =
+      typeof payload === "object" &&
+      payload !== null &&
+      "duration" in payload &&
+      typeof payload.duration === "number"
+        ? payload.duration
+        : undefined;
+    return {
+      text,
+      wordTimestamps: alignSpeechWords(
+        sourceText,
+        recognizedWords,
+        duration,
+      ),
+    };
+  }
+
+  private async requestTranscription(
+    request: SpeechRecognitionRequest,
+    responseFormat: "json" | "verbose_json",
+  ): Promise<unknown> {
     request.signal.throwIfAborted();
     const language = WHISPER_LANGUAGE_TAGS[request.language.toLowerCase()];
     if (!language) {
@@ -86,7 +138,10 @@ export class WhisperCppHttpEngine implements SpeechRecognitionEngine {
       AUDIO_FILENAMES[request.mimeType] ?? "speech.webm",
     );
     form.append("language", language);
-    form.append("response_format", "json");
+    form.append("response_format", responseFormat);
+    if (responseFormat === "verbose_json") {
+      form.append("token_timestamps", "true");
+    }
     // Suppresses low-confidence output on silence/noise, mitigating hallucinations.
     form.append("no_speech_thold", String(this.noSpeechThreshold));
 
@@ -112,14 +167,60 @@ export class WhisperCppHttpEngine implements SpeechRecognitionEngine {
         `Whisper.cpp returned HTTP ${response.status}: ${errorMessage(payload)}`,
       );
     }
-    if (
-      typeof payload !== "object" ||
-      payload === null ||
-      !("text" in payload) ||
-      typeof payload.text !== "string"
-    ) {
-      throw new Error("Whisper.cpp response did not contain a transcript.");
-    }
-    return { text: payload.text.trim() };
+    return payload;
   }
+}
+
+function readTranscript(payload: unknown): string {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("text" in payload) ||
+    typeof payload.text !== "string"
+  ) {
+    throw new Error("Whisper.cpp response did not contain a transcript.");
+  }
+  return payload.text.trim();
+}
+
+function readWordTimestamps(payload: unknown): SpeechWordTimestamp[] {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("segments" in payload) ||
+    !Array.isArray(payload.segments)
+  ) {
+    throw new Error("Whisper.cpp response did not contain word timestamps.");
+  }
+  const timestamps: SpeechWordTimestamp[] = [];
+  for (const segment of payload.segments) {
+    if (
+      typeof segment !== "object" ||
+      segment === null ||
+      !("words" in segment) ||
+      !Array.isArray(segment.words)
+    ) {
+      continue;
+    }
+    for (const word of segment.words) {
+      if (
+        typeof word !== "object" ||
+        word === null ||
+        !("word" in word) ||
+        typeof word.word !== "string" ||
+        !("start" in word) ||
+        typeof word.start !== "number" ||
+        !("end" in word) ||
+        typeof word.end !== "number"
+      ) {
+        throw new Error("Whisper.cpp returned an invalid word timestamp.");
+      }
+      timestamps.push({
+        word: word.word,
+        start: word.start,
+        end: word.end,
+      });
+    }
+  }
+  return timestamps;
 }

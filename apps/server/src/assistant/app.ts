@@ -355,6 +355,7 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
     const messages = readMessages(payload.messages);
     const appContext = readAppContext(payload.appContext);
     const availableActions = readAvailableActions(payload.availableActions);
+    const shortSentences = payload.shortSentences;
     if (
       typeof sessionId !== "string" ||
       !ID_PATTERN.test(sessionId) ||
@@ -362,7 +363,8 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
       !ID_PATTERN.test(turnId) ||
       !messages ||
       appContext === null ||
-      availableActions === null
+      availableActions === null ||
+      (shortSentences !== undefined && typeof shortSentences !== "boolean")
     ) {
       return errorResponse(context, "Assistant turn is invalid.", 400);
     }
@@ -412,6 +414,7 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
               ...(appContext ? { appContext } : {}),
               ...(availableActions ? { availableActions } : {}),
               ...(memoryContext ? { memoryContext } : {}),
+              ...(typeof shortSentences === "boolean" ? { shortSentences } : {}),
               signal: abortController.signal,
             },
             memory?.active() ? memory : undefined,

@@ -12,6 +12,7 @@ type FetchLike = (
 ) => Promise<Response>;
 
 export interface ServerLlmProviderOptions {
+  readonly getShortSentences?: () => boolean;
   readonly baseUrl?: string;
   readonly fetch?: FetchLike;
   readonly now?: () => number;
@@ -70,12 +71,14 @@ export class ServerLlmProvider implements LlmProvider {
   private readonly fetcher: FetchLike;
   private readonly now: () => number;
   private readonly onLatency: ServerLlmProviderOptions["onLatency"];
+  private readonly getShortSentences: ServerLlmProviderOptions["getShortSentences"];
 
   constructor(options: ServerLlmProviderOptions = {}) {
     this.endpoint = `${(options.baseUrl ?? "/api").replace(/\/+$/, "")}/assistant/turns`;
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.now = options.now ?? (() => performance.now());
     this.onLatency = options.onLatency;
+    this.getShortSentences = options.getShortSentences;
   }
 
   async *stream(request: LlmStreamRequest): AsyncIterable<LlmTextDelta> {
@@ -88,6 +91,7 @@ export class ServerLlmProvider implements LlmProvider {
         sessionId: request.sessionId,
         turnId: request.turnId,
         messages: request.messages,
+        ...(this.getShortSentences ? { shortSentences: this.getShortSentences() } : {}),
         ...(request.appContext ? { appContext: request.appContext } : {}),
         ...(request.availableActions
           ? { availableActions: request.availableActions }

@@ -101,6 +101,19 @@ requested on activation, never on page load. You can type a message first
 to test AI and TTS without STT. See the
 [development stack guide](docs/development-stack.md) for model downloads,
 Docker/Podman setup, individual-service development, and troubleshooting.
+
+The **Avatar** picker also offers **Three dots**, a lightweight alternative
+that needs no 3D viewer. Large dots move sequentially while thinking and
+pulse while speaking; a text label conveys the state even with reduced
+motion. Three dots is the default when no valid avatar choice is saved.
+Saved choices are preserved, and human avatars remain available.
+Expand **Speech and subtitles** in the Assistant sidebar to set speech speed
+(0.75–1.25x), additional sentence pauses (0–1000 ms), short-sentence responses,
+and subtitle visibility, size and text/background colors. Settings are saved
+on this device and pacing changes apply to the next response. Hidden
+subtitles remain available under **Read response**; action confirmations and
+errors are never hidden. Low-contrast color choices show a warning.
+
 To select a different STT service, set `STT_PROVIDER=whisper-cpp` (download
 its model as described in the guide), `STT_PROVIDER=whistle`, or the
 explicit cloud opt-in `STT_PROVIDER=azure` in `.env`,
@@ -173,6 +186,31 @@ its app sandboxing; the host bridge does not expose app DOM or untrusted web app
 First-party desktop apps can register scoped semantic actions and avatar
 targets with [`@sodalis/app-sdk`](packages/app-sdk/README.md); the bundled
 Sample Notes panel is an example.
+
+## Licensed avatars (collaborators)
+
+Some avatars, such as the MetaHuman Anna, may ship inside Sodalis builds but
+may not be published on their own. Their GLBs live in the private repository
+[TNO/sodalis-licensed-avatars](https://github.com/TNO/sodalis-licensed-avatars),
+never in this public one. Without them, Sodalis builds and runs with the open
+avatars only; forks work the same way.
+
+Sodalis collaborators get read access from a maintainer; ask one to add your
+GitHub account. Then, from the repository root:
+
+```sh
+git clone https://github.com/TNO/sodalis-licensed-avatars ../sodalis-licensed-avatars
+pnpm avatars:licensed ../sodalis-licensed-avatars
+pnpm dev     # or pnpm build; restart a running dev server
+```
+
+The script copies the GLBs and their `NOTICE.md` into the git-ignored
+`apps/desktop/public/avatars/licensed/`. Use them only inside Sodalis and
+share them only through the private repository: no public uploads, forks,
+CI artefacts or tokens. Release builds contain these files, so distribute
+them only as the Sodalis app. See
+[Licensed avatars](docs/avatar/licensed-avatars.md) for adding an avatar and
+the licence rules.
 
 ## Checks
 

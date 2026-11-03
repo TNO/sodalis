@@ -31,7 +31,9 @@ import type {
 import { AvatarConversationCard } from "./AvatarConversationCard.js";
 import { AvatarNotificationPanel } from "./AvatarNotificationPanel.js";
 import type { AvatarNotification } from "./AvatarNotificationPanel.js";
-import { AvatarViewport } from "./AvatarViewport.js";
+import { AvatarViewport, type AvatarSwitchOption } from "./AvatarViewport.js";
+import { AVATAR_CATALOGUE, DEFAULT_AVATAR_ID, type CompanionAsset } from "./avatarCatalogue.js";
+import { DEFAULT_COMPANION_PREFERENCES, type CompanionPreferenceStore } from "./companionPreferences.js";
 import type { AvatarPresentationController } from "./AvatarPresentationController.js";
 import {
   createSpeechPlaybackController,
@@ -39,6 +41,11 @@ import {
 } from "./SpeechPlaybackController.js";
 
 interface DesktopAvatarOverlayAttrs {
+  /** The avatar to show; defaults to the catalogue default. */
+  asset?: CompanionAsset;
+  preferences?: CompanionPreferenceStore;
+  reducedMotion?: boolean;
+  switchTo?: AvatarSwitchOption;
   targetRegistry?: AttentionTargetRegistry;
   onGeometryChange?: () => void;
   onScene?: (scene: AvatarSceneHandle | undefined) => void;
@@ -55,6 +62,10 @@ interface DesktopAvatarOverlayAttrs {
   actionRuntime?: AssistantActionRuntime;
 }
 
+const DEFAULT_ASSET = (
+  AVATAR_CATALOGUE.find((entry) => entry.asset.id === DEFAULT_AVATAR_ID) ??
+  AVATAR_CATALOGUE[0]!
+).asset;
 const CLOUD_RECOGNIZER_NAMES: Readonly<Record<string, string>> = { azure: "Azure" };
 const TASKBAR_FLOOR_OVERLAP = 3;
 const TASKBAR_AVATAR_OCCLUSION_RATIO = 0.5;
@@ -111,6 +122,7 @@ interface ActiveSpeechRecognition {
 
 export const DesktopAvatarOverlay =
   (): m.Component<DesktopAvatarOverlayAttrs> => {
+    let preferences = DEFAULT_COMPANION_PREFERENCES;
     let layer: HTMLElement | undefined;
     let frame: HTMLIFrameElement | undefined;
     let outerWindow: Window | undefined;
@@ -142,9 +154,11 @@ export const DesktopAvatarOverlay =
     let microphoneWasActive = false;
     let speechOutputActive = false;
     let speechIsPlaying = false;
+    let activeSpeechWordIndex: number | undefined;
     let speechActivityMessage: string | undefined;
     let speechError: string | undefined;
     let speechOutputError: string | undefined;
+    let speechCaptionError: string | undefined;
     let conversationError: string | undefined;
     let conversationState: ConversationState = "idle";
     let conversationInterruptible = true;
@@ -175,8 +189,14 @@ export const DesktopAvatarOverlay =
         }
       },
     });
+    const fallbackTtsApiBaseUrl =
+      import.meta.env.VITE_SODALIS_TTS_FALLBACK_API_URL?.trim();
+    const fallbackTextToSpeechProviders = fallbackTtsApiBaseUrl
+      ? [new ServerTextToSpeechProvider({ baseUrl: fallbackTtsApiBaseUrl })]
+      : [];
     const llmProvider = new ServerLlmProvider({
       baseUrl: speechApiBaseUrl,
+      getShortSentences: () => preferences.shortSentences,
       onLatency(metric) {
         if (import.meta.env.DEV) {
           console.debug("Assistant generation latency:", metric);
@@ -443,16 +463,35 @@ export const DesktopAvatarOverlay =
     const createSpeechPlayback = (): SpeechPlaybackController =>
       createSpeechPlaybackController({
         provider: textToSpeechProvider,
+        getSpeechPreferences: () => ({
+          rate: preferences.speechRate,
+          sentencePauseMs: preferences.sentencePauseMs,
+        }),
+        fallbackProviders: fallbackTextToSpeechProviders,
+        alignAudio: (text, language, audio, signal) =>
+          speechToTextProvider.alignAudio(text, language, audio, signal),
         getAvatarController: () => avatarScene?.controller,
         isListening: () => microphoneWasActive,
         onOutputChange(active) {
           speechOutputActive = active;
+          if (active) {
+            activeSpeechWordIndex = undefined;
+            speechCaptionError = undefined;
+          }
           syncActiveSpeechOutput();
           if (layer) m.redraw();
         },
         onStateChange(speaking, request) {
           speechIsPlaying = speaking;
           conversation?.notifyPlaybackState(request.speechId, speaking);
+          if (layer) m.redraw();
+        },
+        onWordChange(wordIndex) {
+          activeSpeechWordIndex = wordIndex;
+          if (layer) m.redraw();
+        },
+        onAlignmentError(error) {
+          speechCaptionError = error.message;
           if (layer) m.redraw();
         },
         onCancelGeneration() {
@@ -465,6 +504,7 @@ export const DesktopAvatarOverlay =
         throw new Error("Speech playback is unavailable.");
       }
       speechOutputError = undefined;
+      speechCaptionError = undefined;
       const request: SpeechRequest = {
         sessionId: createSpeechRequestId("desktop"),
         speechId: createSpeechRequestId("speech"),
@@ -825,7 +865,10 @@ export const DesktopAvatarOverlay =
       },
 
       view(vnode: Vnode<DesktopAvatarOverlayAttrs>) {
+        preferences = vnode.attrs.preferences?.value ?? DEFAULT_COMPANION_PREFERENCES;
         const viewportAttrs = {
+          asset: vnode.attrs.asset ?? DEFAULT_ASSET,
+          ...(vnode.attrs.switchTo ? { switchTo: vnode.attrs.switchTo } : {}),
           targetRegistry: vnode.attrs.targetRegistry,
           onScene(scene: AvatarSceneHandle | undefined) {
             avatarScene = scene;
@@ -837,6 +880,16 @@ export const DesktopAvatarOverlay =
           gazeOverlay: vnode.attrs.gazeOverlay,
           showGazeTarget: vnode.attrs.showGazeTarget,
           interactive: true,
+          reducedMotion: vnode.attrs.reducedMotion,
+          activity: speechIsPlaying
+            ? "speaking" as const
+            : conversationState === "thinking" || speechOutputActive || conversationState === "transcribing"
+              ? "thinking" as const
+              : microphoneWasActive
+                ? "listening" as const
+                : conversationState === "error"
+                  ? "error" as const
+                  : "idle" as const,
           conversationOpen,
           notificationCount: conversationOpen
             ? 0
@@ -917,16 +970,19 @@ export const DesktopAvatarOverlay =
               : null,
             conversationOpen
               ? m(AvatarConversationCard, {
+                  preferences,
                   speechInput,
                   speechActivityMessage,
                   cloudSpeechRecognizer,
                   speechError,
                   speechOutputError,
+                  speechCaptionError,
                   conversationError,
                   conversationState,
                   pendingConfirmation,
                   userTranscript,
                   assistantText,
+                  activeSpeechWordIndex,
                   speechOutputActive,
                   speechPlaying: speechIsPlaying,
                   onSpeechError: reportSpeechError,

@@ -1,4 +1,4 @@
-import type { SpeechRequest } from "@sodalis/speech";
+import { isSpeechRate, type SpeechRequest } from "@sodalis/speech";
 import type { SpeechSynthesisEngine } from "./PiperTtsEngine.js";
 
 export interface AzureTtsEngineOptions {
@@ -41,6 +41,7 @@ export function azureTtsEndpoint(value: string): string {
 }
 
 export class AzureTtsEngine implements SpeechSynthesisEngine {
+  readonly supportsRate: boolean;
   readonly voiceId: string;
   private readonly endpoint: string;
   private readonly key: string;
@@ -55,11 +56,15 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
     }
     this.key = options.key;
     this.voiceId = options.voice;
+    this.supportsRate = !options.voice.includes(":");
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
   }
 
   async *synthesize(request: SpeechRequest, signal: AbortSignal): AsyncIterable<Uint8Array> {
     signal.throwIfAborted();
+    if (request.rate !== undefined && !isSpeechRate(request.rate)) {
+      throw new RangeError("Speech rate must be between 0.75 and 1.25.");
+    }
     if (!request.text.trim() || !/^nl-(?:NL|BE)$/.test(request.language) ||
         (request.voice && request.voice !== this.voiceId)) {
       throw new Error("Azure TTS does not support the requested language or voice.");
@@ -68,6 +73,9 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
     const text = this.voiceId.toLowerCase().startsWith("nl-")
       ? xmlText(request.text)
       : `<lang xml:lang="${request.language}">${xmlText(request.text)}</lang>`;
+    const pacedText = !this.supportsRate || request.rate === undefined || request.rate === 1
+      ? text
+      : `<prosody rate="${Math.round((request.rate - 1) * 100)}%">${text}</prosody>`;
     const response = await this.fetcher(this.endpoint, {
       method: "POST",
       headers: {
@@ -77,7 +85,7 @@ export class AzureTtsEngine implements SpeechSynthesisEngine {
         "User-Agent": "Sodalis",
       },
       body: `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="${request.language}">` +
-        `<voice name="${this.voiceId}">${text}</voice></speak>`,
+        `<voice name="${this.voiceId}">${pacedText}</voice></speak>`,
       signal,
     });
     signal.throwIfAborted();

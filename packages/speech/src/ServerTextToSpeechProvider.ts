@@ -6,6 +6,7 @@ import type {
   TextToSpeechCapabilities,
   TextToSpeechProvider,
 } from "./index.js";
+import { isSpeechRate } from "./speechChunking.js";
 
 const SERVER_TTS_CAPABILITIES: TextToSpeechCapabilities = {
   runtime: "server",
@@ -18,11 +19,11 @@ const SERVER_TTS_CAPABILITIES: TextToSpeechCapabilities = {
 };
 
 const PCM_PARAMETERS = {
-  rate: "22050",
   bits: "16",
   channels: "1",
   endianness: "little",
 };
+const SUPPORTED_PCM_SAMPLE_RATES = new Set(["22050", "24000"]);
 
 type FetchLike = (
   input: RequestInfo | URL,
@@ -90,6 +91,9 @@ function validateAudioContentType(value: string): void {
       );
     }
   }
+  if (!SUPPORTED_PCM_SAMPLE_RATES.has(parameters.get("rate") ?? "")) {
+    throw new Error("Speech server returned an unsupported PCM rate parameter.");
+  }
 }
 
 function verifySpeechHeaders(
@@ -140,6 +144,11 @@ export class ServerTextToSpeechProvider implements TextToSpeechProvider {
     if (!response.ok) throw await responseError(response);
 
     const mimeType = verifySpeechHeaders(response, request);
+    const rawAppliedRate = response.headers.get("x-sodalis-applied-rate");
+    const appliedRate = rawAppliedRate === null ? undefined : Number(rawAppliedRate);
+    if (appliedRate !== undefined && !isSpeechRate(appliedRate)) {
+      throw new Error("Speech server returned an invalid applied speech rate.");
+    }
     if (!response.body) {
       throw new Error("Speech server returned no audio stream.");
     }
@@ -193,6 +202,7 @@ export class ServerTextToSpeechProvider implements TextToSpeechProvider {
           type: "audio",
           data,
           mimeType,
+          ...(appliedRate !== undefined ? { appliedRate } : {}),
           sessionId: request.sessionId,
           speechId: request.speechId,
           sequence: sequence++,
@@ -210,5 +220,6 @@ export class ServerTextToSpeechProvider implements TextToSpeechProvider {
       if (readerCancellation) await readerCancellation;
       reader.releaseLock();
     }
+
   }
 }

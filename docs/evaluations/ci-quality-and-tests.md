@@ -3,8 +3,8 @@
 - **Status:** Complete
 - **Date:** 2026-10-19
 - **Updated:** 2026-11-03 (free-tool baseline)
-- **Task:** [0054](../../TASKS/0054-ci-cd-pipeline.md); follow-up
-  [0055](../../TASKS/0055-formatter-and-dead-code.md)
+- **Task:** [0065](../../TASKS/0065-ci-cd-pipeline.md); follow-up
+  [0066](../../TASKS/0066-formatter-and-dead-code.md)
 
 ## Summary and recommendation
 
@@ -21,7 +21,7 @@
     - pnpm dependency audit (high/critical npm advisories);
     - actionlint;
     - Dependabot.
-  - **Phase 2 (task 0055):**
+  - **Phase 2 (task 0066):**
     - Biome as a formatter, with a minimal lint set;
     - knip for dead code;
     - both in a separate change, to isolate the reformat.
@@ -75,7 +75,7 @@ The server suite also ran inside the built API image, which includes FFmpeg.
 | Root `scripts/` tests | 33 tests, < 0.1 s |
 | Python | 23 tests, ~1 s |
 
-Gaps found and fixed in task 0054:
+Gaps found and fixed in task 0065:
 
 | Gap | Effect | Fix |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ known-dependency findings, not a source-code vulnerability assessment.
 | --- | --- | --- |
 | Biome lint (recommended) | About 300 findings. Most (277) are `noNonNullAssertion`, about half of them in tests. The rest: 5 `useTemplate`, 4 `noAssignInExpressions`, 4 `useIterableCallbackReturn`, 2 unused imports, 1 duplicate CSS property, 1 `eval` in a test, and a few single findings | Few real defects; strict `tsc` already covers most of them |
 | Biome format | 144 of 160 files would change | No consistent style; needs a one-time reformat |
-| `tsc --noUnusedLocals/Parameters` | 4 sites (2 unused imports, 1 write-only field, 1 unused parameter) | Adopted; fixed in 0054 |
+| `tsc --noUnusedLocals/Parameters` | 4 sites (2 unused imports, 1 write-only field, 1 unused parameter) | Adopted; fixed in 0065 |
 | knip | 11 unused exports, 30 unused exported types, 1 false-positive entry file (`scripts/llm-live-check.ts`) | Typical leftovers of iterative edits; worth gating once configured |
 
 ## Analysis
@@ -159,7 +159,7 @@ known-dependency findings, not a source-code vulnerability assessment.
 
 ## Open items
 
-- Task 0055: Biome formatter and minimal lint set, knip, and
+- Task 0066: Biome formatter and minimal lint set, knip, and
   `.git-blame-ignore-revs`.
 - Optionally run the Aster smoke suite in a path-filtered workflow when the
   vendored snapshot changes.
