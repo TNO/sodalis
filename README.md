@@ -222,12 +222,8 @@ pnpm test:python   # speech-http and TTS comparison tests
 pnpm audit:dependencies   # fail on high/critical npm advisories
 ```
 
-CI runs these checks on Ubuntu and macOS for every pull request, together
-with Compose validation, image builds, actionlint, and a dependency audit. No
-paid code-security service or Dependency graph setup is required. Pushes
-to `main` and `v*` tags publish multi-arch images to GHCR. See
-[Published images and CI](docs/development-stack.md#published-images-and-ci)
-and [ADR 0006](docs/adr/0006-ci-cd.md).
+For CI checks and published container images, see the
+[development stack guide](docs/development-stack.md#published-images-and-ci).
 
 Aster is vendored at `apps/desktop/public/aster/`. Its upstream `TESTING.md`
 describes the standalone browser suite. At the pinned upstream commit, the
