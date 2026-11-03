@@ -44,6 +44,7 @@ jspm_packages/
 # Python authoring byproducts
 __pycache__/
 *.py[cod]
+.venv/
 
 # Snowpack dependency directory (https://snowpack.dev/)
 web_modules/
