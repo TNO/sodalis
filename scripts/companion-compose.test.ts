@@ -66,10 +66,12 @@ describe.skipIf(!available)("companion Compose configuration (no daemon or model
         expect(ai.environment).toMatchObject({
           HOME_GRAPH_URL: "bolt://graph.test:7687", HOME_GRAPH_PASSWORD: "synthetic-test-password",
         });
-        expect(ai.volumes).toContainEqual(expect.objectContaining({
+        const readingsVolume = ai.volumes?.find((volume) => volume.target === "/data/home/readings.sqlite");
+        expect(readingsVolume).toMatchObject({
           type: "bind", source, target: "/data/home/readings.sqlite", read_only: true,
-          bind: { create_host_path: false },
-        }));
+        });
+        // Older Compose versions omit false fields from their JSON output.
+        expect(readingsVolume?.bind?.create_host_path ?? false).toBe(false);
       } else {
         expect(ai.volumes?.some((volume) => volume.type === "bind")).toBe(false);
       }
