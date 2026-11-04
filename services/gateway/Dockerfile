@@ -6,5 +6,5 @@ RUN pnpm fetch
 COPY . .
 RUN pnpm install --frozen-lockfile --offline && pnpm --filter @sodalis/desktop build
 
-FROM caddy:2.10-alpine
+FROM caddy:2.11-alpine
 COPY --from=build /app/dist/desktop /srv
