@@ -4,6 +4,10 @@ Below is a legend followed by certain diagrams describing how to fetch (dynamic)
 
 Cypher queries are not included yet.
 
+These are illustrative lookup diagrams, not an implemented connector contract.
+See the [agreed harness design](./harness-design.md) for the initial read-only
+Neo4j/tool scope, retrieval choices still to benchmark, and future enhancements.
+
 ## Legend
 ```mermaid
 flowchart LR
