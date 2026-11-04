@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import m from "mithril";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as speech from "@sodalis/speech";
 import {
   ServerSpeechToTextProvider,
@@ -10,6 +10,8 @@ import {
 import {
   ConversationOrchestrator,
   createAssistantActionRuntime,
+  readAssistantMode,
+  WorkflowConversationOrchestrator,
   type AppActionDefinition,
 } from "@sodalis/assistant";
 import type { AvatarBehaviorController } from "@sodalis/avatar";
@@ -29,6 +31,11 @@ const humanAsset = humanEntry.asset;
 
 vi.mock("@sodalis/avatar/internal/scene", () => ({
   createAvatarScene: vi.fn(),
+}));
+
+vi.mock("@sodalis/assistant", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@sodalis/assistant")>(),
+  readAssistantMode: vi.fn(async () => "turn"),
 }));
 
 function createSceneHandle(): AvatarSceneHandle {
@@ -58,6 +65,9 @@ function createSceneHandle(): AvatarSceneHandle {
 
 describe("DesktopAvatarOverlay", () => {
   let mountedHost: HTMLElement | undefined;
+  beforeEach(() => {
+    vi.mocked(readAssistantMode).mockResolvedValue("turn");
+  });
 
   afterEach(() => {
     if (mountedHost) m.mount(mountedHost, null);
@@ -66,6 +76,81 @@ describe("DesktopAvatarOverlay", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     document.body.replaceChildren();
+  });
+
+  it("uses the server-selected workflow without invoking turn actions", async () => {
+    vi.mocked(readAssistantMode).mockResolvedValue("workflow");
+    const workflow = vi.spyOn(WorkflowConversationOrchestrator.prototype, "submitUserMessage")
+      .mockResolvedValue(undefined);
+    const turn = vi.spyOn(ConversationOrchestrator.prototype, "submitUserMessage");
+    const onSpeechInput = vi.fn();
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(DesktopAvatarOverlay, { onSpeechInput }) });
+    await vi.waitFor(() => expect(onSpeechInput.mock.calls.at(-1)?.[0]).toBeDefined());
+    expect(readAssistantMode).toHaveBeenCalledWith(expect.objectContaining({
+      baseUrl: "/api", signal: expect.any(AbortSignal),
+    }));
+    host.querySelector<HTMLButtonElement>('[aria-label="Start a conversation with Sodalis"]')?.click();
+    await vi.waitFor(() => expect(host.querySelector("#avatar-conversation-input")).not.toBeNull());
+    const input = host.querySelector<HTMLInputElement>("#avatar-conversation-input")!;
+    input.value = "Hoe warm is het?";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(workflow).toHaveBeenCalledWith("Hoe warm is het?"));
+    expect(turn).not.toHaveBeenCalled();
+  });
+
+  it("shows configuration failure without enabling a microphone or falling back to turn mode", async () => {
+    vi.mocked(readAssistantMode).mockRejectedValue(new Error("offline"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const createInput = vi.spyOn(speech, "createSpeechInputController");
+    const turn = vi.spyOn(ConversationOrchestrator.prototype, "submitUserMessage");
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(DesktopAvatarOverlay) });
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Start a conversation with Sodalis"]')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('[aria-label="Start a conversation with Sodalis"]')?.click();
+    await vi.waitFor(() => expect(host.textContent).toContain("Unable to configure the assistant: offline"));
+    expect(host.querySelector<HTMLButtonElement>(".avatar-conversation-listening")?.disabled).toBe(true);
+    expect(host.querySelector<HTMLInputElement>("#avatar-conversation-input")?.disabled).toBe(true);
+    expect(createInput).not.toHaveBeenCalled();
+    expect(turn).not.toHaveBeenCalled();
+  });
+
+  it("keeps conversation input disabled until runtime discovery succeeds", async () => {
+    let resolve!: (mode: "turn") => void;
+    vi.mocked(readAssistantMode).mockImplementation(() => new Promise((done) => { resolve = done; }));
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(DesktopAvatarOverlay) });
+    await vi.waitFor(() => expect(host.querySelector('[aria-label="Start a conversation with Sodalis"]')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('[aria-label="Start a conversation with Sodalis"]')!.click();
+    await vi.waitFor(() => expect(host.textContent).toContain("Connecting to the assistant."));
+    expect(host.querySelector<HTMLInputElement>("#avatar-conversation-input")?.disabled).toBe(true);
+    resolve("turn");
+    await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>("#avatar-conversation-input")?.disabled).toBe(false));
+    expect(host.querySelector<HTMLButtonElement>(".avatar-conversation-listening")?.disabled).toBe(false);
+  });
+
+  it("aborts pending configuration on unmount and never initializes late speech input", async () => {
+    let resolve!: (mode: "turn") => void;
+    vi.mocked(readAssistantMode).mockImplementation(() => new Promise((done) => { resolve = done; }));
+    const createInput = vi.spyOn(speech, "createSpeechInputController");
+    const host = document.createElement("div");
+    mountedHost = host;
+    document.body.append(host);
+    m.mount(host, { view: () => m(DesktopAvatarOverlay) });
+    const signal = vi.mocked(readAssistantMode).mock.calls.at(-1)?.[0]?.signal;
+    m.mount(host, null);
+    mountedHost = undefined;
+    expect(signal?.aborted).toBe(true);
+    resolve("turn");
+    await Promise.resolve();
+    expect(createInput).not.toHaveBeenCalled();
   });
 
   it("shows three dots by default without loading a 3D scene", async () => {

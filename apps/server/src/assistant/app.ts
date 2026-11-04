@@ -5,10 +5,12 @@ import type {
   AppActionRisk,
   AvailableAppAction,
   AssistantAppContext,
-  ConversationMessage,
 } from "@sodalis/assistant";
 import { formatRecallResult, isRecallReply, mayBeRecallReply, parseRecallCall, type MemoryService } from "@sodalis/memory";
+import { registerWorkflowRoutes } from "./harness/routes.js";
+import type { CompanionWorkflows } from "./harness/workflow.js";
 import { registerMemoryRoutes } from "./memoryRoutes.js";
+import { BodyLimitError, ID_PATTERN, isRecord, readBoundedBody, readMessages } from "./requestBody.js";
 import type {
   LlmGenerationRequest,
   LlmTextGenerationProvider,
@@ -21,15 +23,13 @@ interface AssistantAppOptions {
   readonly memory?: MemoryService;
   /** Sources allowed to post observations to `/api/memory/observations`. */
   readonly observationSources?: readonly string[];
+  /** Pi companion workflows; omit to leave the workflow routes off. */
+  readonly workflows?: CompanionWorkflows;
 }
 
-const MAX_REQUEST_BYTES = 1024 * 1024;
-const MAX_MESSAGES = 13;
 const MAX_AVAILABLE_ACTIONS = 32;
 const MAX_ACTION_DESCRIPTION = 1_000;
-const MAX_MESSAGE_LENGTH = 12_000;
 const MAX_CONTEXT_TEXT = 160;
-const ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const ACTION_RISKS = [
   "read",
   "navigate",
@@ -38,8 +38,6 @@ const ACTION_RISKS = [
   "external-effect",
   "destructive",
 ] as const satisfies readonly AppActionRisk[];
-
-class BodyLimitError extends Error {}
 
 /**
  * Generates one reply. With memory, the model may first answer with a
@@ -101,59 +99,6 @@ function errorResponse(
   status: 400 | 413 | 415 | 503,
 ) {
   return context.json({ error: message }, status);
-}
-
-async function readBoundedBody(request: Request): Promise<Uint8Array> {
-  const reader = request.body?.getReader();
-  if (!reader) return new Uint8Array();
-  const chunks: Uint8Array[] = [];
-  let byteLength = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      byteLength += value.byteLength;
-      if (byteLength > MAX_REQUEST_BYTES) {
-        await reader.cancel();
-        throw new BodyLimitError("Assistant request exceeds the size limit.");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const body = new Uint8Array(byteLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return body;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readMessages(value: unknown): ConversationMessage[] | undefined {
-  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_MESSAGES) {
-    return undefined;
-  }
-  const messages: ConversationMessage[] = [];
-  for (const item of value) {
-    if (
-      !isRecord(item) ||
-      (item.role !== "user" && item.role !== "assistant") ||
-      typeof item.content !== "string" ||
-      !item.content.trim() ||
-      item.content.length > MAX_MESSAGE_LENGTH
-    ) {
-      return undefined;
-    }
-    messages.push({ role: item.role, content: item.content });
-  }
-  if (messages.at(-1)?.role !== "user") return undefined;
-  return messages;
 }
 
 function readAppContext(value: unknown): AssistantAppContext | undefined | null {
@@ -300,6 +245,10 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
   }
   let activeRequests = 0;
   const app = new Hono();
+  app.get("/api/assistant/config", (context) => {
+    context.header("cache-control", "no-store");
+    return context.json({ mode: options.workflows ? "workflow" : "turn" });
+  });
   app.get("/healthz", (context) =>
     context.json({ status: "ok", service: "ai" }),
   );
@@ -308,6 +257,8 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
       ? context.json({ status: "ready", service: "ai" })
       : errorResponse(context, "LLM is not configured.", 503),
   );
+
+  if (options.workflows) registerWorkflowRoutes(app, options.workflows);
 
   if (options.memory) {
     registerMemoryRoutes(app, {

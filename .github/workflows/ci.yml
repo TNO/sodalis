@@ -109,8 +109,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Renders the example selection only; no provider is contacted.
-      - run: cp .env.example .env
+      # Renders the example selection only; no graph or provider is contacted.
+      - name: Prepare example configuration with a synthetic graph password
+        run: |
+          cp .env.example .env
+          echo 'HOME_GRAPH_PASSWORD=synthetic-ci-password' >> .env
       - name: Published images
         run: pnpm stack:config
       - name: Locally built images

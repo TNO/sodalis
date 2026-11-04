@@ -7,7 +7,7 @@ to `127.0.0.1:4176` by default; this is not a production deployment.
 
 ## Prerequisites
 
-- Node.js 24 and pnpm 12.4.1 (or Corepack with the repository's pinned pnpm).
+- Node.js 24 and pnpm 12.16.1 (or Corepack with the repository's pinned pnpm).
 - Docker Desktop with Docker Compose v2 on Windows, macOS, or Linux; alternatively
   Docker Engine with the Compose v2 plugin on Linux.
 - Podman with a running machine on macOS/Windows, or a running Podman socket on
@@ -20,7 +20,10 @@ to `127.0.0.1:4176` by default; this is not a production deployment.
 
 Install dependencies with `pnpm install`, then copy `.env.example` to `.env`
 (`cp .env.example .env` on macOS/Linux, or `Copy-Item .env.example .env` in
-PowerShell). Never commit `.env`, downloaded models, or access tokens.
+PowerShell). The example enables Pi and prefills the simulator graph settings;
+set `HOME_GRAPH_PASSWORD` from your Neo4j deployment before launching. Follow
+the [companion setup](#companion-workflow-against-the-test-graph) for connectivity
+and optional readings. Never commit `.env`, downloaded models, or access tokens.
 
 ## Choose providers
 
@@ -1070,6 +1073,141 @@ The same pattern supports
 `SODALIS_HOME_API_URL=http://127.0.0.1:3003` with `pnpm dev:home` when a
 separate Home Assistant Core endpoint and token are reachable from the host;
 Compose's Core container has no host port by design.
+
+### Companion workflow against the test graph
+
+The read-only Pi companion workflow (task 0067) is embedded in the existing
+Compose `ai` container. It does not launch a Pi CLI or require a separate Pi
+container. The standard `.env.example` selects `COMPANION_HARNESS=pi`.
+Set `off` and clear graph/data settings for the existing turn mode.
+Invalid selections fail explicitly.
+See [turn mode versus workflow mode](architecture/companion-harness.md#turn-mode-versus-workflow-mode)
+before switching: workflow adds adaptive home investigation but currently
+does not provide turn mode's desktop actions or optional long-term memory.
+
+#### Shared graph network
+
+The AI container now also runs on a second Docker network, the **graph
+network**, which the externally managed Neo4j container is expected to join.
+In `compose.yaml` it is the network key `graph`; its Docker name is the stack's
+container prefix: `sodalis` for a root checkout and `sodalis-<worktree>` for a
+worktree (matching container names such as `sodalis-<worktree>-ai`). Only the
+`ai` service joins it; gateway, speech, and the other services stay on the
+project's default network. On that network Neo4j must be reachable under the
+host name `neo4j`, which is what `HOME_GRAPH_URL=bolt://neo4j:7687` in
+`.env.example` assumes.
+
+The Sodalis stack owns the network: `pnpm stack:up` creates it. The
+`home_simulator` Neo4j test container declares it as an external network named
+by `SODALIS_NETWORK` (default `sodalis`); set `SODALIS_NETWORK=sodalis-<worktree>`
+in its `containers/neo4j-test/.env` for a worktree. Hence the first start order
+matters:
+
+1. Start the Sodalis stack first. A Neo4j container started before the network
+   exists fails with `network … declared as external, but could not be found`.
+   Conversely, Compose refuses to start the stack if another tool already
+   created a network with that name without Compose labels.
+2. After that, either side can be restarted independently. `pnpm stack:down`
+   leaves the network in place while Neo4j is still attached to it (Compose
+   reports `Resource is still in use`), and the next `pnpm stack:up` reuses it.
+3. When both are down, the network is gone; start Sodalis first again.
+
+Check membership with
+`docker network inspect <prefix> --format '{{range .Containers}}{{.Name}} {{end}}'`;
+it should list both the AI container and Neo4j.
+
+#### Setup
+
+1. Set the following in Sodalis's ignored root `.env` (or an explicit `--env`
+   overlay). Use an absolute host path for the readings file:
+
+   ```sh
+   COMPANION_HARNESS=pi
+   HOME_GRAPH_URL=bolt://neo4j:7687
+   HOME_GRAPH_PASSWORD='<NEO4J_PASSWORD from the container .env>'
+   HOME_DATA_SQLITE_FILE=/absolute/path/to/home_simulator/testdata/neo4j-test/timeseries.sqlite
+   ```
+
+   Use `LLM_PROVIDER=mock` to check the plumbing without a model; it always
+   gives the same canned answer. Azure needs the `AZURE_LLM_*` variables and
+   explicit consent for each run.
+   The existing `LLM_PROVIDER` configuration is reused. The launcher checks
+   the readings source before restarting containers and automatically adds
+   `compose.companion-data.yaml`: only the AI container receives the read-only
+   file mount at `/data/home/readings.sqlite`. The path is resolved by the
+   Docker daemon: Docker Engine on Linux or inside WSL2 can mount any path it
+   can read, while Docker Desktop and Podman machines run containers in a VM
+   and can only mount host paths shared into it (Docker Desktop's
+   **Resources > File sharing** list, or the Podman machine's volumes). On
+   Windows, use a path from the WSL distribution, such as `/home/...`.
+   Only this file is mounted, not its directory. Use a closed snapshot such as
+   the test container's `timeseries.sqlite`: a running writer's uncommitted WAL
+   data is invisible, and a file replaced by rename stays stale until restart.
+   The file is never copied into an image.
+   Omit the file and endpoint settings if only graph structure is needed.
+2. Launch the normal stack, which creates the graph network, and open its
+   gateway:
+
+   ```sh
+   pnpm stack:config
+   pnpm stack:up
+   ```
+
+3. In your `home_simulator` checkout, start its Neo4j test container (see its
+   `docs/neo4j-test-container.md`); it joins the
+   [graph network](#shared-graph-network). It serves a fixed graph snapshot
+   to the AI container as `bolt://neo4j:7687`, and to the host on
+   `bolt://127.0.0.1:7687`, with the password from its own
+   `containers/neo4j-test/.env`. Neo4j is externally managed, not automatically
+   provisioned by this stack. For a Neo4j outside Docker,
+   use a URL the AI container can reach instead; host loopback is not
+   reachable through a host-gateway IP, and never expose an unauthenticated
+   database publicly.
+   The AI service keeps running if Neo4j is not up yet: startup warm-up logs
+   `Home graph warm-up failed`, tools report `unavailable` until Neo4j is
+   reachable, and later calls connect without restarting the AI container.
+   Query plans are then not pre-warmed, so the first questions can hit the
+   cold-query cost and time out; restart the `ai` container to warm them.
+
+The desktop reads `GET /api/assistant/config` through the gateway and selects
+the server's mode at runtime. No special frontend build is required. Reload
+open desktop tabs after changing the mode. If discovery fails, the desktop
+displays an error rather than falling back to another mode; reload to retry.
+
+| Variable | Required | Meaning |
+| --- | --- | --- |
+| `COMPANION_HARNESS` | no | The example selects `pi`; `off` retains turn mode. Unset still means `off` for compatibility. Other values fail. |
+| `HOME_GRAPH_URL` | for graph tools | `bolt://` or `neo4j://` URL, without credentials. Without it every tool reports `unavailable`. |
+| `HOME_GRAPH_PASSWORD` | with the URL | The test container's `NEO4J_PASSWORD`. |
+| `HOME_GRAPH_USER` | no | Default `neo4j`. |
+| `HOME_GRAPH_SCOPE` | no | Import scope; the default `cphs:simulation:couple-apartment` matches the test snapshot. |
+| `HOME_GRAPH_DATABASE` | no | The example selects `neo4j`; blank uses the account's default database. |
+| `HOME_DATA_SQLITE_FILE` | for readings | Absolute host path to the snapshot's `timeseries.sqlite`, mapped read-only into the AI container by the launcher. Neo4j holds only references. Without the file, entities and references are still found, but references show `readable: false` and `read_external_data` reports `unavailable`. |
+| `HOME_DATA_SQLITE_ENDPOINT` | no | Not a path: the graph endpoint whose references are served from that file. The default `local://simulation/timeseries.sqlite` matches the snapshot (`sqliteEndpoint` in its `SOURCE.json`). Sodalis ignores the file path stored in the graph. |
+
+Graph/data settings require `COMPANION_HARNESS=pi`; clear them when switching
+back to `off`. A configured readings file requires a graph URL and password.
+With `pi` and no graph settings, tools explicitly report `unavailable`.
+Workflow mode retains the read-only capability restrictions, cancellation,
+and budgets; it does not offer desktop actions or retrieve/store long-term
+memory. Turn mode keeps existing exact-action confirmations and memory consent.
+
+For frontend-only development against the stack, use
+`SODALIS_API_GATEWAY_URL=http://127.0.0.1:4176 pnpm dev`. Native AI development
+still accepts the same settings as shell variables; in that case use native
+reachable URLs and the actual SQLite path rather than its container mount path.
+
+The AI API checks graph connectivity at startup and logs `Home graph warm-up
+failed` if the container is unreachable or the password is wrong; it keeps
+running and the tools report `unavailable`. To run the direct graph checks
+against the same container:
+
+```sh
+HOME_GRAPH_TEST_URL=bolt://127.0.0.1:7687 \
+HOME_GRAPH_TEST_PASSWORD='<NEO4J_PASSWORD>' \
+HOME_DATA_TEST_SQLITE=/absolute/path/to/home_simulator/testdata/neo4j-test/timeseries.sqlite \
+pnpm --filter @sodalis/server exec vitest run src/assistant/harness/homeGraph.integration.test.ts
+```
 
 ### First-time Home Assistant simulator onboarding
 

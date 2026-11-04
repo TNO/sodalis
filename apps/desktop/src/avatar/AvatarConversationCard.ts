@@ -24,6 +24,7 @@ interface AvatarConversationCardAttrs {
   speechPlaying?: boolean;
   conversationState?: ConversationState;
   conversationError?: string;
+  assistantReady?: boolean;
   pendingConfirmation?: PendingActionConfirmation;
   onSpeechError?: (error: Error) => void;
   onSpeechOutputError?: (error: Error) => void;
@@ -209,6 +210,8 @@ export const AvatarConversationCard =
             ? `Microphone error: ${vnode.attrs.speechError}`
             : vnode.attrs.conversationError
               ? `Assistant error: ${vnode.attrs.conversationError}`
+            : vnode.attrs.assistantReady === false
+              ? "Connecting to the assistant."
             : vnode.attrs.speechOutputError
               ? `Speech output error: ${vnode.attrs.speechOutputError}`
             : vnode.attrs.conversationState === "awaiting-confirmation"
@@ -235,7 +238,7 @@ export const AvatarConversationCard =
                       : "Microphone is off. Hold to talk or type a message.";
 
         const startPushToTalk = () => {
-          if (pushToTalkActive || requestingPermission) return;
+          if (pushToTalkActive || requestingPermission || vnode.attrs.assistantReady === false) return;
           pushToTalkActive = true;
           runInputAction(
             speechInput ? () => speechInput.start() : undefined,
@@ -254,6 +257,7 @@ export const AvatarConversationCard =
         const sendMessage = (event: SubmitEvent) => {
           event.preventDefault();
           const message = draft.trim();
+          if (vnode.attrs.assistantReady === false) return;
           if (!message) return;
           draft = "";
           const send = vnode.attrs.onSend;
@@ -335,7 +339,7 @@ export const AvatarConversationCard =
               m(
                 "button.avatar-conversation-push-to-talk[type=button]",
                 {
-                  disabled: requestingPermission,
+                  disabled: requestingPermission || vnode.attrs.assistantReady === false,
                   "aria-pressed": String(pushToTalkActive),
                   onpointerdown: (event: PointerEvent) => {
                     event.preventDefault();
@@ -398,7 +402,7 @@ export const AvatarConversationCard =
                 m(
                   "button.avatar-conversation-listening[type=button]",
                   {
-                    disabled: requestingPermission,
+                    disabled: requestingPermission || vnode.attrs.assistantReady === false,
                     onclick: () => {
                       runInputAction(
                         speechInput
@@ -464,6 +468,7 @@ export const AvatarConversationCard =
                   }, "Or type a message"),
                   m("div.avatar-conversation-input-row", [
                     m("input#avatar-conversation-input[type=text]", {
+                      disabled: vnode.attrs.assistantReady === false,
                       value: draft,
                       placeholder: "Type a message",
                       autocomplete: "off",
@@ -472,7 +477,7 @@ export const AvatarConversationCard =
                       },
                     }),
                     m("button[type=submit]", {
-                      disabled: !draft.trim(),
+                      disabled: !draft.trim() || vnode.attrs.assistantReady === false,
                     }, "Send"),
                   ]),
                 ],

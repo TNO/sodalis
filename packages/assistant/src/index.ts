@@ -1,4 +1,5 @@
 import type { SpeechRequest } from "@sodalis/speech";
+export { readAssistantMode, type AssistantMode } from "./assistantMode.js";
 import type {
   AssistantActionResult,
   AssistantActionRuntime,
@@ -507,3 +508,15 @@ export {
   type ServerLlmProviderOptions,
   type LlmProviderLatency,
 } from "./ServerLlmProvider.js";
+export {
+  ServerWorkflowClient,
+  type CompanionSteerResult,
+  type CompanionWorkflowClient,
+  type CompanionWorkflowEvent,
+  type CompanionWorkflowStartRequest,
+  type ServerWorkflowClientOptions,
+} from "./ServerWorkflowClient.js";
+export {
+  WorkflowConversationOrchestrator,
+  type WorkflowConversationOptions,
+} from "./WorkflowConversation.js";
