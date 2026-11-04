@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 WORKDIR /app
 RUN npm install -g pnpm@12.16.1
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
