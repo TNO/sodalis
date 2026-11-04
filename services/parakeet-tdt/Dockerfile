@@ -1,4 +1,4 @@
-FROM python:3.12-bookworm
+FROM python:3.15-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl ffmpeg && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir sherpa-onnx==1.13.8 "numpy>=1.24,<3"
