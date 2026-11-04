@@ -3,6 +3,9 @@ import type { Vnode } from "mithril";
 import {
   ConversationOrchestrator,
   ServerLlmProvider,
+  ServerWorkflowClient,
+  WorkflowConversationOrchestrator,
+  readAssistantMode,
 } from "@sodalis/assistant";
 import type {
   AssistantAppContext,
@@ -136,7 +139,11 @@ export const DesktopAvatarOverlay =
     let presentation: AvatarPresentationController | undefined;
     let speechInput: SpeechInputController | undefined;
     let speechPlayback: SpeechPlaybackController | undefined;
-    let conversation: ConversationOrchestrator | undefined;
+    let conversation:
+      | ConversationOrchestrator
+      | WorkflowConversationOrchestrator
+      | undefined;
+    const configurationAbort = new AbortController();
     let speechInputListener:
       | ((controller: SpeechInputController | undefined) => void)
       | undefined;
@@ -347,6 +354,9 @@ export const DesktopAvatarOverlay =
                   if (event.text.trim()) {
                     void conversation?.submitUserMessage(event.text);
                   } else {
+                    if (conversation instanceof WorkflowConversationOrchestrator) {
+                      conversation.discardUtterance();
+                    }
                     conversation?.setListening(true);
                   }
                 }
@@ -494,8 +504,9 @@ export const DesktopAvatarOverlay =
           speechCaptionError = error.message;
           if (layer) m.redraw();
         },
+        // Barge-in stops talking; only explicit controls cancel a workflow.
         onCancelGeneration() {
-          conversation?.cancelTurn();
+          conversation?.setInterrupted();
         },
       });
 
@@ -802,15 +813,36 @@ export const DesktopAvatarOverlay =
       oncreate(vnode) {
         layer = vnode.dom as HTMLElement;
         onGeometryChange = vnode.attrs.onGeometryChange;
-        speechInput = createSpeechInput();
-        speechPlayback = createSpeechPlayback();
-        conversation = new ConversationOrchestrator({
-          provider: llmProvider,
-          audioOutput: speechPlayback,
-          actionRuntime: vnode.attrs.actionRuntime,
-          getAppContext: () => vnode.attrs.getAppContext?.(),
-          onUtterance: applyAssistantUtterance,
-          onChange: updateConversationView,
+        const audioOutput = createSpeechPlayback();
+        speechPlayback = audioOutput;
+        void readAssistantMode({
+          baseUrl: speechApiBaseUrl,
+          signal: configurationAbort.signal,
+        }).then((mode) => {
+          if (configurationAbort.signal.aborted) return;
+          conversation = mode === "workflow"
+            ? new WorkflowConversationOrchestrator({
+                client: new ServerWorkflowClient({ baseUrl: speechApiBaseUrl }),
+                audioOutput,
+                onChange: updateConversationView,
+              })
+            : new ConversationOrchestrator({
+                provider: llmProvider,
+                audioOutput,
+                actionRuntime: vnode.attrs.actionRuntime,
+                getAppContext: () => vnode.attrs.getAppContext?.(),
+                onUtterance: applyAssistantUtterance,
+                onChange: updateConversationView,
+              });
+          speechInput = createSpeechInput();
+          speechInputListener?.(speechInput);
+          m.redraw();
+        }).catch((error: unknown) => {
+          if (configurationAbort.signal.aborted) return;
+          console.error("Unable to configure the assistant:", error);
+          conversationError = `Unable to configure the assistant: ${errorMessage(error)} Reload to retry.`;
+          conversationState = "error";
+          m.redraw();
         });
         setSpeechInputListener(vnode.attrs.onSpeechInput);
         setFrame(vnode.attrs.frame);
@@ -842,6 +874,7 @@ export const DesktopAvatarOverlay =
       },
 
       onremove() {
+        configurationAbort.abort();
         if (conversationOpen || notificationOpen) {
           presentation?.setMode("ambient");
         }
@@ -978,6 +1011,7 @@ export const DesktopAvatarOverlay =
                   speechOutputError,
                   speechCaptionError,
                   conversationError,
+                  assistantReady: conversation !== undefined,
                   conversationState,
                   pendingConfirmation,
                   userTranscript,
@@ -1000,9 +1034,17 @@ export const DesktopAvatarOverlay =
                       conversation?.reportError(error);
                     }
                   },
-                  onSend: (text) =>
-                    conversation?.submitUserMessage(text) ?? Promise.resolve(),
-                  onConversationError: (error) => conversation?.reportError(error),
+                  onSend: async (text) => {
+                    if (!conversation) throw new Error(conversationError ?? "Assistant configuration is still loading.");
+                    await conversation.submitUserMessage(text);
+                  },
+                  onConversationError: (error) => {
+                    if (conversation) conversation.reportError(error);
+                    else {
+                      conversationError = error.message;
+                      m.redraw();
+                    }
+                  },
                   onClose: closeConversation,
                 })
               : null,

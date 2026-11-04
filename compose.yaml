@@ -58,6 +58,14 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "3002"
+      COMPANION_HARNESS: ${COMPANION_HARNESS:-off}
+      HOME_GRAPH_URL: ${HOME_GRAPH_URL:-}
+      HOME_GRAPH_USER: ${HOME_GRAPH_USER:-}
+      HOME_GRAPH_PASSWORD: ${HOME_GRAPH_PASSWORD:-}
+      HOME_GRAPH_DATABASE: ${HOME_GRAPH_DATABASE:-}
+      HOME_GRAPH_SCOPE: ${HOME_GRAPH_SCOPE:-}
+      HOME_DATA_SQLITE_FILE: ${HOME_DATA_SQLITE_FILE:-}
+      HOME_DATA_SQLITE_ENDPOINT: ${HOME_DATA_SQLITE_ENDPOINT:-}
       LLM_PROVIDER: ${LLM_PROVIDER:?Set LLM_PROVIDER in .env}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -93,6 +101,9 @@ services:
       MEMORY_CONSOLIDATION: ${MEMORY_CONSOLIDATION:-true}
     volumes:
       - memory_data:/data/memory
+    networks:
+      - default
+      - graph
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -181,3 +192,9 @@ services:
 volumes:
   homeassistant_data:
   memory_data:
+
+networks:
+  # The graph network: shared with the externally managed home_simulator Neo4j
+  # container, which joins it as an external network named after the prefix.
+  graph:
+    name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}

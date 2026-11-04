@@ -13,7 +13,7 @@ optional Three.js/TalkingHead avatar runtime and an accessible assistant panel.
 
 Use Docker Desktop with Docker Compose v2, or a running Podman machine with
 the standalone Docker Compose v2 `docker-compose` executable (not
-`podman-compose`). Install Node.js 24 and pnpm 12.4.1. Models are not
+`podman-compose`). Install Node.js 24 and pnpm 12.16.1. Models are not
 included in the repository: `models/` is git-ignored, so **every fresh
 checkout needs its own downloads**. From the repository root, download the
 default Piper voice before starting the stack. The default Parakeet TDT v3
@@ -250,5 +250,20 @@ The example connects AI to a host Ollama model. Opt-in, consent-based
 long-term memory (`packages/memory`, ADR 0005) runs in the AI service; real
 Home Assistant integration, its memory consent UI, and real Mail delivery
 remain future work.
-See `TASKS/README.md` and
-`docs/architecture/desktop-foundation.md` for boundaries and later work.
+An opt-in read-only Pi companion workflow can investigate the home knowledge
+graph. It does not yet integrate desktop actions or long-term memory, its
+investigations cannot yet be traced for debugging, and it has not yet returned
+actual sensor readings in manual checks. The standard `.env.example`
+enables it and prefills the simulator graph settings. Supply your Neo4j password
+in `.env` and configure optional readings, then use the normal Compose launcher;
+the AI container joins a shared `graph` network that the external Neo4j
+container is expected to join. The desktop
+discovers the mode at runtime. See the
+[companion architecture](docs/architecture/companion-harness.md) and
+[server setup](apps/server/README.md#companion-workflow-pi-harness).
+See [turn mode versus workflow mode](docs/architecture/companion-harness.md#turn-mode-versus-workflow-mode)
+for the capability differences, interruption behavior, and switching procedure.
+
+See the [task index](TASKS/README.md) and
+[desktop foundation](docs/architecture/desktop-foundation.md) for boundaries
+and later work.

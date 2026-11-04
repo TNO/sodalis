@@ -13,17 +13,67 @@ const base = {
 };
 
 describe("development stack selection", () => {
-  it("wires the example to host Ollama without activating a local LLM container", () => {
+  it("maps explicit companion data settings to the AI container without copying its source", () => {
+    const selected = resolveStack({
+      ...base, COMPANION_HARNESS: "pi",
+      HOME_GRAPH_URL: "bolt://host.docker.internal:7687",
+      HOME_GRAPH_PASSWORD: "test", HOME_GRAPH_SCOPE: "test-scope",
+      HOME_DATA_SQLITE_FILE: "/srv/simulator/timeseries.sqlite",
+      HOME_DATA_SQLITE_ENDPOINT: "local://simulation/timeseries.sqlite",
+    });
+    expect(selected.environment).toMatchObject({
+      COMPANION_HARNESS: "pi",
+      HOME_GRAPH_URL: "bolt://host.docker.internal:7687",
+      HOME_GRAPH_PASSWORD: "test",
+      HOME_GRAPH_SCOPE: "test-scope",
+      HOME_DATA_SQLITE_SOURCE: "/srv/simulator/timeseries.sqlite",
+      HOME_DATA_SQLITE_FILE: "/data/home/readings.sqlite",
+      HOME_DATA_SQLITE_ENDPOINT: "local://simulation/timeseries.sqlite",
+    });
+    expect(selected.profiles).toEqual(resolveStack(base).profiles);
+  });
+
+  it("leaves companion settings and the optional data mount off by default", () => {
+    expect(resolveStack(base).environment).toMatchObject({
+      COMPANION_HARNESS: "off", HOME_GRAPH_URL: "", HOME_GRAPH_PASSWORD: "",
+      HOME_DATA_SQLITE_FILE: "", HOME_DATA_SQLITE_SOURCE: "",
+    });
+    expect(resolveStack({ ...base, COMPANION_HARNESS: "pi" }).environment.HOME_DATA_SQLITE_SOURCE).toBe("");
+  });
+
+  it.each([
+    { COMPANION_HARNESS: "typo" },
+    { COMPANION_HARNESS: "off", HOME_GRAPH_PASSWORD: "unused" },
+    { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://graph:7687" },
+    { COMPANION_HARNESS: "pi", HOME_DATA_SQLITE_FILE: "/data/test.sqlite" },
+    { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "https://graph", HOME_GRAPH_PASSWORD: "test" },
+    { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://user:pass@graph:7687", HOME_GRAPH_PASSWORD: "test" },
+    { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://graph:7687/path", HOME_GRAPH_PASSWORD: "test" },
+    { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://graph:7687?secret=x", HOME_GRAPH_PASSWORD: "test" },
+    { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://graph:7687", HOME_GRAPH_PASSWORD: "test", HOME_DATA_SQLITE_FILE: "relative.sqlite" },
+    { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://graph:7687", HOME_GRAPH_PASSWORD: "test", HOME_DATA_SQLITE_ENDPOINT: "local://unused" },
+  ])("rejects inconsistent companion settings %j", (settings) => {
+    expect(() => resolveStack({ ...base, ...settings })).toThrow();
+  });
+
+  it("enables Pi in the example and requires an explicit graph password before launch", () => {
     const example = parseEnv(
       readFileSync(resolve(import.meta.dirname, "../.env.example"), "utf8"),
     );
-    const selected = resolveStack(example);
+    expect(example.HOME_GRAPH_PASSWORD).toBe("");
+    expect(() => resolveStack(example)).toThrow("Set HOME_GRAPH_PASSWORD");
+    const selected = resolveStack({ ...example, HOME_GRAPH_PASSWORD: "synthetic-test-password" });
     expect(selected.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
     expect(selected.models).toEqual(expect.arrayContaining([
       "models/piper/nl_NL-ronnie-medium.onnx",
       "models/piper/nl_NL-ronnie-medium.onnx.json",
     ]));
     expect(selected.environment).toMatchObject({
+      COMPANION_HARNESS: "pi",
+      HOME_GRAPH_URL: "bolt://neo4j:7687",
+      HOME_GRAPH_USER: "neo4j",
+      HOME_GRAPH_DATABASE: "neo4j",
+      HOME_GRAPH_SCOPE: "cphs:simulation:couple-apartment",
       STT_PROVIDER: "parakeet-tdt",
       PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
       LLM_PROVIDER: "openai-compatible",

@@ -96,6 +96,19 @@ consolidated analysis belongs in [`docs/evaluations/`](../docs/evaluations/READM
 - [ ] 0044 Letting the model propose confirmed actions *(needs 0037)*
 - [ ] 0038 Connecting to a real Home Assistant instance *(needs 0032, 0033, 0034)*
 
+## Companion investigation harness
+
+[ADR 0007](../docs/adr/0007-companion-harness.md) records the Pi integration
+decision. The [architecture](../docs/architecture/companion-harness.md) maps
+current behavior and tests; the
+[evaluation](../docs/evaluations/companion-harness.md) records graph-only
+findings and the first manual end-to-end check. The opt-in read-only
+implementation is present; developer tracing and sensor-reading journeys are
+the open [known gaps](0067-companion-harness.md#known-gaps).
+
+- [ ] [0067 Building and evaluating the companion harness](0067-companion-harness.md)
+  *(needs 0031; includes deferred directions, not scheduled requirements)*
+
 ## Long-term memory and future scale
 
 Memory is a separate local-first AI-service milestone. It distinguishes

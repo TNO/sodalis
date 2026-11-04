@@ -1,0 +1,59 @@
+import type { LlmProviderSettings } from "../providers.js";
+import { createCompanionModel } from "./companionModel.js";
+import { createCompanionSession } from "./companionSession.js";
+import { SqliteReadingsReader } from "./externalData.js";
+import { Neo4jHomeGraph } from "./homeGraph.js";
+import { createHomeTools } from "./tools.js";
+import { CompanionWorkflows } from "./workflow.js";
+import { validateCompanionSettings, validateReadingsFile, type CompanionDataSettings } from "./settings.js";
+
+export interface CompanionHarnessSettings extends LlmProviderSettings, CompanionDataSettings {}
+
+const DEFAULT_SCOPE = "cphs:simulation:couple-apartment";
+const DEFAULT_SQLITE_ENDPOINT = "local://simulation/timeseries.sqlite";
+
+/**
+ * The companion workflows from environment settings, or undefined when the
+ * harness is switched off. The graph driver lives for the process lifetime.
+ */
+export async function createCompanionHarnessFromEnv(
+  settings: CompanionHarnessSettings,
+): Promise<CompanionWorkflows | undefined> {
+  if (validateCompanionSettings(settings) === "off") return undefined;
+  const file = settings.HOME_DATA_SQLITE_FILE?.trim();
+  if (file) validateReadingsFile(file);
+  const model = await createCompanionModel(settings);
+  const reader = file
+    ? new SqliteReadingsReader({
+        file,
+        endpoint: settings.HOME_DATA_SQLITE_ENDPOINT?.trim() || DEFAULT_SQLITE_ENDPOINT,
+      })
+    : undefined;
+  let graph: Neo4jHomeGraph | undefined;
+  if (settings.HOME_GRAPH_URL?.trim()) {
+    graph = new Neo4jHomeGraph({
+      url: settings.HOME_GRAPH_URL.trim(),
+      user: settings.HOME_GRAPH_USER?.trim() || "neo4j",
+      password: settings.HOME_GRAPH_PASSWORD!,
+      scope: settings.HOME_GRAPH_SCOPE?.trim() || DEFAULT_SCOPE,
+      ...(settings.HOME_GRAPH_DATABASE?.trim() ? { database: settings.HOME_GRAPH_DATABASE.trim() } : {}),
+      isReadable: (adapter, endpoint) => reader?.isReadable(adapter, endpoint) ?? false,
+    });
+    // An unreachable graph is reported by the tools as `unavailable`; startup continues.
+    graph.warmUp().catch((error: unknown) => console.error("Home graph warm-up failed:", error));
+  } else {
+    console.warn("COMPANION_HARNESS=pi without HOME_GRAPH_URL: home tools report unavailable.");
+  }
+  return new CompanionWorkflows({
+    createSession: ({ history, budget }) =>
+      createCompanionSession({
+        model,
+        history,
+        tools: createHomeTools({
+          ...(graph ? { graph } : {}),
+          ...(reader ? { reader } : {}),
+          budget,
+        }),
+      }),
+  });
+}

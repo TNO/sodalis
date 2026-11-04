@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix } from "./stack-config.js";
+import { validateReadingsFile } from "../apps/server/src/assistant/harness/settings.js";
 
 const root = resolve(import.meta.dirname, "..");
 const envPath = resolve(root, ".env");
@@ -23,6 +24,8 @@ const settings = {
 };
 const selection = resolveStack(settings);
 if (operation === "up") {
+  const readings = selection.environment.HOME_DATA_SQLITE_SOURCE;
+  if (readings) validateReadingsFile(readings);
   for (const model of selection.models) {
     if (!existsSync(resolve(root, model))) {
       throw new Error(`Missing ${model}; see docs/development-stack.md for model setup.`);
@@ -58,6 +61,9 @@ const baseArgs = [
   ...compose.prefix,
   "--env-file", envPath,
   "-f", resolve(root, "compose.yaml"),
+  ...(selection.environment.HOME_DATA_SQLITE_SOURCE
+    ? ["-f", resolve(root, "compose.companion-data.yaml")]
+    : []),
   ...(settings.SODALIS_LOCAL_IMAGES === "true"
     ? ["-f", resolve(root, "compose.local-images.yaml")]
     : []),

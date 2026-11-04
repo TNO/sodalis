@@ -1,4 +1,6 @@
+import { isAbsolute } from "node:path";
 import { azureLlmSettings } from "../apps/server/src/assistant/providers.js";
+import { validateCompanionSettings } from "../apps/server/src/assistant/harness/settings.js";
 
 export interface StackSelection {
   readonly profiles: readonly string[];
@@ -41,6 +43,19 @@ export function resolveStack(settings: Settings): StackSelection {
     HOME_ASSISTANT_IMAGE: settings.HOME_ASSISTANT_IMAGE ||
       "ghcr.io/home-assistant/home-assistant:2026.9.4",
   };
+  environment.COMPANION_HARNESS = validateCompanionSettings(settings);
+  for (const key of [
+    "HOME_GRAPH_URL", "HOME_GRAPH_USER", "HOME_GRAPH_PASSWORD", "HOME_GRAPH_DATABASE",
+    "HOME_GRAPH_SCOPE", "HOME_DATA_SQLITE_ENDPOINT",
+  ] as const) {
+    environment[key] = key === "HOME_GRAPH_PASSWORD" ? settings[key] || "" : settings[key]?.trim() || "";
+  }
+  const readings = settings.HOME_DATA_SQLITE_FILE?.trim();
+  if (readings && !isAbsolute(readings)) {
+    throw new Error("HOME_DATA_SQLITE_FILE must be an absolute file path on the Compose host.");
+  }
+  environment.HOME_DATA_SQLITE_SOURCE = readings || "";
+  environment.HOME_DATA_SQLITE_FILE = readings ? "/data/home/readings.sqlite" : "";
   if (settings.HOME_ADMIN_UI && !["0", "1"].includes(settings.HOME_ADMIN_UI)) {
     throw new Error("HOME_ADMIN_UI must be 0 or 1.");
   }

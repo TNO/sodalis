@@ -1,0 +1,9 @@
+services:
+  ai:
+    volumes:
+      - type: bind
+        source: ${HOME_DATA_SQLITE_SOURCE:?Set HOME_DATA_SQLITE_FILE through the stack launcher}
+        target: /data/home/readings.sqlite
+        read_only: true
+        bind:
+          create_host_path: false

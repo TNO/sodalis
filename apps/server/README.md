@@ -153,6 +153,18 @@ them.
 
 ## Conversation assistant
 
+Sodalis has two execution paths: **turn mode** (`COMPANION_HARNESS=off`, also
+used when unset) retains desktop actions and optional consent-based memory;
+**workflow mode** (`COMPANION_HARNESS=pi`) uses an embedded Pi investigation
+loop with read-only home tools, but no desktop actions or long-term memory.
+Both use the same selected model provider and desktop speech facilities.
+The standard `.env.example` enables workflow mode and prefills the simulator
+graph settings; supplying `HOME_GRAPH_PASSWORD` is required before launch.
+The [mode comparison and switching guide](../../docs/architecture/companion-harness.md#turn-mode-versus-workflow-mode)
+documents context, answer delivery, steering, barge-in, cancellation, and
+current limitations side by side. The turn-mode behavior follows here;
+[workflow routes and setup](#companion-workflow-pi-harness) follow below.
+
 The AI service requires `LLM_PROVIDER=mock` for deterministic local development,
 `LLM_PROVIDER=openai-compatible` for an OpenAI Chat Completions-compatible
 streaming provider, or `LLM_PROVIDER=azure` for Azure OpenAI. For
@@ -206,6 +218,93 @@ pending action and arguments, and conversational confirmation requires the
 action-specific phrase shown in the companion card. The initial Mail actions
 operate on deterministic in-memory fixtures only; mock sending never delivers
 real email.
+
+## Companion workflow (Pi harness)
+
+An opt-in, read-only second path embeds the [Pi](https://pi.dev/) agent SDK
+(`@earendil-works/pi-coding-agent`, pinned to 1.5.0) as a companion that
+investigates the home knowledge graph through successive tool calls; see the
+[companion architecture](../../docs/architecture/companion-harness.md) and
+[ADR 0007](../../docs/adr/0007-companion-harness.md). The turn path above is
+unchanged. Set `COMPANION_HARNESS=pi` to register these routes on the AI
+service:
+
+| Route | Body | Response |
+| --- | --- | --- |
+| `POST /api/assistant/workflows` | `sessionId`, `workflowId`, `inputId`, `messages` (as for turns) | SSE: `started`, then exactly one of `answer {inputId, text}`, `failed {code, residentMessage}` or `cancelled` |
+| `POST /api/assistant/workflows/:id/steer` | `inputId`, `text` | `202 {status: accepted\|duplicate}` or `409 {status: not_running\|conflict}` |
+| `POST /api/assistant/workflows/:id/cancel` | `{}` | `200 {status: cancelled}` or `409 {status: not_running}` |
+
+One workflow runs per conversation (`409` otherwise). New resident input while
+it runs is Pi steering, delivered after the current model turn and its tool
+calls; an answer is published only after Pi settles and covers the latest
+accepted input. Closing the stream aborts the work. The desktop uses this path
+according to `GET /api/assistant/config`, which returns only
+`{mode: "workflow"}` or `{mode: "turn"}` with caching disabled. The same desktop
+image supports both without a build flag. Discovery failure is displayed and disables assistant input rather than
+silently switching modes. Reload the desktop after changing the server mode.
+Workflow mode offers no app actions or long-term-memory integration; turn mode
+retains both its exact-action confirmations and optional-memory behavior.
+
+The model uses the existing `LLM_PROVIDER` settings; `mock` answers with a
+fixed sentence without calling a model service. The explicit prompt, three
+read-only tools, resource restrictions, provider mapping, and host limits are
+described in the [architecture](../../docs/architecture/companion-harness.md).
+Tools run inside the AI service process, not an operating-system sandbox.
+
+The graph tools run fixed, parameterized read queries against the Neo4j
+import from the separate `home_simulator` project (`--neo4j-readable`), within
+`HOME_GRAPH_SCOPE`. They never return health, profile or interest records,
+or service connection details. `read_external_data` resolves a discovered
+reference on the server and reads only the simulator's SQLite `readings`
+series at `HOME_DATA_SQLITE_FILE`, for references whose endpoint is
+`HOME_DATA_SQLITE_ENDPOINT`; other adapters (time-series HTTP, Microsoft Graph
+calendar, weather, agenda) report `unavailable`. Results distinguish
+`current`, `stale` and `last_change` observations. Without `HOME_GRAPH_URL`
+the tools report `unavailable`.
+
+```sh
+COMPANION_HARNESS=pi LLM_PROVIDER=mock \
+HOME_GRAPH_URL=bolt://127.0.0.1:7687 HOME_GRAPH_PASSWORD=... \
+HOME_DATA_SQLITE_FILE=/absolute/path/to/home_simulator/testdata/neo4j-test/timeseries.sqlite \
+pnpm dev:ai
+```
+
+The command above is an optional native development setup. For the normal
+Compose stack, set these variables in the root `.env` and run `pnpm stack:up`.
+The launcher interprets `HOME_DATA_SQLITE_FILE` as an absolute host path and
+mounts it read-only at `/data/home/readings.sqlite` in the existing AI container,
+using the optional `compose.companion-data.yaml` overlay. A missing, unreadable,
+or non-file source fails preflight before restarting the stack; Docker may not
+create a missing bind source. No simulator data is copied into an image.
+Use a Neo4j address reachable from the container, not `127.0.0.1`; Neo4j remains
+externally managed. In Compose, the AI container joins a second
+[graph network](../../docs/development-stack.md#shared-graph-network) that the
+Neo4j container is expected to join as `neo4j`. For local testing, run the Neo4j test container
+from your `home_simulator` checkout (see its `docs/neo4j-test-container.md`).
+It loads a fixed snapshot of the simulator import on `127.0.0.1:7687`, and its
+`testdata/neo4j-test/` holds the matching SQLite file. No simulator data is
+copied into this repository. The step-by-step setup and every variable are in
+[Companion workflow against the test graph](../../docs/development-stack.md#companion-workflow-against-the-test-graph).
+
+This path neither retrieves nor records long-term memory; connecting Pi sessions
+to it is [deferred](../../TASKS/0067-companion-harness.md#deferred-directions-not-scheduled-requirements).
+Automated tests use Pi's
+scripted faux model and never call a paid model. The direct graph checks in
+`homeGraph.integration.test.ts` run only when `HOME_GRAPH_TEST_URL` and
+`HOME_GRAPH_TEST_PASSWORD` point at a simulator import, such as the test
+container (and optionally `HOME_DATA_TEST_SQLITE` at its snapshot SQLite file).
+They do not run in CI yet.
+`COMPANION_HARNESS` accepts only `off` (when unset) or `pi` (the standard example); invalid values
+fail startup. Graph/data settings require `pi`, and readings require a graph
+URL and password. With `pi` but no graph settings, ordinary conversation works
+and graph tools explicitly report `unavailable`.
+Recorded graph-only findings and the first manual end-to-end check are in the
+[evaluation](../../docs/evaluations/companion-harness.md); remaining manual
+acceptance and the known gaps (no developer-visible trace of retrieved context,
+tool calls, or model requests; no sensor readings obtained yet) are tracked in
+[task 0067](../../TASKS/0067-companion-harness.md#known-gaps). Today the only
+diagnostics are AI-container log lines for failures (`docker logs <prefix>-ai`).
 
 ## Long-term memory
 
