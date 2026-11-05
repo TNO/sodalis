@@ -111,8 +111,8 @@ remain open.
 - [ ] [0068 Inspect a conversation through a persistent developer text audit](0068-persistent-developer-audit.md)
 - [ ] [0069 Diagnose and repair harness data retrieval](0069-diagnose-harness-data-retrieval.md) *(needs 0068)*
 - [ ] [0070 Complete a sensor journey end to end](0070-complete-sensor-journey.md) *(needs 0069)*
-- [ ] [0071 Decide authorized read-only email access](0071-decide-read-only-email-access.md)
-- [ ] [0072 Complete a read-only email journey](0072-complete-read-only-email-journey.md) *(needs 0071; refine after decision)*
+- [x] [0071 Decide authorized read-only email access](0071-decide-read-only-email-access.md)
+- [ ] [0072 Complete a read-only email journey](0072-complete-read-only-email-journey.md) *(needs 0071; refined, ready for implementation)*
 - [x] [0073 Decide authorized read-only calendar access](0073-decide-read-only-calendar-access.md)
 - [ ] [0074 Complete a read-only calendar journey](0074-complete-read-only-calendar-journey.md) *(needs 0073; contract refined for Microsoft Graph and Google Calendar)*
 - [ ] [0075 Decide harness memory, recall, and context ownership](0075-decide-harness-memory-and-context.md)
