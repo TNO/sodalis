@@ -24,7 +24,7 @@
     "@sodalis/assistant": "workspace:*",
     "@sodalis/memory": "workspace:*",
     "@sodalis/speech": "workspace:*",
-    "hono": "^4.11.7",
+    "hono": "^4.13.16",
     "microsoft-cognitiveservices-speech-sdk": "1.52.0",
     "neo4j-driver": "6.3.0",
     "to-words": "^7.4.0",
