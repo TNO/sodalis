@@ -175,6 +175,16 @@ describe("ReadOnlyEmailReader", () => {
     await expect(request(reader)).resolves.toMatchObject({ status: "unauthorized", messages: [] });
   });
 
+  it("maps an oversized streamed provider response to unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(1_048_577))));
+    try {
+      await expect(request(createGraphEmailReader({ resolveConnection })))
+        .resolves.toMatchObject({ status: "unavailable", coverage: "incomplete", messages: [] });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("retains complete coverage while explicitly disclosing bounded body truncation", async () => {
       let requestedBody = "";
       const reader = createGraphEmailReader({

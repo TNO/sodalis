@@ -2,6 +2,7 @@ import { createHash, createPublicKey, randomBytes, timingSafeEqual, verify } fro
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { EmailConnection, EmailHttpResponse, EmailProvider } from "./emailReader.js";
+import { readBoundedResponseBody } from "./boundedResponseBody.js";
 
 const execFileAsync = promisify(execFile);
 const SESSION_COOKIE = "sodalis_email_session";
@@ -119,36 +120,10 @@ async function defaultTransport(url: string, init?: RequestInit): Promise<EmailO
     ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)])
     : AbortSignal.timeout(15_000);
   const response = await fetch(url, { ...init, signal, redirect: "error" });
-  if (!response.body) {
-    return { status: response.status, headers: Object.fromEntries(response.headers), body: "" };
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > MAX_OAUTH_RESPONSE_BYTES) {
-        await reader.cancel();
-        throw new Error("response_too_large");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
   return {
     status: response.status,
     headers: Object.fromEntries(response.headers),
-    body: new TextDecoder().decode(bytes),
+    body: await readBoundedResponseBody(response, MAX_OAUTH_RESPONSE_BYTES),
   };
 }
 

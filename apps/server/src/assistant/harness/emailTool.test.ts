@@ -44,6 +44,13 @@ describe("bounded email harness tool", () => {
     expect(JSON.stringify(result)).not.toMatch(/accessToken|test-token|refresh_token|client_secret/);
   });
 
+  it("classifies ordinary inbox and mail wording as out-of-scope email requests", () => {
+    expect(isEmailRelatedQuestion("Read my mail")).toBe(true);
+    expect(isEmailRelatedQuestion("What are my latest emails?")).toBe(true);
+    expect(isEmailRelatedQuestion("Please mail the package to my home")).toBe(false);
+    expect(isEmailRelatedQuestion("Is the mailbox beside the front door?")).toBe(true);
+  });
+
   it("uses only a limitation tool for wider email questions, without exposing home readers", async () => {
     const tools = createHomeTools({
       emailScopeLimited: true,

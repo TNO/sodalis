@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { readBoundedResponseBody } from "./boundedResponseBody.js";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 const WINDOW_MS = 7 * DAY_MS;
@@ -162,36 +163,10 @@ function withTimeout(signal: AbortSignal): AbortSignal {
 
 async function defaultTransport(url: string, init?: RequestInit): Promise<EmailHttpResponse> {
   const response = await fetch(url, { ...init, redirect: "error" });
-  if (!response.body) {
-    return { status: response.status, headers: Object.fromEntries(response.headers), body: "" };
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > MAX_RESPONSE_BYTES) {
-        await reader.cancel();
-        throw new ProviderReadError("unavailable");
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
   return {
     status: response.status,
     headers: Object.fromEntries(response.headers),
-    body: new TextDecoder().decode(bytes),
+    body: await readBoundedResponseBody(response, MAX_RESPONSE_BYTES),
   };
 }
 
@@ -399,7 +374,7 @@ async function mapBounded<T, U>(
   return results;
 }
 
-async function read(
+async function readProviderInbox(
   request: EmailReaderRequest,
   provider: EmailProvider,
   resolveConnection: ResolveEmailConnection,
@@ -542,7 +517,7 @@ export function createGraphEmailReader(options: EmailReaderAdapterOptions): Read
 
   return {
     readRecentInbox(request) {
-      return read(
+      return readProviderInbox(
         request,
         "graph",
         options.resolveConnection,
@@ -661,7 +636,7 @@ export function createGmailEmailReader(options: EmailReaderAdapterOptions): Read
 
   return {
     readRecentInbox(request) {
-      return read(
+      return readProviderInbox(
         request,
         "gmail",
         options.resolveConnection,

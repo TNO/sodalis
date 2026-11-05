@@ -130,6 +130,33 @@ function graphHarness(selector: string, tenant = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaa
 }
 
 describe("delegated email connection coordinator", () => {
+  it("maps an oversized streamed OAuth response to provider_unavailable", async () => {
+    const coordinator = new EmailConnectionCoordinator({
+      settings: {
+        provider: "gmail",
+        residentId: "resident-1",
+        clientId: "email-client",
+        clientSecretRef: "email-client-secret",
+        redirectUri: "https://desktop.example.test/api/email/callback",
+      },
+      credentials: { get: async () => "synthetic-client-secret" },
+      now: () => NOW,
+    });
+    const session = coordinator.ensureSession();
+    const authorizationUrl = new URL(await coordinator.begin(session.id, session.csrfToken));
+
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array(1_048_577))));
+    try {
+      await expect(coordinator.complete(
+        session.id,
+        authorizationUrl.searchParams.get("state")!,
+        "auth-code",
+      )).rejects.toThrow("provider_unavailable");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("uses a secure host session, CSRF, PKCE and exact email-only scopes", async () => {
     const { coordinator, calls, begin } = harness();
     const { session, url, state } = await begin();
