@@ -1283,7 +1283,8 @@ build) still runs the full CI. Runs on `main` and tags always run every job.
 Other pull requests also skip work their paths cannot affect:
 
 - The macOS Node job runs only when a PR touches `apps/desktop/**`,
-  `packages/desktop-host/**`, or the shared toolchain (`ci.yml`,
+  `packages/desktop-host/**`, or the shared toolchain (`ci.yml`, the FFmpeg
+  setup action,
   `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`,
   `tsconfig.base.json`, `vitest.config.ts`).
 - The `api` and `gateway` image builds run only when a PR touches `apps/**`,
@@ -1297,6 +1298,18 @@ Other pull requests also skip work their paths cannot affect:
 | Compose config | `pnpm stack:config` for `.env.example`, with and without `SODALIS_LOCAL_IMAGES=true` | the same command |
 | Image build | Builds `api` and `gateway` when app, package, Dockerfile or toolchain files change, and `parakeet-tdt` when its service files change | `docker build -f services/<image>/Dockerfile .` |
 | Quality | actionlint; npm dependency audit blocks high/critical vulnerabilities | `pnpm audit:dependencies`; `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12` |
+
+Both Linux test jobs share a cached static FFmpeg from the
+[`ffmpeg-static` b6.1.1 release](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1).
+The [setup action](../.github/actions/setup-ffmpeg/action.yml) verifies a pinned
+SHA-256 checksum for the compressed download and checks the executable's
+checksum on every run, including cache hits. Its cache key includes the
+platform and action contents; changing
+the release requires updating the URL and both checksums together. No apt
+repository refresh or package installation runs. Downloads have bounded
+timeouts and retries, and each setup step has a three-minute limit. A failed
+download or checksum check fails CI rather than silently skipping audio tests.
+This test-only binary does not change the LGPL FFmpeg build in the API image.
 
 Strict TypeScript checks, behaviour tests, actionlint, and the npm audit form
 the free-tool quality baseline. Dependabot proposes weekly action, npm, and
