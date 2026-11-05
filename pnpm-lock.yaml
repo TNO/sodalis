@@ -282,8 +282,8 @@ importers:
   packages/avatar:
     dependencies:
       '@met4citizen/talkinghead':
-        specifier: 1.7.0
-        version: 1.7.0
+        specifier: 1.8.2
+        version: 1.8.2
       three:
         specifier: 0.180.0
         version: 0.180.0
@@ -869,8 +869,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@met4citizen/talkinghead@1.7.0':
-    resolution: {integrity: sha512-iBQhTjvwOO2lLht/YeWqAUmsH0jk4FGpxiPTPMMp3QYVjst/u2rDhn4up59BMJwfdeW3DyU7Im6y+TWmnNllZA==}
+  '@met4citizen/talkinghead@1.8.2':
+    resolution: {integrity: sha512-+1EVKIQovJav2uBW7TE6ul50jI2Yh0F40AFWMLIX3sVY3AphpUZ1ebWhZO4I7M/GKdc95gE2eb0qbLtcYWQvZw==}
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
@@ -1720,6 +1720,9 @@ packages:
   three@0.180.0:
     resolution: {integrity: sha512-o+qycAMZrh+TsE01GqWUxUIKR1AL0S8pq7zDkYOQw8GqfX8b8VoCKYUoHbhiX5j+7hr8XsuHDVU6+gkQJQKg9w==}
 
+  three@0.186.1:
+    resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
+
   tinybench@6.2.3:
     resolution: {integrity: sha512-Al01C2JIBnO2CXCAPbpAl6sUiOZHeThGtHYNTa51JRw9PyWOCdr+9Ong05R4qg/Sk3+H645E8ov1h2c58ityNw==}
     engines: {node: '>=20.0.0'}
@@ -2511,9 +2514,9 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@met4citizen/talkinghead@1.7.0':
+  '@met4citizen/talkinghead@1.8.2':
     dependencies:
-      three: 0.180.0
+      three: 0.186.1
 
   '@oxc-project/types@0.156.0': {}
 
@@ -3324,6 +3327,8 @@ snapshots:
       safe-buffer: 5.2.1
 
   three@0.180.0: {}
+
+  three@0.186.1: {}
 
   tinybench@6.2.3: {}
 
