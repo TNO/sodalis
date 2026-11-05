@@ -2,7 +2,8 @@
 
 Status: first implementation present; manually verified end to end for
 household/resident questions; sensor readings and full acceptance pending.
-Developer audit and one-path convergence are planned, not implemented.
+Developer audit, read-only calendar adapters, and one-path convergence are
+planned, not implemented.
 Updated: 2026-11-05.
 
 The opt-in Pi workflow investigates household questions through successive
@@ -200,6 +201,168 @@ answers are cached across workflows. Repeated unproductive calls stop the
 investigation. Stable metadata and changing source contents need separate
 freshness policies before any future caching. A future agenda request must
 fetch current contents, not reuse a previous answer.
+
+### Approved read-only calendar contract (planned)
+
+[Task 0073](../../TASKS/0073-decide-read-only-calendar-access.md) selects one
+provider-neutral calendar interface with **both Microsoft Graph and Google
+Calendar adapters in the initial implementation**. Neither adapter nor account
+authorization is implemented today; [task 0074](../../TASKS/0074-complete-read-only-calendar-journey.md)
+implements and verifies this contract. This specializes ADR 0007's existing
+host-controlled read capability, without changing its architectural decision.
+
+The seam is a server-owned `readCalendar` operation behind the harness's
+explicit read tools, not arbitrary HTTP access or an imported desktop calendar.
+Both adapters satisfy the same interface and acceptance cases. Provider OAuth,
+pagination, recurrence expansion, and timezone conversion stay inside the
+calendar module. No generic connector registry or new identity framework is
+required.
+
+#### Question, interval, and source
+
+The first journey is: **"What appointments are in my selected calendar
+tomorrow?"** It reads exactly one explicitly selected, authorized source:
+the signed-in account's default Microsoft calendar or Google `primary`
+calendar. A host-owned opaque source reference binds resident, provider,
+account subject, and calendar; the model cannot supply account IDs, calendar
+IDs, endpoints, scopes, or credentials. Graph references can help discover that
+source but never establish account ownership or consent. No configured source
+means unavailable; multiple eligible sources require clarification, not a
+silent default or a combined answer.
+
+- Resolve "tomorrow" against a captured request clock in the resident's
+  explicitly configured IANA timezone. If that zone or source is missing or
+  ambiguous, ask before fetching. Never infer the zone from server locale,
+  provider defaults, or an email address.
+- Use a half-open local-day interval `[midnight, next midnight)`, converted to
+  UTC instants using timezone rules. A day can be 23 or 25 hours. Explicit
+  periods must have valid ordered endpoints and span at most 48 elapsed hours;
+  reject wider periods rather than silently narrowing them.
+- Include timed events overlapping the interval (`start < queryEnd` and
+  `end > queryStart`), including ongoing appointments. Expand recurring
+  occurrences and exceptions, omit cancelled events, deduplicate occurrence
+  IDs, and order by start then stable occurrence ID. Preserve an untitled
+  appointment as such rather than inventing a title.
+- Preserve all-day events as start/end **dates with exclusive end date** in
+  their calendar timezone; do not fabricate midnight appointment times.
+  Include them when that date span overlaps the requested interval after
+  calendar-zone interpretation. Timed events retain UTC instants and render
+  in the requested IANA zone with the applicable offset.
+- An answer states the requested day/period, timezone, and selected provider
+  and safe calendar label, with the time checked. "No appointments" is
+  justified only by a complete, fresh, authorized empty result for that source
+  and interval; it is not a claim about all of the resident's calendars.
+
+#### Shared interface and normalized outcomes
+
+The planned request carries `sourceRef`, UTC `start`/`end`, IANA `timeZone`,
+and the captured clock; trusted caller authorization and cancellation are
+host-supplied, never model-provided. Validate resident/source binding and the
+interval before any network request, including reused within-workflow reads.
+
+Every outcome identifies the safe source reference/provider/calendar label,
+requested interval and zone, and `checkedAt` (attempt time, not evidence that
+the provider answered). Successful evidence additionally records `fetchedAt`.
+Events expose only an opaque occurrence reference, optional title, and timed
+start/end or all-day date span/calendar zone. Do not return event bodies,
+attendees, attachments, meeting links, tokens, raw responses, or connection
+details. Treat titles as untrusted data, never tool instructions. Both adapters
+normalize into these outcomes; do not equate transport success with usable
+evidence:
+
+| Outcome | Meaning and resident behavior |
+| --- | --- |
+| `ok` | Complete fresh result with one or more normalized appointments; source evidence accompanies each occurrence. |
+| `empty` | Complete fresh result with zero appointments in the exact requested interval. |
+| `unauthorized` | Missing/expired/revoked grant, wrong resident/account binding, insufficient permission, or provider 401/403 after at most one permitted refresh. Ask to connect/reconnect; return no events and never try another account. |
+| `unavailable` | Source not configured, timeout, network/provider failure, rate limit, malformed data, incomplete pagination, or exceeded result budget. Explain that appointments could not be checked; return no partial list as a complete answer. |
+| `stale` | Evidence is explicitly known to be out of date; label it with its original fetch time and do not claim current appointments or current emptiness. No persistent calendar cache is introduced in 0074, so a failed fresh fetch is normally unavailable, not stale. An old event modification timestamp alone does not mean stale evidence. |
+| `invalid_request` / `ambiguous` | Invalid/over-wide interval or unresolved source/timezone; reject or ask for clarification without contacting a provider. |
+
+These are calendar outcomes, not claims that the current external-data schema
+already supports them. Task 0074 must preserve their meaning through tool
+evidence and resident delivery, including a distinct empty versus failed read.
+Bound each read to 100 expanded occurrences and five provider pages, within
+the existing workflow tool timeout/cancellation budget. Fetch all pages before
+claiming completeness; exceeding either cap is unavailable with an incomplete
+reason, not empty or a silently truncated list. Do not follow provider-supplied
+pagination URLs outside the configured provider origin and selected account/
+calendar. Do not retry indefinitely; rate limiting remains an explicit failure.
+Cancellation stops fetching and prevents a late result becoming an answer.
+No cross-workflow result reuse or offline fallback is approved.
+
+#### Delegated authorization and provider setup
+
+Account access requires an explicit resident-initiated connection and provider
+consent. A host-owned grant binds the authenticated resident to the provider's
+verified stable account subject, exact selected calendar, granted scopes, and
+expiry. Local source selection is not a substitute for provider consent, and
+provider consent is not permission for another resident. Disconnect immediately
+disables reads and removes locally held tokens; attempt provider revocation
+where supported, without making local removal depend on network success.
+
+Use authorization-code OAuth with PKCE S256, unpredictable single-use `state`,
+and OIDC `nonce`/validated issuer, audience, signature, and subject when binding
+the account. Register exact redirect URIs, HTTPS except registered loopback HTTP
+for local development. Reject redirect/state/account mismatches and replay.
+The host handles exchange and refresh; the assistant and Aster never receive
+codes, tokens, client credentials, or authorization headers.
+
+| Provider | Required setup and least read-only grant for this journey |
+| --- | --- |
+| Microsoft Graph | Register a Microsoft identity application for the intended tenant/account types and a server redirect URI; configure client ID, allowed tenant/issuer and client credential where the registration requires it. Request **delegated `Calendars.ReadBasic`**, not application permissions, `Calendars.ReadWrite`, or shared-calendar access. Add `openid` for verified account binding and `offline_access` only for refreshable consent. Use the signed-in user's default calendar through `GET /v1.0/me/calendarView`, explicit UTC `startDateTime`/`endDateTime`, and a minimal field selection (ID, subject, start, end, original timezone fields, all-day/cancelled flags). Request UTC for timed values rather than trusting its default zone; preserve original timezone information to recover all-day dates, mapping supported Windows zones to IANA. An unresolvable custom zone is unavailable, not a guessed date. Tenant policies may require administrator approval; report this as setup/authorization work, not permission to broaden scopes. |
+| Google Calendar | Create a Google Cloud project, enable Calendar API, configure the OAuth consent screen (test users while in testing), and register a web OAuth client with exact server redirect URI. Request **`https://www.googleapis.com/auth/calendar.events.readonly`** plus `openid` for verified subject binding. Use `access_type=offline` only when refresh is needed; do not force consent on every read. Read only `GET /calendar/v3/calendars/primary/events` with `timeMin`/`timeMax`, `singleEvents=true`, `showDeleted=false`, and minimal response fields including pagination and calendar timezone. The grant can cover more calendars than this journey; host policy still restricts it to `primary`. No broad `calendar` write scope, service account, or domain-wide delegation. Public distribution may require OAuth verification; testing grants may expire and must not silently become empty results. |
+
+Provider documentation for implementation:
+[Graph calendarView](https://learn.microsoft.com/en-us/graph/api/calendar-list-calendarview?view=graph-rest-1.0),
+[Microsoft delegated scopes](https://learn.microsoft.com/en-us/graph/permissions-reference#calendarsreadbasic),
+[Google events.list](https://developers.google.com/workspace/calendar/api/v3/reference/events/list),
+and [Google server-side OAuth](https://developers.google.com/identity/protocols/oauth2/web-server).
+Task 0074 must check the actual registered-client requirements and consented
+scopes; these links and endpoint metadata do not authorize any live request.
+
+Keep client secrets and refresh/access tokens in host-only secure credential
+storage (OS credential store or encrypted server store with its key separately
+managed), never plaintext credential files in the repository. Ignored local
+configuration may reference secret storage and contain non-secret client IDs,
+issuer, redirect, timezone, and source aliases; commit only placeholders.
+Document the concrete store and provisioning steps before enabling either
+adapter; if secure storage is unavailable, fail closed. Never place secrets in
+browser storage, URLs beyond the required OAuth callback, prompts, tool evidence,
+developer audit, errors, fixtures, GitHub Actions, or distributed artifacts.
+Redact callback query strings and token-exchange responses from request logs.
+Refresh only for the bound account and approved scopes; if refresh fails,
+require reconnection, with no silent permission expansion. No automatic
+long-term-memory ingestion of calendar evidence is authorized.
+
+#### Deterministic verification and exclusions
+
+Use a shared synthetic fixture calendar and fixed clock, exercised through the
+public calendar interface for both adapters and through the harness's evidence/
+answer path. Provider-shaped synthetic HTTP responses sit at the injected
+transport seam; use no real accounts, secrets, copied personal events, network,
+or real-model assertions. The same expected normalized events must result from
+Graph and Google payloads. Include timed/all-day/recurring/exception/cancelled
+events, empty days, overlap boundaries, timezone offsets and DST, pagination,
+and failures; [0074](../../TASKS/0074-complete-read-only-calendar-journey.md)
+specifies acceptance fixtures. Only future implementation adds behavior tests;
+0073 changes documentation alone.
+
+Live verification is separate, opt-in, never CI, and self-skips without explicit
+enablement or credentials. Use only a consenting user's dedicated synthetic
+test calendar/account. Obtain explicit consent **for each run and each adapter**
+before OAuth or calendar requests; account consent does not authorize an agent's
+future live checks. Inspect `.env` and any `--env` overlay's selected providers
+first; no incidental LLM, speech, or other cloud calls are authorized. Record
+only sanitized setup, adapter, interval/zone, result class, and verification
+limits, never tokens or personal appointments. This decision performs no live
+verification.
+
+Creating, editing, deleting, inviting, responding to events, subscription/watch
+registration, background polling, shared/delegated calendars, calendar discovery,
+and merging calendars are excluded. Do not combine appointments with email,
+Home sensors, memory, or other sources to infer plans, availability, conflicts,
+or recommendations. No writes, cross-source synthesis, or provider fallback.
 
 ## Investigation and answer delivery
 

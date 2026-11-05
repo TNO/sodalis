@@ -113,8 +113,8 @@ remain open.
 - [ ] [0070 Complete a sensor journey end to end](0070-complete-sensor-journey.md) *(needs 0069)*
 - [ ] [0071 Decide authorized read-only email access](0071-decide-read-only-email-access.md)
 - [ ] [0072 Complete a read-only email journey](0072-complete-read-only-email-journey.md) *(needs 0071; refine after decision)*
-- [ ] [0073 Decide authorized read-only calendar access](0073-decide-read-only-calendar-access.md)
-- [ ] [0074 Complete a read-only calendar journey](0074-complete-read-only-calendar-journey.md) *(needs 0073; refine after decision)*
+- [x] [0073 Decide authorized read-only calendar access](0073-decide-read-only-calendar-access.md)
+- [ ] [0074 Complete a read-only calendar journey](0074-complete-read-only-calendar-journey.md) *(needs 0073; contract refined for Microsoft Graph and Google Calendar)*
 - [ ] [0075 Decide harness memory, recall, and context ownership](0075-decide-harness-memory-and-context.md)
 - [ ] [0076 Preserve consent-governed memory and recall in the harness](0076-preserve-memory-in-harness.md) *(needs 0075; refine after decision)*
 - [ ] [0077 Preserve confirmed desktop actions through the harness](0077-preserve-confirmed-actions-in-harness.md)
