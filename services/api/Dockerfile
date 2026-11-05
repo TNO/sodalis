@@ -25,7 +25,7 @@ RUN ./configure --disable-everything --disable-autodetect --disable-doc \
       --enable-filter=aresample,aformat,anull,abuffer,abuffersink \
     && make -j"$(nproc)" ffmpeg && strip ffmpeg
 
-FROM node:24-bookworm-slim
+FROM node:25-bookworm-slim
 COPY --from=ffmpeg /src/ffmpeg /usr/local/bin/ffmpeg
 WORKDIR /app
 RUN npm install -g pnpm@12.16.1
