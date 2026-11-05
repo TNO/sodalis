@@ -1,6 +1,6 @@
 # 0070 Complete a sensor journey end to end
 
-Status: in progress (manual database retrieval verified; full journey evidence pending)
+Status: complete (provenance-backed local snapshot journey; not live/model-quality acceptance)
 Priority: high
 Subsystem: assistant
 Depends on: 0069
@@ -61,15 +61,23 @@ its workflow/session, and joins the terminal outcome by workflow ID. Cases
 that clarify or report conflict assert that no external read was selected,
 dispatched or performed. Audit capture and production policies are unchanged.
 
-This is **synthetic contract evidence, not an actual-source passing journey**.
-The database reuses the existing scripted workflow's synthetic reference and
-observation. It does not establish a household mapping or reading. At the time
-of automated verification, no paired, provenance-backed simulator
-graph/reference and readings snapshot was supplied in the fresh checkout;
-the existing direct integration test requires external
-Neo4j settings and a matching SQLite file. Recorded import findings alone do
-not supply that file or its exact supported series metadata. Inventing these
-to mark acceptance complete would be misleading.
+The original six cases remain **synthetic contract evidence**, not evidence
+of a household mapping. The subsequent local follow-up inspected the accessible
+`home_simulator` project read-only and added two opt-in workflow cases against
+its actual paired graph export and SQLite snapshot. No simulator file was
+modified or copied into Sodalis. SHA-256 pins bind the local test to the
+inspected pair; ownership, installed location, service, capability/unit and
+reading owner must agree before it runs.
+
+The generated temperature series belongs to the bathroom-installed sensor.
+It is not the separately configured, unsupported bedroom database reference.
+Both local runs obtain an actual numeric observation using the production
+SQLite reader, assert it against an independent read-only source oracle,
+and settle an answer containing source, observation time and clock-relative
+freshness. The snapshot ends at `2026-10-19T23:59:00+02:00`: it is recent only
+at the historical fixed check (`2026-10-19T22:01:00Z`, age 2 minutes), and
+stale at `2026-11-05T12:00:00Z` (age 23,881 minutes). Both runs assert
+per-tool selection/dispatch/result and workflow-terminal audit correlation.
 
 Consolidated results and limitations are in the
 [evaluation](../docs/evaluations/companion-harness.md#0070-deterministic-sensor-journey).
@@ -78,27 +86,41 @@ value retrieval using the `home_simulator` SQLite database. See the
 [manual follow-up](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05)
 for the reported result and limits. This supersedes the database-access
 blocker, but does not establish all journey acceptance criteria.
-No additional live external or cloud check was run by the implementation
-agent. Neither this ticket nor dependent acceptance is marked complete.
+No live external or cloud check ran. Scripted orchestration is not real-model
+quality evidence, and this result does not complete dependent tickets.
 
-### Remaining acceptance evidence
+### Acceptance evidence and remaining limits
 
-1. Record sanitized provenance for the manually tested pair: the scoped graph entity,
-   location/ownership and supported reference metadata, plus its matching
-   SQLite readings snapshot. Establish the exact reference resource from that
-   evidence, not a reference name or guessed room mapping. Do not copy private
-   data into this public repository.
-2. Record whether the manual journey established discovery, reference resolution,
-   a grounded answer with source, timestamp and freshness, and correlated audit
-   outcomes. These details were not supplied with the successful retrieval
-   report. If historical, report stale evidence honestly; if conflicting, retain
-   an honest limitation rather than relabeling the source.
-3. Keep any later real-source/model check separate. Obtain explicit consent
-   for that run and check provider selection in `.env` and any overlay before
-   running it. Record only sanitized conclusions here and in the evaluation.
+1. Local source provenance, supported resource, grounded answer and correlated
+   audit are now demonstrated by the opt-in snapshot workflow. The
+   [evaluation](../docs/evaluations/companion-harness.md#local-simulator-snapshot-follow-up-2026-11-05)
+   records provenance and its limits; the
+   [local reproduction procedure](../docs/development-stack.md#offline-sensor-snapshot-journey)
+   needs files only, not a running service or credentials.
+2. The user's manual retrieval report still supplies no timestamp, freshness,
+   terminal-answer or audit details. The local automated result does not
+   retroactively establish those facts or explain the initial failure.
+3. Live Neo4j/HTTP/cloud and real-model checks were not required or performed.
+   Any later such run needs separate consent (and cloud-provider selection
+   checks). They are not a blocker to this ticket's deterministic local scope.
 
 ## Agent Notes
 
+- 2026-11-05 follow-up: Created fresh `ticket/0070-complete-sensor-journey`
+  worktree at the exact requested integration base
+  `b8c9afb12c8bd31ffc14fa3b4127d7c2e6bb1946`. Loaded TDD; the first targeted
+  test failed on the absent snapshot loader, then passed with the read-only
+  projection and real source. Targeted workflow/tools/routes: 48 passed,
+  including both local snapshot runs and the existing six contract cases.
+- Full `pnpm test`: 550 passed, 11 skipped (including the two opt-in snapshot
+  cases in CI mode); `pnpm typecheck` and `pnpm build` passed. Live graph/STT
+  settings were explicitly removed; no `.env` or overlay was loaded.
+  The first full run exposed missing `three` dependencies in the new worktree;
+  restored all workspace dependencies with the frozen lockfile and reran.
+  Build retains the existing chunk-size advisory. No Python changed.
+- Merged the integration tip before completion (already up to date at
+  `b8c9afb12c8bd31ffc14fa3b4127d7c2e6bb1946`). Also verified CI ignores an
+  explicitly configured nonexistent snapshot directory: 21 passed, 2 skipped.
 - 2026-11-05: Confirmed integration base
   `49708c60f253e2fc1308e96494f09b3b099136d6`; created the fresh
   `implementation/0070-complete-sensor-journey` branch/worktree.

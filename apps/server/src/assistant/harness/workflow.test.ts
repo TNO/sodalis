@@ -22,6 +22,7 @@ import type { HomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
 import { CompanionWorkflows, type WorkflowEvent, type WorkflowLimits } from "./workflow.js";
 import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
+import { loadSimulatorSnapshot } from "./simulatorSnapshot.test-support.js";
 
 const ROOM = "home/bedroom";
 const SENSOR = "home/temp-sensor";
@@ -195,6 +196,62 @@ beforeAll(() => {
   }
 });
 afterAll(() => rmSync(journeyDirectory, { recursive: true, force: true }));
+
+// Explicit local opt-in only: CI must never open household snapshots.
+const snapshotDirectory = process.env.CI ? undefined : process.env.SODALIS_SENSOR_SNAPSHOT_DIR;
+describe.skipIf(!snapshotDirectory)("local simulator snapshot through the public workflow", () => {
+  it.each([
+    ["recent-at-fixed-check", "2026-10-19T22:01:00Z", "current", 2],
+    ["historical-at-fixed-check", "2026-11-05T12:00:00Z", "stale", 23881],
+  ] as const)("grounds %s evidence and correlates the entire run", async (label, checkedAt, freshness, ageMinutes) => {
+    const snapshot = await loadSimulatorSnapshot(snapshotDirectory!);
+    const now = () => Date.parse(checkedAt);
+    const source = new SqliteReadingsReader({
+      endpoint: snapshot.reference.endpoint!, file: snapshot.file, now,
+    });
+    const read = vi.spyOn(source, "read");
+    const answer = `${snapshot.reference.name} reports ${snapshot.observation.value} ${snapshot.unit}, observed at ${snapshot.observation.observedAt}, for the sensor installed in ${snapshot.room.name}. At ${checkedAt} this snapshot observation is ${ageMinutes} minutes old (${freshness}). This is a local simulator snapshot, not a live/current room reading.`;
+    const h = await harness({
+      graph: snapshot.graph, reader: source, now,
+      responses: [
+        fauxAssistantMessage(fauxToolCall("find_entities", { query: snapshot.room.name, kind: "room" })),
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            status: "ok", candidates: [{ id: snapshot.room.id }],
+          });
+          return fauxAssistantMessage(fauxToolCall("inspect_neighborhood", { entityIds: [snapshot.room.id] }));
+        },
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            relationships: [{ from: snapshot.sensor.id, type: "INSTALLED_IN", to: snapshot.room.id }],
+            externalData: [{ id: snapshot.reference.id, ownerIds: [snapshot.sensor.id], readable: true }],
+          });
+          return fauxAssistantMessage(fauxToolCall("read_external_data", { referenceId: snapshot.reference.id }));
+        },
+        (context) => {
+          const text = toolResultTexts(context).at(-1)!;
+          expect(text).not.toMatch(/local:|sqlite|endpoint|adapter/);
+          expect(JSON.parse(text)).toMatchObject({
+            status: "ok", referenceId: snapshot.reference.id, name: snapshot.reference.name,
+            unit: snapshot.unit, latest: snapshot.observation, freshness, ageMinutes,
+            checkedAt: new Date(checkedAt).toISOString(),
+          });
+          return fauxAssistantMessage(fauxText(answer));
+        },
+      ],
+    });
+    const workflowId = `simulator-${label}`;
+    expect(await started(h.start({ workflowId, question: `What does the temperature sensor installed in ${snapshot.room.name} report?` })))
+      .toMatchObject({ type: "answer", workflowId, text: answer });
+    expect(read).toHaveBeenCalledOnce();
+    assertJourneyAudit(h.auditEvents, workflowId, [
+      ["find_entities", "ok"], ["inspect_neighborhood", "ok"], ["read_external_data", "ok"],
+    ]);
+    expect(auditedRead(h.auditEvents)).toMatchObject({
+      latest: snapshot.observation, freshness, ageMinutes, checkedAt: new Date(checkedAt).toISOString(),
+    });
+  });
+});
 
 describe("synthetic sensor journey through the public workflow", () => {
   it("discovers a reference, reads SQLite, and delivers source, timestamp and freshness with a correlated audit", async () => {

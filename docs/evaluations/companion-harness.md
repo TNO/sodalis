@@ -1,8 +1,8 @@
 # Companion harness: graph retrieval findings
 
 Status: local graph measurements, a first manual end-to-end check, and a
-bounded audit diagnosis recorded; synthetic sensor contracts verified,
-manual database retrieval verified and full journey/latency evidence pending.
+bounded audit diagnosis recorded; synthetic contracts and provenance-backed
+offline sensor journey verified. Live-model sensor quality and latency unmeasured.
 Date: 2026-11-05.
 
 ## Summary and recommendation
@@ -20,6 +20,9 @@ reading, and its cause remains unconfirmed. On 2026-11-05 the user reported
 successful manual connection to the `home_simulator` SQLite database and value
 retrieval. This subsequent result confirms database access in the tested setup,
 but does not by itself establish the full sensor-journey criteria.
+The subsequent offline snapshot workflow now demonstrates task 0070's complete
+local journey with actual simulator readings and correlated audit outcomes;
+it makes no additional claim about that manual run or real-model quality.
 
 Retain this retrieval shape until representative manual journeys establish a
 reason to change it. No comparison yet establishes that combining reads,
@@ -29,7 +32,9 @@ batching, adding indexes, or caching produces better resident-facing results.
 
 Neo4j graph discovery and the simulator's supported SQLite readings, without
 model calls, plus the initial manual end-to-end check with a real model and
-a subsequent user-reported database retrieval check. Architecture is in
+a subsequent user-reported database retrieval check, plus network-disabled
+scripted workflow tests against an inspected local graph/SQLite snapshot.
+Architecture is in
 [companion-harness.md](../architecture/companion-harness.md); acceptance work is
 tracked in [task 0067](../../TASKS/0067-companion-harness.md).
 
@@ -55,6 +60,7 @@ test prerequisites are in the
 | Manual end-to-end: household and residents | Answered about the home; named Jo and Robin as its residents | Graph discovery works through the full stack (desktop, gateway, AI container, graph network, Neo4j) with a real model |
 | Initial manual end-to-end: sensor readings | No actual sensor data obtained | The available audit shows no external-data read in the observed workflow; see [Analysis](#analysis) for trace limits |
 | Manual database follow-up (2026-11-05) | User reported successful connection and value retrieval from the `home_simulator` SQLite database | Database access verified in the manual setup; full journey details not reported |
+| Offline source-backed workflow (2026-11-05) | Two opt-in runs read the actual paired simulator SQLite snapshot, settle grounded answers and correlate all tool/terminal audit events | Local journey verified; historical/current-relative and stale checks are separate from live/model-quality evidence |
 | End-to-end latency | Not measured | No conclusion about response-time goals |
 
 The inspected import also exposed important evidence limitations:
@@ -159,14 +165,11 @@ household contents or tool payloads are reproduced here. Capture is unchanged.
 **Recommendation:** retain the existing retrieval and safety boundaries.
 No production defect was demonstrated. Scripted answers prove orchestration
 and evidence delivery only, not a real model's investigative decisions.
-The passing synthetic case is **not actual-source acceptance**. The fresh
-automated-test checkout supplied no paired, provenance-backed scoped
-graph/reference and matching readings snapshot. Existing integration tests require those external
-inputs; historical import findings do not establish the exact source resource
-or supply its data. Inventing that pair would hide the acceptance blocker.
-Task [0070](../../TASKS/0070-complete-sensor-journey.md#remaining-acceptance-evidence)
-tracks the remaining provenance and full-journey evidence separately from
-the subsequent manual database retrieval.
+The passing synthetic case is **not actual-source acceptance**. The earlier
+fresh-checkout investigation did not locate the external pair. That was a
+limit of that investigation, not evidence that the accessible local simulator
+project lacked it. The follow-up below supersedes this blocker without
+inventing a mapping or requiring a live service.
 
 No live external or cloud check ran during automated implementation.
 
@@ -180,10 +183,84 @@ of the initial failed sensor check or prove a retrieval repair was needed.
 The report did not include the question, selected entity/reference, returned
 values, observation timestamps, freshness labels, audit correlation, model,
 or timings. Those details are not inferred. Full grounded-answer acceptance
-and repeatability against a provenance-backed source pair remain unverified.
+for that particular manual run remains unverified; the separate local snapshot
+test below supplies repeatable automated evidence, not a reconstruction.
 No database contents or audit payloads are copied into this evaluation.
 No additional live or cloud check was run by the implementation agent; any
 future such run still requires separate explicit consent.
+
+### Local simulator snapshot follow-up (2026-11-05)
+
+**Method/provenance:** inspected the accessible `home_simulator` checkout,
+its deterministic generator and existing test-data pair read-only. Source HEAD
+was `3f881eb0409ad19882cb76f8b7e004e15ae8ee4f`; the working tree was not clean
+and included the untracked snapshot builder `applications/neo4j_testdata.py`.
+Consequently HEAD alone is not claimed to reproduce the snapshot.
+`SOURCE.json` records scope `cphs:simulation:couple-apartment`, revision
+`3f881eb`, build time `2026-11-04T13:06:16+00:00`, 122 nodes and 249 edges.
+The builder relativizes graph paths, copies the matching SQLite file and
+records provenance; it was inspected, **not executed**. Its SHA-256 was
+`24f8b9a1cbb17fb0befc59fd401b94af091ba62ed2a2e5728081e489958af87e`.
+The opt-in test pins this inspected pair:
+
+| Local file (not published) | SHA-256 |
+| --- | --- |
+| `neo4j.json` | `63a07d69b0317c53949e612c4347914e80d5782f82c1179d3f6aa2f37875a5bb` |
+| `timeseries.sqlite` | `37510dca058814891b0898c27d9022e04f61bc0f67f3a9425e8014816b6aa0d3` |
+
+`applications/simulator/main.py` generates each reference from its exact
+series and sensor owner, calls `external_records` to emit ownership/service
+metadata, and stores sensor reports in `readings`. `models/ontology/graph.py`
+emits installed location from the deployment binding. The test follows the
+exported `DATA_FOR_ENTITY`/`HAS_EXTERNAL_DATA`, `INSTALLED_IN`,
+`ACCESSIBLE_THROUGH` and `MEASURES` edges and cross-checks the SQLite owner.
+It does not infer a room from a reference name.
+
+**Supported source:** read-only SQLite inspection found four readings series:
+`couple-apartment/door/DoorOpen`, `couple-apartment/presence/Presence`,
+`couple-apartment/temp-hum/Humidity` and
+`couple-apartment/temp-hum/Temperature`. The selected generated reference is
+`external/simulation/couple-apartment/temp-hum/Temperature`, resource
+`couple-apartment/temp-hum/Temperature`, service adapter `sqlite`, endpoint
+`local://simulation/timeseries.sqlite`, table `readings`, periodic reporting,
+and degree-Celsius measurement capability. Its owner is the temperature/humidity
+sensor installed in the bathroom. The separately configured
+`apartment.bedroom.temperature` resource is not a supported readings series;
+it must not be substituted or used to claim a bedroom observation.
+
+**Results:** two runs at the public `CompanionWorkflows` seam use a minimal
+test-only projection of those actual export edges, the production
+`SqliteReadingsReader`, real Pi sessions and a scripted provider with
+`allowModelNetwork: false`. An independent read-only SQL oracle establishes
+the expected actual numeric observation; assertions check the tool evidence
+before returning a grounded terminal answer. The temperature series has 1,472
+observations and ends at `2026-10-19T23:59:00+02:00`.
+
+| Fixed check clock | Asserted result |
+| --- | --- |
+| `2026-10-19T22:01:00Z` | Actual snapshot observation is 2 minutes old, `current` only relative to this historical check; terminal answer labels it a snapshot, not a live room reading |
+| `2026-11-05T12:00:00Z` | Same observation is 23,881 minutes old, `stale`; terminal answer retains source, observation time, check time and limitation |
+
+Each run verifies source/unit/value/time/freshness, final answer, exactly one
+source read, and selection/dispatch/result correlation by tool-call ID within
+its workflow/session, with the terminal outcome joined by workflow ID.
+The existing six deterministic cases separately cover wrong entity,
+unavailable, empty, stale and conflicting evidence. Targeted
+workflow/tools/routes tests: **48 passed**, including both snapshot runs.
+Full repository gates: **550 passed, 11 skipped** with local/live opt-ins
+disabled; typecheck/build passed. No Python changed.
+
+**Conclusion/limits:** task 0070's local source-backed sensor journey is
+complete. This is actual local snapshot retrieval and scripted orchestration,
+not live Neo4j authorization verification, a running HTTP service, real-model
+investigative quality, or latency acceptance. The snapshot projection is a
+test fixture, not a new production graph adapter. No production authorization,
+reader, graph mapping, resident behavior or audit capture changed. No simulator
+file was modified, no private export/database was copied, and no household
+messages or raw audit payloads are published. No network service/cloud call ran.
+Reproduction is [documented in the development guide](../development-stack.md#offline-sensor-snapshot-journey).
+Manual-run details remain unknown; later live/model checks require separate
+consent and are not added as requirements of this ticket.
 
 ## Limitations
 
@@ -198,8 +275,9 @@ future such run still requires separate explicit consent.
   content. Source availability and result freshness were not exercised in that
   historical workflow.
 - Stale fixtures and unsupported references constrain answerability.
-- Synthetic workflow/SQLite fixtures do not supply a provenance-backed
-  household source or satisfy actual-source sensor acceptance.
+- Synthetic contract fixtures alone do not establish actual-source acceptance;
+  the separate opt-in pair does establish local snapshot acceptance, not live
+  graph/model behavior. Private files are intentionally absent from public CI.
 
 ## Open items
 

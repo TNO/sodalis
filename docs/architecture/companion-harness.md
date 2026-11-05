@@ -1,8 +1,8 @@
 # Companion harness
 
 Status: first implementation present; manually verified end to end for
-household/resident questions; synthetic sensor contracts verified,
-manual database retrieval verified and full sensor-journey evidence pending.
+household/resident questions; synthetic sensor contracts and provenance-backed
+offline sensor journey verified. Live-model sensor quality remains unmeasured.
 The development-only developer audit is implemented; read-only email/calendar
 adapters and one-path convergence are still planned.
 Updated: 2026-11-05.
@@ -612,16 +612,33 @@ freshness are checked within that same correlated run. This uses an in-memory
 audit sink; existing file/redaction tests cover persistence. No audit fields,
 content capture, resident SSE or memory behavior changed.
 
-These are synthetic contract fixtures, not a captured source snapshot or proof
-that a real model chooses correct tools or answers. No production retrieval
+Those six cases are synthetic contract fixtures, not a captured source snapshot
+or proof that a real model chooses correct tools or answers. No production retrieval
 defect was established, so scope, authorization, allowlists, validation and
 household/resident behavior remain unchanged. On 2026-11-05 the user reported
 successful manual connection to the `home_simulator` SQLite database and value
 retrieval. This confirms access in that manual setup, not all journey criteria:
 source/reference provenance, answer timestamp/freshness and per-run audit
-correlation were not reported. Additional live checks still require consent. The
+correlation were not reported.
+
+The subsequent local-only opt-in in `workflow.test.ts` consumes the actual
+simulator graph/SQLite pair without copying it. A test-only, hash-pinned
+projection checks source scope/revision, reciprocal reference ownership,
+installed location, SQLite service metadata and measurement capability, then
+cross-checks the reading owner using read-only SQLite. The production reader
+opens only the explicitly selected local file, never a graph-supplied path.
+The generated temperature series belongs to the bathroom-installed sensor;
+the unrelated configured bedroom database reference is not relabeled.
+Two fixed-clock runs assert actual observation evidence and grounded terminal
+answers (historically recent versus stale), plus the same per-run audit
+correlation. These cases skip by default and always skip in CI. The model
+remains scripted and network-disabled: this establishes local source-backed
+orchestration, not live Neo4j authorization or real-model quality.
+See the [offline procedure](../development-stack.md#offline-sensor-snapshot-journey).
+
+Additional live checks still require consent. The
 [evaluation](../evaluations/companion-harness.md#0070-deterministic-sensor-journey)
-and [0070 follow-up](../../TASKS/0070-complete-sensor-journey.md#remaining-acceptance-evidence)
+and [0070 evidence](../../TASKS/0070-complete-sensor-journey.md#acceptance-evidence-and-remaining-limits)
 record the limits without reproducing household content or audit payloads.
 
 ## Planned acceptance roadmap
@@ -629,9 +646,9 @@ record the limits without reproducing household content or audit payloads.
 The audit task is implemented
 ([0068](../../TASKS/0068-persistent-developer-audit.md)), and the evidence-based
 diagnosis is complete (0069; no repair was justified by the available trace).
-Next is actual-source acceptance of the sensor journey
-([0070](../../TASKS/0070-complete-sensor-journey.md); synthetic contract cases
-verified, manual database retrieval reported, full journey evidence pending). The known cause of the
+The local source-backed sensor journey is complete
+([0070](../../TASKS/0070-complete-sensor-journey.md)); this does not imply
+real-model sensor or dependent-ticket acceptance. The known cause of the
 historical missing reading remains unconfirmed because the sanitized audit
 cannot uniquely match its workflows to that manual question.
 
@@ -975,6 +992,7 @@ skips without its local Neo4j settings.
 | Private audit files readable by the host after a root container exits (local Docker image required; skipped in CI) | [audit-permissions.test.ts](../../scripts/audit-permissions.test.ts) |
 | Bounded tool reads, explicit unavailable results, SQLite observations | [tools.test.ts](../../apps/server/src/assistant/harness/tools.test.ts) |
 | Synthetic sensor discovery-to-SQLite-to-answer journey, honest adverse outcomes and per-run audit correlation (not actual-source/model acceptance) | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
+| Opt-in actual simulator snapshot journey, source provenance, fixed-clock grounded answer and per-run audit correlation (not live/model-quality acceptance) | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts), [snapshot projection](../../apps/server/src/assistant/harness/simulatorSnapshot.test-support.ts) |
 | Actual imported schema and supported source reads, without models; local only, against the `home_simulator` Neo4j test container | [homeGraph.integration.test.ts](../../apps/server/src/assistant/harness/homeGraph.integration.test.ts) |
 | Speech-stop/steer distinction, in-transit answers, newer input | [WorkflowConversation.test.ts](../../packages/assistant/src/WorkflowConversation.test.ts) |
 | HTTP/SSE transport | [ServerWorkflowClient.test.ts](../../packages/assistant/src/ServerWorkflowClient.test.ts) |
