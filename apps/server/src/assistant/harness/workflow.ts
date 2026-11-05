@@ -2,6 +2,7 @@ import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-
 import type { ConversationMessage } from "@sodalis/assistant";
 import type { ToolBudget } from "./tools.js";
 import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
+import type { EmailConnectionCoordinator } from "./emailAuthorization.js";
 
 /**
  * One foreground companion workflow per resident conversation: start, steer
@@ -48,6 +49,10 @@ const RESIDENT_MESSAGES: Record<WorkflowFailureCode, string> = {
 export interface WorkflowStartInput {
   readonly sessionId: string;
   readonly workflowId: string;
+  /** Opaque HTTP-only account session, never supplied in the request body. */
+  readonly hostSessionId?: string;
+  /** Avoids content-capturing audit and error detail for account-related workflows. */
+  readonly sensitive?: boolean;
   /** Identifies the resident input that is the last message. */
   readonly inputId: string;
   /** Bounded resident conversation, oldest first; the last message is the question. */
@@ -65,12 +70,15 @@ export interface CompanionWorkflowsOptions {
   /** Creates the session for one workflow, with tools bound to `budget`. */
   readonly createSession: (input: {
     readonly history: readonly ConversationMessage[];
+    readonly question: string;
+    readonly hostSessionId?: string;
     readonly budget: ToolBudget;
   }) => Promise<AgentSession>;
   readonly limits?: Partial<WorkflowLimits>;
   readonly maxConcurrentWorkflows?: number;
   /** Local developer diagnostics; omitted by default and never sent to residents. */
   readonly audit?: CompanionAuditSink;
+  readonly emailConnections?: EmailConnectionCoordinator;
 }
 
 export interface WorkflowStartOptions {
@@ -170,10 +178,13 @@ class WorkflowRun {
     try {
       session = await createSession({
         history: this.input.messages.slice(0, -1),
+        question: this.input.messages.at(-1)!.content,
+        ...(this.input.hostSessionId ? { hostSessionId: this.input.hostSessionId } : {}),
         budget: { onUnproductive: () => this.stopAtLimit("limit") },
       });
     } catch (error) {
-      console.error(`Companion workflow "${this.workflowId}" could not start:`, error);
+      if (this.input.sensitive) console.error(`Companion workflow "${this.workflowId}" could not start.`);
+      else console.error(`Companion workflow "${this.workflowId}" could not start:`, error);
       this.finishFailed("internal");
       return;
     }
@@ -359,7 +370,8 @@ class WorkflowRun {
       });
     } else {
       if (this.modelError) {
-        console.error(`Companion workflow "${this.workflowId}": the model request failed: ${this.modelErrorMessage}`);
+        if (this.input.sensitive) console.error(`Companion workflow "${this.workflowId}": the model request failed.`);
+        else console.error(`Companion workflow "${this.workflowId}": the model request failed: ${this.modelErrorMessage}`);
         this.finishFailed("model_error");
       } else {
         console.error(`Companion workflow "${this.workflowId}": the model returned no answer text.`);
@@ -371,7 +383,8 @@ class WorkflowRun {
   private submit(text: string): void {
     this.session!.prompt(text, { expandPromptTemplates: false }).catch((error: unknown) => {
       if (this.state !== "running") return;
-      console.error(`Companion workflow "${this.workflowId}" failed:`, error);
+      if (this.input.sensitive) console.error(`Companion workflow "${this.workflowId}" failed.`);
+      else console.error(`Companion workflow "${this.workflowId}" failed:`, error);
       this.finishFailed(this.limitCode ?? "model_error");
     });
   }
@@ -416,7 +429,10 @@ class WorkflowRun {
     if (session) {
       void session
         .abort()
-        .catch((error: unknown) => console.error(`Aborting workflow "${this.workflowId}" failed:`, error))
+        .catch((error: unknown) => {
+          if (this.input.sensitive) console.error(`Aborting workflow "${this.workflowId}" failed.`);
+          else console.error(`Aborting workflow "${this.workflowId}" failed:`, error);
+        })
         .finally(() => session.dispose());
     }
     this.onFinished();
@@ -459,10 +475,12 @@ export class CompanionWorkflows {
   private readonly runs = new Map<string, WorkflowRun>();
   private readonly limits: WorkflowLimits;
   private readonly maxConcurrentWorkflows: number;
+  readonly emailConnections: EmailConnectionCoordinator | undefined;
 
   constructor(private readonly options: CompanionWorkflowsOptions) {
     this.limits = { ...WORKFLOW_LIMITS, ...options.limits };
     this.maxConcurrentWorkflows = options.maxConcurrentWorkflows ?? 4;
+    this.emailConnections = options.emailConnections;
   }
 
   start(input: WorkflowStartInput, options: WorkflowStartOptions): WorkflowStartResult {
@@ -474,7 +492,7 @@ export class CompanionWorkflows {
     const run = new WorkflowRun(input, this.limits, options.onEvent, () => {
       if (this.runs.get(input.workflowId) === run) this.runs.delete(input.workflowId);
       options.signal?.removeEventListener("abort", onAbort);
-    }, this.options.audit);
+    }, input.sensitive ? undefined : this.options.audit);
     const onAbort = () => run.disconnect();
     this.runs.set(input.workflowId, run);
     options.signal?.addEventListener("abort", onAbort, { once: true });

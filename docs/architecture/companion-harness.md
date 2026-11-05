@@ -688,11 +688,14 @@ ADRs; consolidated evaluation findings belong in
 
 ## Delegated account authorization
 
-**Planned; not implemented.** The read-only email (0072) and calendar (0074)
-journeys share one host-owned OAuth connection protocol. The trade-offs are
-recorded in [ADR 0008](../adr/0008-delegated-personal-account-access.md).
-Whichever journey lands first implements the coordinator, host session and
-secure credential store; the other reuses them.
+**Email protocol implemented by 0072; calendar remains unimplemented.** The
+read-only email (0072) and calendar (0074) journeys share one host-owned OAuth
+connection protocol. The trade-offs are recorded in
+[ADR 0008](../adr/0008-delegated-personal-account-access.md). Email provides
+the first implementation: a host session, CSRF-bound connect/disconnect,
+authorization-code PKCE, single-use state, nonce and callback binding,
+signed ID-token validation, and session/resident/subject-bound in-memory email
+grants. Calendar has no route, grant, scope or token implementation in 0072.
 
 The coordinator handles connect, callback, account verification,
 resident/session binding and disconnect. It does not own a universal token
@@ -718,9 +721,9 @@ another resident.
   `9188040d-6c67-4c5b-b112-36a304b66dad`; `organizations` accepts any other
   tenant; `common` accepts any tenant. Never accept an issuer template literally.
 - **Session binding.** Connections start from an explicit same-origin host UI
-  action, never a model tool. Today's server has no host session: introduce an
-  HttpOnly, SameSite=Lax host-session cookie (Secure outside loopback) and
-  CSRF-protect connect/disconnect. Bind each grant to that session, the
+  action, never a model tool. The email host uses an HttpOnly, SameSite=Lax
+  session cookie (Secure outside loopback) and CSRF-protects connect/disconnect.
+  Bind each grant to that session, the
   configured resident and the verified subject; another session or resident
   cannot use it, even with a copied reference.
 - **Disconnect.** Immediately disable reads for that capability, cancel its
@@ -749,9 +752,10 @@ were consulted 2026-11-05.
 
 ## Read-only email access decision (0071)
 
-**Approved 2026-11-05; not implemented or live-verified.** Following the user's
-decision, Sodalis will support **Microsoft Graph (Outlook) and Gmail API** behind
-one provider-neutral `ReadOnlyEmailReader` interface in the AI server.
+**Approved 2026-11-05; implemented and deterministically verified by 0072;
+live-unverified.** Following the user's decision, Sodalis supports
+**Microsoft Graph (Outlook) and Gmail API** behind one provider-neutral
+`ReadOnlyEmailReader` interface in the AI server.
 [0072](../../TASKS/0072-complete-read-only-email-journey.md) implements both
 adapters and the foreground desktop journey. This specializes ADR 0007's
 configured readers; it does not introduce a plugin system or change Aster.
@@ -798,9 +802,9 @@ Disconnect follows the shared protocol: it cancels in-flight reads, discards
 their evidence and local tokens, then revokes the Google token where
 supported; Graph disconnect is local only. The calendar grant is unaffected.
 
-### Planned configuration
+### Implemented configuration
 
-These are decisions for 0072, **not settings supported by today's server**.
+The AI server and stack launcher support these settings. Email is off by default.
 
 | Setting | Contract |
 | --- | --- |
@@ -817,6 +821,17 @@ graph properties, plaintext secrets, committed tokens or CI secrets. Keep
 provider endpoints fixed to official OAuth and mail hosts.
 Mock mode uses synthetic data and needs no account or secrets. Missing
 configuration fails closed, not into fixture or live discovery.
+
+The selected client-secret store is the host OS credential store. Linux uses
+`secret-tool`/Secret Service attributes `service=sodalis-email` and
+`key=<EMAIL_OAUTH_CLIENT_SECRET_REF>`; macOS uses a Keychain generic-password
+item with service `com.sodalis.email` and account
+`<EMAIL_OAUTH_CLIENT_SECRET_REF>`. Unsupported platforms and processes without
+the store fail closed. The default Compose AI container does not receive a host
+keyring; real OAuth needs a native AI process with the host store available or
+a deployment that deliberately provisions an equivalent host-only store.
+Email access tokens are only held in process memory and disappear at expiry,
+disconnect or restart.
 
 ### Provider-neutral reader and bounded question
 
@@ -857,7 +872,9 @@ provider queries, paging, MIME and normalization.
   time query conservatively widened by one second at each edge, then exact
   local filtering. Gmail listing returns IDs, not body/envelope data: fetch
   metadata for at most 100 candidates, then full messages for the selected
-  five. Recheck labels/draft status in returned metadata.
+  five. Deduplicate Gmail listing IDs within and across pages before metadata
+  requests and selection, so repeats cannot displace a unique message.
+  Recheck labels/draft status in returned metadata.
 - Follow provider continuation only on the fixed allowed mail host and same
   account path; no arbitrary URLs/redirects. Bound the reader to **15 seconds**
   or the remaining workflow budget, whichever is smaller, and at most four
@@ -936,9 +953,13 @@ Run shared reader behavior cases for both real adapters using fake transports
 and for mock, plus host authorization, workflow and desktop behavior cases as
 specified in [0072](../../TASKS/0072-complete-read-only-email-journey.md).
 
-0071 is documentation-only; no code tests or live account checks were needed or
-performed. 0072 must run `pnpm test`, `pnpm typecheck` and `pnpm build` offline.
-Live checks never run in CI and self-skip without credentials. Each live run
+0071 was documentation-only. 0072's provider responses, OAuth credentials and
+model answers are synthetic in deterministic tests; behavior tests exercise
+the public reader, coordinator, HTTP routes, harness tool and desktop
+connection client. The full workspace gates run offline. No real account or
+mailbox is used. OAuth/provider compatibility, cloud-model handling, Google
+deployment approval, model quality and latency remain live-unverified. Live
+checks never run in CI and self-skip without credentials. Each live run
 requires explicit user consent for account/provider/data and any cloud-model
 processing, after checking `.env` and any `--env` overlay's provider selection.
 OAuth consent does not replace that run-specific consent. Deterministic

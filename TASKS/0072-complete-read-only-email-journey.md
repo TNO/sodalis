@@ -1,6 +1,6 @@
 # 0072 Complete a read-only email journey
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: assistant
 Depends on: 0071
@@ -12,6 +12,7 @@ Ready for implementation following completed
 [read-only email contract](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
 is the source of truth. Implement both Microsoft Graph (Outlook) and Gmail API,
 not a provider-specific shortcut or an extension of the fixture Mail app.
+See the [Pi ecosystem packages evaluation](../docs/evaluations/pi-packages-for-account-readers.md) for why no Pi/MCP package is reused for provider access, OAuth, or credential storage.
 This ticket covers a local, single-resident foreground journey, not a
 production multi-user identity system or a claim of live provider acceptance.
 
@@ -105,3 +106,20 @@ clock and synthetic fixture table as an independent expected result.
 - Without that consent, finish deterministic verification and record real
   OAuth/provider compatibility, model quality, latency and Google deployment
   approval as unverified. Do not present mocks as proof of live acceptance.
+
+## Completion record
+
+Implemented both provider adapters, the bounded mock, session-bound OAuth
+connection flow, same-origin desktop controls, email-only workflow tools and
+configuration/documentation. Deterministic behavior tests use synthetic
+responses only. `pnpm test`, `pnpm typecheck` and `pnpm build` pass; live
+provider compatibility, Google deployment approval, cloud-model handling and
+response quality remain unverified. No live provider or cloud-model checks
+were run.
+
+Spec-review follow-up: ordinary requests such as “Read all my mail”,
+“Summarize my latest mail” and “Do I have any new mail?” expose only the
+limitation tool, verified at the workflow/model-request boundary alongside
+unrelated mail-delivery prose. Gmail listing IDs are deduplicated before
+metadata/body reads and newest-five selection; deterministic duplicate-ID
+fixtures verify five unique messages, stable ordering and complete coverage.

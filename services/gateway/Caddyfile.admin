@@ -14,6 +14,9 @@
 			flush_interval -1
 		}
 	}
+	handle /api/email/* {
+		reverse_proxy ai:3002
+	}
 	handle /api/memory/* {
 		reverse_proxy ai:3002
 	}

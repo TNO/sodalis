@@ -1174,9 +1174,73 @@ the server's mode at runtime. No special frontend build is required. Reload
 open desktop tabs after changing the mode. If discovery fails, the desktop
 displays an error rather than falling back to another mode; reload to retry.
 
+#### Read-only email (task 0072)
+
+Email is disabled by default (`EMAIL_PROVIDER=off`). To exercise the complete
+desktop path without an account or provider, set `EMAIL_PROVIDER=mock` and
+`EMAIL_RESIDENT_ID=resident-local` with `COMPANION_HARNESS=pi`. The desktop
+shows an explicit connect button for the synthetic inbox; the assistant
+supports only **"What are my five most recent inbox emails from the last seven
+days? Summarize each."** Wider email requests receive a limitation instead of
+an arbitrary query. Mock data is synthetic and does not demonstrate provider
+acceptance.
+
+For real delegated access, select exactly one provider and configure its
+email-only client registration:
+
+```dotenv
+COMPANION_HARNESS=pi
+EMAIL_PROVIDER=graph
+EMAIL_RESIDENT_ID=resident-local
+EMAIL_OAUTH_CLIENT_ID=<email-only-client-id>
+EMAIL_OAUTH_CLIENT_SECRET_REF=sodalis-email-client
+EMAIL_OAUTH_REDIRECT_URI=http://localhost:4176/api/email/callback
+EMAIL_GRAPH_TENANT=common
+```
+
+For Gmail set `EMAIL_PROVIDER=gmail`, use a separate Gmail Web client,
+remove `EMAIL_GRAPH_TENANT`, and register the exact redirect URI. For native
+Vite development, the redirect origin is the frontend origin, for example
+`http://localhost:5173/api/email/callback`; for the default Compose gateway it
+is `http://localhost:4176/api/email/callback`. Use HTTPS outside loopback and
+register the exact callback URI with the provider. Graph requests delegated
+`Mail.Read`, `openid`, and `profile`; Gmail requests `gmail.readonly` and
+`openid`. The server does not request refresh/offline access. Admin consent,
+Google restricted-scope verification and security assessment, or Workspace
+policy may block a real connection; never widen scopes to work around that.
+
+The client secret reference must resolve in the host OS credential store. On
+Linux create the Secret Service entry with attributes `service=sodalis-email`
+and `key=sodalis-email-client`; on macOS create a Keychain generic-password
+entry with service `com.sodalis.email` and account `sodalis-email-client`.
+The secret value is entered into the OS password manager, never `.env`, the
+browser, or CI. The stock Compose AI container does not receive a host keyring,
+so real OAuth requires running the AI server natively with its OS keyring
+available, or an explicitly provisioned equivalent host-only credential
+store. Missing entries fail closed. Tokens are held only in server memory;
+expiry, disconnect or restart requires reconnecting.
+
+The panel explains inbox/body access and that minimized evidence is processed
+by the configured model, which may be cloud-hosted. Select a local LLM if
+local-only processing is required. No account content is persisted to memory
+or developer audit; when content-capturing audit is enabled, email reads are
+refused. Disconnect removes local access first; Google revocation is attempted,
+while Graph consent must also be removed from Microsoft account settings.
+
+Deterministic adapter, OAuth, route, tool and desktop-client tests use only
+synthetic payloads. Real OAuth compatibility, provider approval, model quality
+and latency are unverified. Live provider/model checks are opt-in and require
+explicit consent for each run; none is run by the normal stack commands.
+
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `COMPANION_HARNESS` | no | The example selects `pi`; `off` retains turn mode. Unset still means `off` for compatibility. Other values fail. |
+| `EMAIL_PROVIDER` | no | Defaults to `off`; selects exactly one of `mock`, `graph` or `gmail`. Real modes require `COMPANION_HARNESS=pi`. |
+| `EMAIL_RESIDENT_ID` | with email | Local configured resident scope bound to the host session. |
+| `EMAIL_OAUTH_CLIENT_ID` | with Graph/Gmail | Email-only client ID; separate from calendar registrations. |
+| `EMAIL_OAUTH_CLIENT_SECRET_REF` | with Graph/Gmail | Reference to the server process's host OS credential-store entry; never a secret value. |
+| `EMAIL_OAUTH_REDIRECT_URI` | with Graph/Gmail | Exact registered same-origin `/api/email/callback`; loopback HTTP only for local development. |
+| `EMAIL_GRAPH_TENANT` | with Graph | `common`, `consumers`, `organizations`, or an explicit tenant UUID. |
 | `HOME_GRAPH_URL` | for graph tools | `bolt://` or `neo4j://` URL, without credentials. Without it every tool reports `unavailable`. |
 | `HOME_GRAPH_PASSWORD` | with the URL | The test container's `NEO4J_PASSWORD`. |
 | `HOME_GRAPH_USER` | no | Default `neo4j`. |

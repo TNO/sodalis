@@ -276,7 +276,14 @@ describe("companion harness configuration", () => {
     expect(literalConfigValue("!rm -rf /")).toBe("$!rm -rf /");
   });
 
-  it("sends the configured key literally to an OpenAI-compatible server", async () => {
+  it.each([
+    [start.messages[0]!.content, ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Read all my mail", ["email_scope_limit"]],
+    ["Summarize my latest mail", ["email_scope_limit"]],
+    ["Do I have any new mail?", ["email_scope_limit"]],
+    ["Please mail the package to my home", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Read a book about mail delivery", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+  ])("sends the configured key literally and exposes only the permitted tools for %s", async (question, expectedTools) => {
     const { createServer } = await import("node:http");
     const requests: { authorization?: string; body: string }[] = [];
     const server = createServer((request, response) => {
@@ -301,14 +308,17 @@ describe("companion harness configuration", () => {
         LLM_API_KEY: "!echo key$HOME",
       }))!;
       vi.spyOn(console, "warn").mockImplementation(() => {});
-      const response = await post(createAssistantApp({ workflows: companion }), "/api/assistant/workflows", start);
+      const response = await post(createAssistantApp({ workflows: companion }), "/api/assistant/workflows", {
+        ...start,
+        messages: [{ role: "user", content: question }],
+      });
       expect(events(await response.text()).at(-1)).toMatchObject({ type: "answer", text: "Hallo." });
       expect(requests[0]!.authorization).toBe("Bearer !echo key$HOME");
       const body = JSON.parse(requests[0]!.body) as { model: string; messages: { role: string; content: unknown }[]; tools?: { function: { name: string } }[] };
       expect(body.model).toBe("local-model");
       expect(body.messages[0]).toMatchObject({ role: "system" });
       expect(String(body.messages[0]!.content)).toContain("You are Sodalis, a companion");
-      expect(body.tools?.map((tool) => tool.function.name)).toEqual(["find_entities", "inspect_neighborhood", "read_external_data"]);
+      expect(body.tools?.map((tool) => tool.function.name)).toEqual(expectedTools);
     } finally {
       server.close();
     }

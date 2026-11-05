@@ -89,7 +89,13 @@ interface Harness {
   readonly events: WorkflowEvent[];
   readonly auditEvents: CompanionAuditEvent[];
   readonly sessions: { dispose: ReturnType<typeof vi.fn> }[];
-  start(input?: { question?: string; workflowId?: string; sessionId?: string; signal?: AbortSignal }): ReturnType<CompanionWorkflows["start"]>;
+  start(input?: {
+    question?: string;
+    workflowId?: string;
+    sessionId?: string;
+    signal?: AbortSignal;
+    sensitive?: boolean;
+  }): ReturnType<CompanionWorkflows["start"]>;
 }
 
 const open: CompanionWorkflows[] = [];
@@ -151,6 +157,7 @@ async function harness(options: {
           sessionId: input.sessionId ?? "session-1",
           workflowId: input.workflowId ?? "workflow-1",
           inputId: "input-1",
+          ...(input.sensitive ? { sensitive: true } : {}),
           messages: [
             { role: "user", content: "Hoe warm was het gisteren?" },
             { role: "assistant", content: "Gisteren was het 18 graden." },
@@ -586,6 +593,16 @@ describe("companion workflow", () => {
     expect(selection.correlationId).toBe(dispatch.correlationId);
     expect(dispatch.correlationId).toBe(result.correlationId);
     expect(h.auditEvents.at(-1)).toMatchObject({ event: "workflow.terminal", outcome: "answer" });
+  });
+
+  it("does not capture sensitive account workflow content in the developer audit", async () => {
+    const h = await harness({
+      responses: [fauxAssistantMessage(fauxText("The private account response."))],
+    });
+
+    await started(h.start({ question: "What are my five most recent inbox emails from the last seven days? Summarize each.", sensitive: true }));
+
+    expect(h.auditEvents).toEqual([]);
   });
 
   it("writes text-only speech transcripts, redacts credentials, and excludes hidden reasoning and artifacts", async () => {

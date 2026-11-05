@@ -1,6 +1,8 @@
 import type { Context, Hono } from "hono";
 import { BodyLimitError, ID_PATTERN, isRecord, MAX_MESSAGE_LENGTH, readBoundedBody, readMessages } from "../requestBody.js";
 import type { CompanionWorkflows, WorkflowEvent } from "./workflow.js";
+import { readEmailSessionCookie } from "./emailAuthorization.js";
+import { isEmailRelatedQuestion } from "./tools.js";
 
 /**
  * The Pi workflow transport: an SSE lifecycle stream per workflow, plus
@@ -37,7 +39,11 @@ function isId(value: unknown): value is string {
   return typeof value === "string" && ID_PATTERN.test(value);
 }
 
-export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows): void {
+export function registerWorkflowRoutes(
+  app: Hono,
+  workflows: CompanionWorkflows,
+  emailSignalForSession?: (sessionId: string) => AbortSignal | undefined,
+): void {
   app.post("/api/assistant/workflows", async (context) => {
     const payload = await readJsonObject(context);
     if (payload instanceof Response) return payload;
@@ -52,8 +58,14 @@ export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows)
     const requestSignal = context.req.raw.signal;
     const onRequestAbort = () => disconnect.abort();
     requestSignal.addEventListener("abort", onRequestAbort, { once: true });
+    const hostSessionId = readEmailSessionCookie(context.req.header("cookie"));
+    const emailSignal = hostSessionId ? emailSignalForSession?.(hostSessionId) : undefined;
+    const workflowSignal = AbortSignal.any([disconnect.signal, requestSignal]);
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     let closed = false;
+    const onEmailDisconnect = () => {
+      workflows.cancel(workflowId);
+    };
     const body = new ReadableStream<Uint8Array>({
       start(streamController) {
         controller = streamController;
@@ -61,6 +73,7 @@ export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows)
       cancel() {
         closed = true;
         disconnect.abort();
+        emailSignal?.removeEventListener("abort", onEmailDisconnect);
       },
     });
     const send = (event: WorkflowEvent) => {
@@ -70,19 +83,30 @@ export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows)
         closed = true;
         controller.close();
         requestSignal.removeEventListener("abort", onRequestAbort);
+        emailSignal?.removeEventListener("abort", onEmailDisconnect);
       }
     };
+    emailSignal?.addEventListener("abort", onEmailDisconnect, { once: true });
     const result = workflows.start(
-      { sessionId, workflowId, inputId, messages },
-      { signal: disconnect.signal, onEvent: send },
+      {
+        sessionId,
+        workflowId,
+        inputId,
+        messages,
+        ...(hostSessionId ? { hostSessionId } : {}),
+        ...(isEmailRelatedQuestion(messages.at(-1)!.content) ? { sensitive: true } : {}),
+      },
+      { signal: workflowSignal, onEvent: send },
     );
     if (result.status !== "started") {
       requestSignal.removeEventListener("abort", onRequestAbort);
+      emailSignal?.removeEventListener("abort", onEmailDisconnect);
       return result.status === "conflict"
         ? errorResponse(context, "A workflow is already running for this conversation.", 409)
         : errorResponse(context, "Assistant is at capacity.", 503);
     }
-    if (requestSignal.aborted) disconnect.abort();
+    if (workflowSignal.aborted) disconnect.abort();
+    if (emailSignal?.aborted) workflows.cancel(workflowId);
     return new Response(body, {
       headers: {
         "content-type": "text/event-stream; charset=utf-8",

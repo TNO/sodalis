@@ -14,6 +14,7 @@ and Google Calendar adapters initially**. The
 is the source of truth for authorization, normalized outcomes, interval/source
 semantics, and exclusions. This ticket is ready for implementation from that
 decision; neither adapter is implemented by the decision itself.
+See the [Pi ecosystem packages evaluation](../docs/evaluations/pi-packages-for-account-readers.md) for why no Pi/MCP package is reused for provider access, OAuth, or credential storage.
 
 ## Setup
 
