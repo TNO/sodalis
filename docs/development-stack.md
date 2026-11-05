@@ -1273,6 +1273,39 @@ HOME_DATA_TEST_SQLITE=/absolute/path/to/home_simulator/testdata/neo4j-test/times
 pnpm --filter @sodalis/server exec vitest run src/assistant/harness/homeGraph.integration.test.ts
 ```
 
+### Offline sensor snapshot journey
+
+Task 0070's local opt-in test needs only the existing
+`home_simulator/testdata/neo4j-test/{SOURCE.json,neo4j.json,timeseries.sqlite}`
+pair. Do not start Neo4j, HTTP services or a cloud provider for this check.
+From the Sodalis root, with `CI` unset:
+
+```sh
+env -u HOME_GRAPH_TEST_URL -u HOME_GRAPH_TEST_PASSWORD -u HOME_DATA_TEST_SQLITE \
+  -u AZURE_STT_ENDPOINT -u AZURE_STT_KEY \
+  SODALIS_SENSOR_SNAPSHOT_DIR=/absolute/path/to/home_simulator/testdata/neo4j-test \
+  pnpm --filter @sodalis/server exec vitest run src/assistant/harness/workflow.test.ts
+```
+
+The snapshot cases self-skip without this opt-in and always skip in CI. The
+scripted model disables model networking and uses no credentials. Files stay
+in the simulator checkout: graph/source files are read locally and SQLite is
+opened read-only. The test exposes only the selected sensor/location/reference
+projection, never agenda, messages or full export/audit payloads.
+
+The loader pins the inspected graph/SQLite SHA-256 pair and simulator source
+revision. It checks generated reference ownership, installed location, service
+parameters, capability/unit and SQLite observation ownership. It never uses a
+graph-supplied path to open a file. A different snapshot fails closed: inspect
+its provenance, update pins and fixed-clock expectations deliberately, and do
+not relabel a configured bedroom reference as the generated bathroom series.
+No database or graph export belongs in this public repository.
+
+See the [consolidated results and provenance](evaluations/companion-harness.md#local-simulator-snapshot-follow-up-2026-11-05).
+This proves scripted orchestration and actual local source evidence, not a
+live deployment or real-model quality. Later live external/cloud checks require
+separate explicit consent.
+
 ### First-time Home Assistant simulator onboarding
 
 With `HOME_PROVIDER=simulator`, leave `HOME_ADMIN_UI=1` and

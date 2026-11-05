@@ -50,17 +50,19 @@ current acceptance.
 Found during the first manual end-to-end check on 2026-11-04 (results in the
 [evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)).
 
-### Developer audit is not implemented
+### Developer audit implemented (0068)
 
-There is no way to follow retrieved evidence, model/tool events, and their
+At the first manual check there was no way to follow retrieved evidence,
+model/tool events, and their
 relation to an outcome, or to inspect tool arguments, results, and step
-durations. Only failures are logged, and the public SSE stream deliberately
+durations. Only failures were logged, and the public SSE stream deliberately
 carries only the terminal outcome (see the
 [architecture](../docs/architecture/companion-harness.md#observability-gap)).
-This makes wrong or missing answers effectively impossible to diagnose, and it
-blocks the accepted diagnosis and sensor journey.
+That gap blocked diagnosis. Task 0068 has since implemented the audit, and
+0069 recorded its bounded diagnosis; the historical manual sensor question
+still cannot be uniquely matched from sanitized metadata alone.
 
-Approved follow-up [0068](0068-persistent-developer-audit.md) adds an
+Completed [0068](0068-persistent-developer-audit.md) provides an
 explicitly opt-in, development-only audit, disabled by default and rejected in
 production. It writes a chronological human transcript and structured JSONL
 from the same event stream to the git-ignored repository-root `logs/` directory,
@@ -81,16 +83,21 @@ developer's session" constraint for local diagnostic logs only. It adds no
 resident-facing behavior or compliance-grade guarantees and does not change
 memory consent, retention, or deletion. Tests use deterministic mock events.
 
-### No actual sensor data obtained
+### Historical missing sensor reading and subsequent retrieval
 
-The manual check never returned an actual sensor reading. The cause is
+The initial manual check never returned an actual sensor reading. The cause is
 unknown; possible causes recorded in the
 [evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)
-are not findings. Task [0069](0069-diagnose-harness-data-retrieval.md) requires
-evidence before a bounded repair. Then task
-[0070](0070-complete-sensor-journey.md) requires a repeatable, grounded journey
-that reports the actual source, timestamp, and freshness. A known historical
-snapshot may return stale data; it must not be presented as fresh.
+are not findings. Task [0069](0069-diagnose-harness-data-retrieval.md) completed
+the bounded [audit diagnosis](../docs/evaluations/companion-harness.md#0068-audit-diagnosis).
+Task [0070](0070-complete-sensor-journey.md) completed the deterministic local
+sensor journey; see the
+[source-backed snapshot evidence and limits](../docs/evaluations/companion-harness.md#local-simulator-snapshot-follow-up-2026-11-05)
+and the separate
+[manual retrieval report](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05).
+Real-model quality and live-source acceptance remain unestablished; no
+additional live check was run. This local completion does not close the
+umbrella's remaining roadmap tasks.
 
 ## Accepted sensor journey
 
