@@ -260,7 +260,7 @@ describe("companion workflow", () => {
       const h = await harness({
         audit: writer,
         responses: [
-          fauxAssistantMessage(fauxToolCall("find_entities", { query: "token=tool-secret bedroom" })),
+          fauxAssistantMessage(fauxToolCall("find_entities", { query: "token=tool-secret client_secret=client-secret dbPassword=db-password" })),
           fauxAssistantMessage([
             fauxThinking("private hidden reasoning must not be captured"),
             fauxText("The bedroom is ready; api_key=answer-secret"),
@@ -269,6 +269,14 @@ describe("companion workflow", () => {
       });
 
       await started(h.start({ question: transcript }));
+      await writer.write({
+        event: "credential.redaction.test",
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        correlationId: "workflow-1",
+        timestamp: new Date().toISOString(),
+        text: '{"client_secret":"json-secret","dbPassword":"json-db-password"}',
+      });
       await writer.flush();
 
       const [jsonl, human] = await Promise.all([
@@ -282,8 +290,14 @@ describe("companion workflow", () => {
       expect(records.find((event) => event.event === "assistant.message" &&
         typeof event.text === "string" && event.text.startsWith("The bedroom"))?.text)
         .toBe("The bedroom is ready; api_key=[REDACTED]");
+      expect(records.find((event) => event.event === "credential.redaction.test")?.text)
+        .toBe('{"client_secret":"[REDACTED]","dbPassword":"[REDACTED]"}');
       expect(jsonl + human).not.toContain("resident-secret");
       expect(jsonl + human).not.toContain("tool-secret");
+      expect(jsonl + human).not.toContain("client-secret");
+      expect(jsonl + human).not.toContain("db-password");
+      expect(jsonl + human).not.toContain("json-secret");
+      expect(jsonl + human).not.toContain("json-db-password");
       expect(jsonl + human).not.toContain("answer-secret");
       expect(jsonl + human).not.toContain("private hidden reasoning");
       expect(records.some((event) => "audio" in event || "recording" in event || "artifact" in event)).toBe(false);

@@ -18,13 +18,16 @@ export interface CompanionAuditSink {
 
 const SECRET_KEY = /(?:password|passwd|secret|token|api[-_]?key|authorization|credential)/i;
 const NON_TEXT_KEY = /(?:audio|recording|artifact|buffer|bytes|binary)/i;
-const inlineSecret = /\b(authorization|x-api-key|api[-_]?key|password|passwd|secret|token)\b(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi;
+const inlineSecret = /(["']?)([A-Za-z0-9_-]*(?:authorization|x-api-key|api[-_]?key|password|passwd|secret|token|credential)[A-Za-z0-9_-]*)\1(\s*[:=]\s*)(\[[^\]]*\]|"[^"]*"|'[^']*'|[^\s,;}\]]+)/gi;
 
 function redactString(value: string): string {
   return value
     .replace(/\bauthorization\b(\s*[:=]\s*)(?:Bearer\s+)?[^\s,;]+/gi, "authorization$1[REDACTED]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [REDACTED]")
-    .replace(inlineSecret, "$1$2[REDACTED]");
+    .replace(inlineSecret, (_match: string, keyQuote: string, key: string, separator: string, credential: string) => {
+      const valueQuote = credential[0] === '"' || credential[0] === "'" ? credential[0] : "";
+      return `${keyQuote}${key}${keyQuote}${separator}${valueQuote}[REDACTED]${valueQuote}`;
+    });
 }
 
 function redact(value: unknown, key = ""): unknown {
