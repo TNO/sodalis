@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { resolveStack } from "./stack-config.js";
 import { validateReadingsFile } from "../apps/server/src/assistant/harness/settings.js";
 
 const root = resolve(import.meta.dirname, "..");
+const composeSource = readFileSync(join(root, "compose.yaml"), "utf8");
 const compose = spawnSync("docker", ["compose", "version"], { stdio: "ignore" }).status === 0
   ? { command: "docker", prefix: ["compose"] }
   : { command: "docker-compose", prefix: [] };
@@ -25,6 +26,12 @@ interface ComposeConfig {
   }>;
   networks?: Record<string, { external?: boolean; name?: string }>;
 }
+
+describe("developer audit persistence", () => {
+  it("bind-mounts repository-root logs into the AI container across container shutdown", () => {
+    expect(composeSource).toMatch(/ai:[\s\S]*?volumes:[\s\S]*?- \.\/logs:\/app\/logs/);
+  });
+});
 
 describe.skipIf(!available)("companion Compose configuration (no daemon or model required)", () => {
   it.each([false, true])("renders the AI configuration with readings enabled=%s", (readings) => {
@@ -59,8 +66,13 @@ describe.skipIf(!available)("companion Compose configuration (no daemon or model
       const ai = config.services.ai!;
       expect(ai.command).toEqual(["pnpm", "--filter", "@sodalis/server", "start:ai"]);
       expect(ai.environment).toMatchObject({
+        NODE_ENV: "development",
+        COMPANION_AUDIT: "false",
         COMPANION_HARNESS: readings ? "pi" : "off",
         HOME_DATA_SQLITE_FILE: readings ? "/data/home/readings.sqlite" : "",
+      });
+      expect(ai.volumes?.find((volume) => volume.target === "/app/logs")).toMatchObject({
+        type: "bind", source: resolve(root, "logs"), target: "/app/logs",
       });
       if (readings) {
         expect(ai.environment).toMatchObject({
@@ -73,7 +85,7 @@ describe.skipIf(!available)("companion Compose configuration (no daemon or model
         // Older Compose versions omit false fields from their JSON output.
         expect(readingsVolume?.bind?.create_host_path ?? false).toBe(false);
       } else {
-        expect(ai.volumes?.some((volume) => volume.type === "bind")).toBe(false);
+        expect(ai.volumes?.some((volume) => volume.target === "/data/home/readings.sqlite")).toBe(false);
       }
       expect(config.services.speech?.environment).not.toHaveProperty("HOME_GRAPH_PASSWORD");
       expect(config.services.gateway?.environment).not.toHaveProperty("HOME_GRAPH_PASSWORD");

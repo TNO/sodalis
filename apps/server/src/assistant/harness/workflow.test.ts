@@ -1,6 +1,7 @@
 import {
   fauxAssistantMessage,
   fauxProvider,
+  fauxThinking,
   fauxText,
   fauxToolCall,
   InMemoryCredentialStore,
@@ -8,12 +9,17 @@ import {
 } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import { FileCompanionAuditWriter } from "./audit.js";
 import type { CompanionModel } from "./companionModel.js";
 import { createCompanionSession } from "./companionSession.js";
 import type { ExternalDataReader } from "./externalData.js";
 import type { HomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
 import { CompanionWorkflows, type WorkflowEvent, type WorkflowLimits } from "./workflow.js";
+import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
 
 const ROOM = "home/bedroom";
 const SENSOR = "home/temp-sensor";
@@ -78,6 +84,7 @@ interface Harness {
   readonly workflows: CompanionWorkflows;
   readonly faux: ReturnType<typeof fauxProvider>;
   readonly events: WorkflowEvent[];
+  readonly auditEvents: CompanionAuditEvent[];
   readonly sessions: { dispose: ReturnType<typeof vi.fn> }[];
   start(input?: { question?: string; workflowId?: string; sessionId?: string; signal?: AbortSignal }): ReturnType<CompanionWorkflows["start"]>;
 }
@@ -87,7 +94,12 @@ afterEach(() => {
   open.length = 0;
 });
 
-async function harness(options: { graph?: HomeGraph; limits?: Partial<WorkflowLimits>; responses: FauxResponseStep[] }): Promise<Harness> {
+async function harness(options: {
+  graph?: HomeGraph;
+  limits?: Partial<WorkflowLimits>;
+  responses: FauxResponseStep[];
+  audit?: CompanionAuditSink;
+}): Promise<Harness> {
   const faux = fauxProvider();
   const modelRuntime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
@@ -99,10 +111,13 @@ async function harness(options: { graph?: HomeGraph; limits?: Partial<WorkflowLi
   faux.setResponses(options.responses);
   const model: CompanionModel = { modelRuntime, model: faux.getModel(), thinkingLevel: "off" };
   const events: WorkflowEvent[] = [];
+  const auditEvents: CompanionAuditEvent[] = [];
+  const audit = options.audit ?? { write: (event: CompanionAuditEvent) => { auditEvents.push(event); } };
   const sessions: Harness["sessions"] = [];
   const graph = options.graph ?? fakeGraph();
   const workflows = new CompanionWorkflows({
     ...(options.limits ? { limits: options.limits } : {}),
+    audit,
     async createSession({ history, budget }) {
       const session = await createCompanionSession({
         model,
@@ -120,6 +135,7 @@ async function harness(options: { graph?: HomeGraph; limits?: Partial<WorkflowLi
     workflows,
     faux,
     events,
+    auditEvents,
     sessions,
     start: (input = {}) =>
       workflows.start(
@@ -196,6 +212,121 @@ describe("companion workflow", () => {
     expect(h.events).toEqual([{ type: "started", workflowId: "workflow-1", sequence: 0 }, terminal]);
     await vi.waitFor(() => expect(h.sessions[0]!.dispose).toHaveBeenCalled());
     expect(h.workflows.activeCount).toBe(0);
+  });
+
+  it("sends a correlated, distinct lifecycle from the Pi event stream to the developer audit", async () => {
+    const h = await harness({
+      responses: [
+        fauxAssistantMessage(fauxToolCall("find_entities", { query: "bedroom" })),
+        fauxAssistantMessage(fauxText("The bedroom is ready.")),
+      ],
+    });
+
+    await started(h.start());
+
+    expect(h.auditEvents.map(({ event }) => event)).toEqual(expect.arrayContaining([
+      "workflow.started",
+      "user.message",
+      "model.run.started",
+      "model.turn.started",
+      "tool.selected",
+      "tool.dispatched",
+      "tool.result",
+      "assistant.message",
+      "model.turn.completed",
+      "model.run.settled",
+      "workflow.terminal",
+    ]));
+    expect(h.auditEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: "user.message", text: "Hoe warm was het gisteren?", source: "conversation_history" }),
+      expect.objectContaining({ event: "assistant.message", text: "Gisteren was het 18 graden.", source: "conversation_history" }),
+    ]));
+    const selection = h.auditEvents.find((event) => event.event === "tool.selected")!;
+    const dispatch = h.auditEvents.find((event) => event.event === "tool.dispatched")!;
+    const result = h.auditEvents.find((event) => event.event === "tool.result")!;
+    expect(selection).toMatchObject({ workflowId: "workflow-1", sessionId: "session-1", toolName: "find_entities" });
+    expect(dispatch).toMatchObject({ workflowId: "workflow-1", sessionId: "session-1", toolName: "find_entities" });
+    expect(result).toMatchObject({ workflowId: "workflow-1", sessionId: "session-1", toolName: "find_entities" });
+    expect(selection.correlationId).toBe(dispatch.correlationId);
+    expect(dispatch.correlationId).toBe(result.correlationId);
+    expect(h.auditEvents.at(-1)).toMatchObject({ event: "workflow.terminal", outcome: "answer" });
+  });
+
+  it("writes text-only speech transcripts, redacts credentials, and excludes hidden reasoning and artifacts", async () => {
+    const directory = resolve(import.meta.dirname, "../../../../../logs", `audit-test-${randomUUID()}`);
+    const writer = new FileCompanionAuditWriter(directory);
+    try {
+      const transcript = "Transcript: bedroom is warm; Authorization: Bearer resident-secret";
+      const h = await harness({
+        audit: writer,
+        responses: [
+          fauxAssistantMessage(fauxToolCall("find_entities", { query: "token=tool-secret client_secret=client-secret dbPassword=db-password" })),
+          fauxAssistantMessage([
+            fauxThinking("private hidden reasoning must not be captured"),
+            fauxText("The bedroom is ready; api_key=answer-secret"),
+          ]),
+        ],
+      });
+
+      await started(h.start({ question: transcript }));
+      await writer.write({
+        event: "credential.redaction.test",
+        workflowId: "workflow-1",
+        sessionId: "session-1",
+        correlationId: "workflow-1",
+        timestamp: new Date().toISOString(),
+        text: '{"client_secret":"json-secret","dbPassword":"json-db-password"}',
+      });
+      await writer.flush();
+
+      const [jsonl, human] = await Promise.all([
+        readFile(writer.paths.jsonl, "utf8"),
+        readFile(writer.paths.transcript, "utf8"),
+      ]);
+      const records = jsonl.trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(records.find((event) => event.event === "user.message" &&
+        event.source !== "conversation_history")?.text)
+        .toBe("Transcript: bedroom is warm; authorization: [REDACTED]");
+      expect(records.find((event) => event.event === "assistant.message" &&
+        typeof event.text === "string" && event.text.startsWith("The bedroom"))?.text)
+        .toBe("The bedroom is ready; api_key=[REDACTED]");
+      expect(records.find((event) => event.event === "credential.redaction.test")?.text)
+        .toBe('{"client_secret":"[REDACTED]","dbPassword":"[REDACTED]"}');
+      expect(jsonl + human).not.toContain("resident-secret");
+      expect(jsonl + human).not.toContain("tool-secret");
+      expect(jsonl + human).not.toContain("client-secret");
+      expect(jsonl + human).not.toContain("db-password");
+      expect(jsonl + human).not.toContain("json-secret");
+      expect(jsonl + human).not.toContain("json-db-password");
+      expect(jsonl + human).not.toContain("answer-secret");
+      expect(jsonl + human).not.toContain("private hidden reasoning");
+      expect(records.some((event) => "audio" in event || "recording" in event || "artifact" in event)).toBe(false);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("reports ordinary audit write failures without changing workflow delivery", async () => {
+    const directory = resolve(import.meta.dirname, "../../../../../logs", `audit-failure-${randomUUID()}`);
+    await writeFile(directory, "not a directory");
+    const audit = new FileCompanionAuditWriter(directory);
+    const report = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const h = await harness({
+        audit,
+        responses: [fauxAssistantMessage(fauxText("The answer is ready."))],
+      });
+
+      expect(await started(h.start())).toMatchObject({ type: "answer", text: "The answer is ready." });
+      await audit.flush();
+      expect(report).toHaveBeenCalledWith(
+        "Developer audit write failed:",
+        expect.objectContaining({ code: "EEXIST" }),
+      );
+    } finally {
+      report.mockRestore();
+      await rm(directory, { force: true });
+    }
   });
 
   it("answers ordinary conversation without tools", async () => {
@@ -289,6 +420,7 @@ describe("companion workflow", () => {
 
     expect(aborted).toBe(true);
     expect(h.events.map((event) => event.type)).toEqual(["started", "cancelled"]);
+    expect(h.auditEvents.at(-1)).toMatchObject({ event: "workflow.terminal", outcome: "cancelled" });
     expect(h.workflows.steer("workflow-1", "input-2", "Hello?")).toBe("not_running");
   });
 
@@ -308,6 +440,7 @@ describe("companion workflow", () => {
     disconnect.abort();
     await vi.waitFor(() => expect(h.sessions[0]!.dispose).toHaveBeenCalled());
     expect(h.events.map((event) => event.type)).toEqual(["started"]);
+    expect(h.auditEvents.at(-1)).toMatchObject({ event: "workflow.terminal", outcome: "disconnected" });
     expect(h.workflows.activeCount).toBe(0);
   });
 
@@ -316,11 +449,13 @@ describe("companion workflow", () => {
     const failing = await harness({ responses: [fauxAssistantMessage([], { stopReason: "error", errorMessage: "Unsupported parameter: 'reasoning_effort'" })] });
     const failed = await started(failing.start());
     expect(failed).toMatchObject({ type: "failed", code: "model_error" });
+    expect(failing.auditEvents.at(-1)).toMatchObject({ event: "workflow.terminal", outcome: "failed", terminalCode: "model_error" });
     expect(log).toHaveBeenCalledWith(expect.stringContaining("Unsupported parameter: 'reasoning_effort'"));
     expect(failed.type === "failed" && failed.residentMessage).not.toMatch(/reasoning|parameter/i);
     const empty = await harness({ responses: [fauxAssistantMessage("   ")] });
     const terminal = await started(empty.start());
     expect(terminal).toMatchObject({ type: "failed", code: "empty" });
+    expect(empty.auditEvents.at(-1)).toMatchObject({ event: "workflow.terminal", outcome: "failed", terminalCode: "empty" });
     expect(log).toHaveBeenCalledWith(expect.stringContaining("no answer text"));
     expect(terminal.type === "failed" && terminal.residentMessage).not.toMatch(/boom|error/i);
     log.mockRestore();

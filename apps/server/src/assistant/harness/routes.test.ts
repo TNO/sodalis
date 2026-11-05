@@ -6,6 +6,9 @@ import {
   InMemoryCredentialStore,
 } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { MemoryService } from "@sodalis/memory";
+import { readFile, readdir, rm } from "node:fs/promises";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantApp } from "../app.js";
 import { literalConfigValue } from "./companionModel.js";
@@ -13,6 +16,7 @@ import { createCompanionSession } from "./companionSession.js";
 import { createCompanionHarnessFromEnv } from "./config.js";
 import type { HomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
+import type { CompanionAuditEvent } from "./audit.js";
 import { CompanionWorkflows } from "./workflow.js";
 
 const start = {
@@ -38,7 +42,7 @@ function events(text: string) {
 }
 
 /** Workflows whose first tool call blocks until `release` is called. */
-async function blockedWorkflows() {
+async function blockedWorkflows(auditEvents?: CompanionAuditEvent[]) {
   let release!: () => void;
   const released = new Promise<void>((resolve) => {
     release = resolve;
@@ -70,6 +74,7 @@ async function blockedWorkflows() {
     fauxAssistantMessage(fauxText("Ik kan de slaapkamer niet vinden. In de keuken weet ik het ook niet.")),
   ]);
   const workflows = new CompanionWorkflows({
+    ...(auditEvents ? { audit: { write: (event: CompanionAuditEvent) => { auditEvents.push(event); } } } : {}),
     createSession: ({ history, budget }) =>
       createCompanionSession({
         model: { modelRuntime, model: faux.getModel(), thinkingLevel: "off" },
@@ -148,9 +153,89 @@ describe("companion workflow routes", () => {
       { type: "cancelled", workflowId: "workflow-1", sequence: 1 },
     ]);
   });
+
+  it("keeps internal audit events out of resident SSE", async () => {
+    const auditEvents: CompanionAuditEvent[] = [];
+    const { workflows, release, toolStarted } = await blockedWorkflows(auditEvents);
+    const memory = {
+      recordUserTurn: vi.fn(),
+      recordAssistantTurn: vi.fn(),
+      retrieve: vi.fn(),
+      recall: vi.fn(),
+    } as unknown as MemoryService;
+    const app = createAssistantApp({ workflows, memory });
+    const response = await post(app, "/api/assistant/workflows", {
+      ...start,
+      audio: "audio-bytes-must-not-be-audited",
+    });
+    await toolStarted;
+    release();
+
+    const residentEvents = events(await response.text());
+    expect(residentEvents).toEqual([
+      { type: "started", workflowId: "workflow-1", sequence: 0 },
+      expect.objectContaining({ type: "answer", workflowId: "workflow-1" }),
+    ]);
+    expect(auditEvents.some((event) => event.event === "tool.dispatched")).toBe(true);
+    expect(JSON.stringify(residentEvents)).not.toContain("tool.dispatched");
+    expect(JSON.stringify(auditEvents)).not.toContain("audio-bytes-must-not-be-audited");
+    expect(auditEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: "user.message", text: "Hoe warm is het in de slaapkamer?" }),
+    ]));
+    expect(memory.recordUserTurn).not.toHaveBeenCalled();
+    expect(memory.recordAssistantTurn).not.toHaveBeenCalled();
+    expect(memory.retrieve).not.toHaveBeenCalled();
+    expect(memory.recall).not.toHaveBeenCalled();
+  });
 });
 
 describe("companion harness configuration", () => {
+  it("keeps developer audit disabled by default and rejects it in production", async () => {
+    expect(await createCompanionHarnessFromEnv({ LLM_PROVIDER: "mock" })).toBeUndefined();
+    await expect(createCompanionHarnessFromEnv({
+      COMPANION_HARNESS: "pi", COMPANION_AUDIT: "true", NODE_ENV: "production", LLM_PROVIDER: "mock",
+    })).rejects.toThrow(/audit.*production/i);
+    await expect(createCompanionHarnessFromEnv({
+      COMPANION_HARNESS: "pi", COMPANION_AUDIT: "perhaps", LLM_PROVIDER: "mock",
+    })).rejects.toThrow(/COMPANION_AUDIT/);
+  });
+
+  it("writes local audit files only when explicitly enabled without changing SSE", async () => {
+    const directory = resolve(import.meta.dirname, "../../../../../logs");
+    const existing = new Set(await readdir(directory).catch(() => []));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const companion = (await createCompanionHarnessFromEnv({
+        COMPANION_HARNESS: "pi",
+        COMPANION_AUDIT: "true",
+        NODE_ENV: "development",
+        LLM_PROVIDER: "mock",
+      }))!;
+      const response = await post(createAssistantApp({ workflows: companion }), "/api/assistant/workflows", start);
+      expect(events(await response.text())).toEqual([
+        { type: "started", workflowId: "workflow-1", sequence: 0 },
+        { type: "answer", workflowId: "workflow-1", sequence: 1, inputId: "input-1", text: "Dit is een testantwoord." },
+      ]);
+      let files: string[] = [];
+      await vi.waitFor(async () => {
+        files = (await readdir(directory)).filter((file) => file.startsWith("companion-audit-") && !existing.has(file));
+        expect(files).toHaveLength(2);
+      });
+      expect(files.some((file) => file.endsWith(".jsonl"))).toBe(true);
+      expect(files.some((file) => file.endsWith(".txt"))).toBe(true);
+      await vi.waitFor(async () => {
+        const jsonl = await readFile(resolve(directory, files.find((file) => file.endsWith(".jsonl"))!), "utf8");
+        expect(jsonl).toContain('"event":"workflow.terminal"');
+        expect(jsonl).toContain('"outcome":"answer"');
+      });
+    } finally {
+      warn.mockRestore();
+      const files = (await readdir(directory).catch(() => []))
+        .filter((file) => file.startsWith("companion-audit-") && !existing.has(file));
+      await Promise.all(files.map((file) => rm(resolve(directory, file), { force: true })));
+    }
+  });
+
   it("rejects invalid selection and graph settings when disabled", async () => {
     await expect(createCompanionHarnessFromEnv({ COMPANION_HARNESS: "typo" })).rejects.toThrow("COMPANION_HARNESS");
     await expect(createCompanionHarnessFromEnv({ COMPANION_HARNESS: "off", HOME_GRAPH_URL: "bolt://graph:7687" }))

@@ -37,8 +37,16 @@ describe("development stack selection", () => {
     expect(resolveStack(base).environment).toMatchObject({
       COMPANION_HARNESS: "off", HOME_GRAPH_URL: "", HOME_GRAPH_PASSWORD: "",
       HOME_DATA_SQLITE_FILE: "", HOME_DATA_SQLITE_SOURCE: "",
+      NODE_ENV: "development", COMPANION_AUDIT: "false",
     });
     expect(resolveStack({ ...base, COMPANION_HARNESS: "pi" }).environment.HOME_DATA_SQLITE_SOURCE).toBe("");
+  });
+
+  it("allows explicit audit only outside production", () => {
+    expect(resolveStack({ ...base, COMPANION_AUDIT: "true" }).environment.COMPANION_AUDIT).toBe("true");
+    expect(() => resolveStack({ ...base, COMPANION_AUDIT: "true", NODE_ENV: "production" }))
+      .toThrow(/audit.*production/i);
+    expect(() => resolveStack({ ...base, COMPANION_AUDIT: "maybe" })).toThrow(/COMPANION_AUDIT/);
   });
 
   it.each([

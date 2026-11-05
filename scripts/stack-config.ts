@@ -1,6 +1,9 @@
 import { isAbsolute } from "node:path";
 import { azureLlmSettings } from "../apps/server/src/assistant/providers.js";
-import { validateCompanionSettings } from "../apps/server/src/assistant/harness/settings.js";
+import {
+  validateCompanionAuditSettings,
+  validateCompanionSettings,
+} from "../apps/server/src/assistant/harness/settings.js";
 
 export interface StackSelection {
   readonly profiles: readonly string[];
@@ -43,6 +46,9 @@ export function resolveStack(settings: Settings): StackSelection {
     HOME_ASSISTANT_IMAGE: settings.HOME_ASSISTANT_IMAGE ||
       "ghcr.io/home-assistant/home-assistant:2026.9.4",
   };
+  validateCompanionAuditSettings(settings);
+  environment.NODE_ENV = settings.NODE_ENV?.trim() || "development";
+  environment.COMPANION_AUDIT = settings.COMPANION_AUDIT?.trim() || "false";
   environment.COMPANION_HARNESS = validateCompanionSettings(settings);
   for (const key of [
     "HOME_GRAPH_URL", "HOME_GRAPH_USER", "HOME_GRAPH_PASSWORD", "HOME_GRAPH_DATABASE",

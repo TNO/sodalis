@@ -58,7 +58,9 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "3002"
+      NODE_ENV: ${NODE_ENV:-production}
       COMPANION_HARNESS: ${COMPANION_HARNESS:-off}
+      COMPANION_AUDIT: ${COMPANION_AUDIT:-false}
       HOME_GRAPH_URL: ${HOME_GRAPH_URL:-}
       HOME_GRAPH_USER: ${HOME_GRAPH_USER:-}
       HOME_GRAPH_PASSWORD: ${HOME_GRAPH_PASSWORD:-}
@@ -101,6 +103,7 @@ services:
       MEMORY_CONSOLIDATION: ${MEMORY_CONSOLIDATION:-true}
     volumes:
       - memory_data:/data/memory
+      - ./logs:/app/logs
     networks:
       - default
       - graph
