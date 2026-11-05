@@ -1,9 +1,9 @@
 # Companion harness: graph retrieval findings
 
 Status: local graph measurements, a first manual end-to-end check, and a
-bounded audit diagnosis recorded; a repeatable sensor-reading journey and
-latency evaluation remain pending.
-Date: 2026-11-04.
+bounded audit diagnosis recorded; synthetic sensor contracts verified,
+actual-source journey blocked and live/latency evaluation pending.
+Date: 2026-11-05.
 
 ## Summary and recommendation
 
@@ -127,6 +127,46 @@ run. No in-repository retrieval defect was confirmed, so no prompt, tool,
 simulator, graph-mapping, or authorization change was made; task 0070 is the
 bounded follow-up for a repeatable sensor journey.
 
+### 0070 deterministic sensor journey
+
+Six additional cases in
+[workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts)
+exercise the public workflow with real Pi sessions, a network-disabled
+scripted provider, the existing synthetic graph fixture and the production
+SQLite reader. A local database reuses the existing scripted observation;
+it is not a simulator export. Reader and tool check times are fixed.
+Execution was local on Linux; no hardware or latency benchmark was performed.
+
+| Contract case | Local result |
+| --- | --- |
+| Recent synthetic observation | Discovery, reference resolution and SQLite read reach a settled answer with source, observation timestamp and fixture-relative freshness |
+| Wrong entity | Clarification; no inspection, reference resolution or source read for the wrong room |
+| Unreachable configured source | Explicit unavailable result and answer; no substituted reading |
+| Empty series | Explicit no-data result; no fabricated value, timestamp or freshness |
+| Historical observation | Stale result and qualified answer; no current-temperature claim |
+| Conflicting location/reference evidence | Explicit limitation; no invented room mapping or source read |
+
+For every run, assertions join selection, dispatch and result by tool-call
+correlation ID within the workflow/session, then join the terminal outcome by
+workflow ID. They verify the correlated read outcome (including freshness)
+or the absence of all external-read lifecycle events. No audit records,
+household contents or tool payloads are reproduced here. Capture is unchanged.
+
+**Recommendation:** retain the existing retrieval and safety boundaries.
+No production defect was demonstrated. Scripted answers prove orchestration
+and evidence delivery only, not a real model's investigative decisions.
+The passing synthetic case is **not actual-source acceptance**. The fresh
+checkout supplies no paired, provenance-backed scoped graph/reference and
+matching readings snapshot. Existing integration tests require those external
+inputs; historical import findings do not establish the exact source resource
+or supply its data. Inventing that pair would hide the acceptance blocker.
+Task [0070](../../TASKS/0070-complete-sensor-journey.md#bounded-follow-up-to-unblock-acceptance)
+keeps a bounded follow-up to obtain approved local evidence and repeat this
+boundary with an honest historical/stale result if that is all it supports.
+
+No live external or cloud check ran. Consent has not been given for a live
+run; source availability and real-model acceptance remain separately pending.
+
 ## Limitations
 
 - Small, local import; performance does not establish scaling behavior.
@@ -140,6 +180,8 @@ bounded follow-up for a repeatable sensor journey.
   content. Source availability and result freshness were not exercised in that
   historical workflow.
 - Stale fixtures and unsupported references constrain answerability.
+- Synthetic workflow/SQLite fixtures do not supply a provenance-backed
+  household source or satisfy actual-source sensor acceptance.
 
 ## Open items
 

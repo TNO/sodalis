@@ -50,17 +50,19 @@ current acceptance.
 Found during the first manual end-to-end check on 2026-11-04 (results in the
 [evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)).
 
-### Developer audit is not implemented
+### Developer audit implemented (0068)
 
-There is no way to follow retrieved evidence, model/tool events, and their
+At the first manual check there was no way to follow retrieved evidence,
+model/tool events, and their
 relation to an outcome, or to inspect tool arguments, results, and step
-durations. Only failures are logged, and the public SSE stream deliberately
+durations. Only failures were logged, and the public SSE stream deliberately
 carries only the terminal outcome (see the
 [architecture](../docs/architecture/companion-harness.md#observability-gap)).
-This makes wrong or missing answers effectively impossible to diagnose, and it
-blocks the accepted diagnosis and sensor journey.
+That gap blocked diagnosis. Task 0068 has since implemented the audit, and
+0069 recorded its bounded diagnosis; the historical manual sensor question
+still cannot be uniquely matched from sanitized metadata alone.
 
-Approved follow-up [0068](0068-persistent-developer-audit.md) adds an
+Completed [0068](0068-persistent-developer-audit.md) provides an
 explicitly opt-in, development-only audit, disabled by default and rejected in
 production. It writes a chronological human transcript and structured JSONL
 from the same event stream to the git-ignored repository-root `logs/` directory,
@@ -91,6 +93,15 @@ evidence before a bounded repair. Then task
 [0070](0070-complete-sensor-journey.md) requires a repeatable, grounded journey
 that reports the actual source, timestamp, and freshness. A known historical
 snapshot may return stale data; it must not be presented as fresh.
+
+On 2026-11-05, 0070 added six deterministic public-workflow contract cases
+using a scripted model and the real local SQLite reader. They correlate tool
+selection, dispatch, result and terminal outcome without broadening the audit.
+These synthetic fixtures do not establish an actual household reading.
+0070 remains blocked on a provenance-backed graph/reference and readings
+snapshot; its bounded follow-up and verification limits are in that ticket
+and the [evaluation](../docs/evaluations/companion-harness.md#0070-deterministic-sensor-journey).
+No live check ran; live acceptance remains separately pending explicit consent.
 
 ## Accepted sensor journey
 

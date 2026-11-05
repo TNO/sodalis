@@ -1,7 +1,8 @@
 # Companion harness
 
 Status: first implementation present; manually verified end to end for
-household/resident questions; sensor readings and full acceptance pending.
+household/resident questions; synthetic sensor contracts verified,
+actual-source sensor acceptance blocked and live verification pending.
 The development-only developer audit is implemented; read-only email/calendar
 adapters and one-path convergence are still planned.
 Updated: 2026-11-05.
@@ -592,13 +593,43 @@ Task [0070](../../TASKS/0070-complete-sensor-journey.md) is the bounded follow-u
 to reproduce the complete journey with deterministic local data and separately
 seek consent before any live-source check.
 
+### Deterministic sensor journey (0070)
+
+The public `CompanionWorkflows` boundary is exercised with a scripted Pi model,
+the existing synthetic graph fixture and the real `SqliteReadingsReader` over a
+local test database. A fixed reader/tool clock makes source timestamp and
+freshness checks repeatable. The model steps assert the returned discovery and
+read evidence before supplying a settled answer. Recent and stale fixture
+observations retain source, observed time and freshness; unavailable and empty
+results produce explicit limitations. Wrong-entity and conflicting-location
+cases end without selecting or dispatching a source read.
+
+Each case checks the existing audit contract: `workflowId` and `sessionId`
+identify the run; `toolCallId` equals `correlationId` across `tool.selected`,
+`tool.dispatched` and `tool.result`; workflow start and terminal records use
+the workflow ID as correlation ID. Read-result status and, when available,
+freshness are checked within that same correlated run. This uses an in-memory
+audit sink; existing file/redaction tests cover persistence. No audit fields,
+content capture, resident SSE or memory behavior changed.
+
+These are synthetic contract fixtures, not a captured source snapshot or proof
+that a real model chooses correct tools or answers. No production retrieval
+defect was established, so scope, authorization, allowlists, validation and
+household/resident behavior remain unchanged. Actual-source acceptance is
+blocked on a provenance-backed graph/reference plus matching readings
+snapshot; live checks remain separately pending consent. The
+[evaluation](../evaluations/companion-harness.md#0070-deterministic-sensor-journey)
+and [0070 follow-up](../../TASKS/0070-complete-sensor-journey.md#bounded-follow-up-to-unblock-acceptance)
+record the limits without reproducing household content or audit payloads.
+
 ## Planned acceptance roadmap
 
 The audit task is implemented
-([0068](../../TASKS/0068-persistent-developer-audit.md)). Next are
-the evidence-based diagnosis (0069; no repair was justified by the available
-trace), then one repeatable sensor journey
-([0070](../../TASKS/0070-complete-sensor-journey.md)). The known cause of the
+([0068](../../TASKS/0068-persistent-developer-audit.md)), and the evidence-based
+diagnosis is complete (0069; no repair was justified by the available trace).
+Next is actual-source acceptance of the sensor journey
+([0070](../../TASKS/0070-complete-sensor-journey.md); synthetic contract cases
+verified, source evidence blocked). The known cause of the
 historical missing reading remains unconfirmed because the sanitized audit
 cannot uniquely match its workflows to that manual question.
 
@@ -941,6 +972,7 @@ skips without its local Neo4j settings.
 | Repository-root audit bind mount persistence | [companion-compose.test.ts](../../scripts/companion-compose.test.ts) |
 | Private audit files readable by the host after a root container exits (local Docker image required; skipped in CI) | [audit-permissions.test.ts](../../scripts/audit-permissions.test.ts) |
 | Bounded tool reads, explicit unavailable results, SQLite observations | [tools.test.ts](../../apps/server/src/assistant/harness/tools.test.ts) |
+| Synthetic sensor discovery-to-SQLite-to-answer journey, honest adverse outcomes and per-run audit correlation (not actual-source/model acceptance) | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
 | Actual imported schema and supported source reads, without models; local only, against the `home_simulator` Neo4j test container | [homeGraph.integration.test.ts](../../apps/server/src/assistant/harness/homeGraph.integration.test.ts) |
 | Speech-stop/steer distinction, in-transit answers, newer input | [WorkflowConversation.test.ts](../../packages/assistant/src/WorkflowConversation.test.ts) |
 | HTTP/SSE transport | [ServerWorkflowClient.test.ts](../../packages/assistant/src/ServerWorkflowClient.test.ts) |

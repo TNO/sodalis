@@ -36,6 +36,6 @@ a single place to find conclusions.
 | [Alternate LLM providers](llm-providers.md) | 0037 | Complete |
 | [Long-term memory](memory.md) | 0048, 0049, 0050, 0051 | Local evaluation complete; Azure ceiling deferred pending configuration and consent |
 | [CI test tiers and code quality tooling](ci-quality-and-tests.md) | 0065, 0066 | Complete |
-| [Companion harness graph retrieval](companion-harness.md) | 0067 | Exploratory local graph measurements; real-model evaluation pending |
+| [Companion harness graph retrieval](companion-harness.md) | 0067, 0070 | Synthetic sensor contracts verified; actual-source journey blocked, live evaluation pending |
 | [MetaHuman and Fab licensing](metahuman-fab-licensing.md) | 0054 | Research note; distribution questions open |
 | [Personal-assistant memory and embodiment for older adults](personal-assistant-memory-and-embodiment.md) | 0039, 0054 | Research complete; implementation and user validation remain |
