@@ -212,8 +212,8 @@ importers:
         specifier: ^2.3.8
         version: 2.3.8
       mithril-materialized:
-        specifier: ^4.0.0
-        version: 4.0.0
+        specifier: ^5.0.3
+        version: 5.0.3
 
   apps/server:
     dependencies:
@@ -1491,8 +1491,8 @@ packages:
     resolution: {integrity: sha512-iny/40PEGkNJQ5/Pv6z3nm6FbRAby32GeZRjCUJk2WnNDbgPSTcdI+DDvLqsgBdD4cD5sMtMheqPPnehCCa8Nw==}
     engines: {node: 18 || 20 || >=22}
 
-  mithril-materialized@4.0.0:
-    resolution: {integrity: sha512-osq9Q25++xDRmyczM8AQsNok3GBmOcIH/MYJsAnFWAph+bTSC2d7Cwpncf2svWKAXlQ+w5iyqWcH3K1Ydk0LYA==}
+  mithril-materialized@5.0.3:
+    resolution: {integrity: sha512-dUX2FsBFSiK8oHLvwLZCYoMDR2dXqfNhRJ+fRRvKmDP9iLA5GoI/Tk2VRpMl4ZDfssGIHO759c5xRYdLCwmiOQ==}
 
   mithril@2.3.8:
     resolution: {integrity: sha512-za/Yo7qXEckjm5syrSfaaI9Utf4tCUT3T1IOIYqH6Lrj7G0OZuYYLAY9SV4ygoaAf0+CNqU92MBt+7pmo53JVQ==}
@@ -3090,7 +3090,7 @@ snapshots:
       '@isaacs/nonrecursive-glob-match': 1.0.3
       brace-expansion: 5.0.12
 
-  mithril-materialized@4.0.0:
+  mithril-materialized@5.0.3:
     dependencies:
       mithril: 2.3.8
 
