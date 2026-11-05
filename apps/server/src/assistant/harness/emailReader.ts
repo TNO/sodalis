@@ -666,7 +666,7 @@ export function createGmailEmailReader(options: EmailReaderAdapterOptions): Read
               throw error;
             }
             malformed ||= current.malformed === true;
-            const uniqueIds = current.ids.filter((id) => !seen.has(id));
+            const uniqueIds = [...new Set(current.ids)].filter((id) => !seen.has(id));
             const remaining = MAX_CANDIDATES - seen.size;
             if (uniqueIds.length > PAGE_SIZE || uniqueIds.length > remaining) malformed = true;
             const ids = uniqueIds.slice(0, Math.min(PAGE_SIZE, remaining));

@@ -116,3 +116,10 @@ responses only. `pnpm test`, `pnpm typecheck` and `pnpm build` pass; live
 provider compatibility, Google deployment approval, cloud-model handling and
 response quality remain unverified. No live provider or cloud-model checks
 were run.
+
+Spec-review follow-up: ordinary requests such as “Read all my mail”,
+“Summarize my latest mail” and “Do I have any new mail?” expose only the
+limitation tool, verified at the workflow/model-request boundary alongside
+unrelated mail-delivery prose. Gmail listing IDs are deduplicated before
+metadata/body reads and newest-five selection; deterministic duplicate-ID
+fixtures verify five unique messages, stable ordering and complete coverage.

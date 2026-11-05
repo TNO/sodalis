@@ -310,5 +310,5 @@ export function isApprovedEmailQuestion(question: string): boolean {
 
 export function isEmailRelatedQuestion(question: string): boolean {
   return /\b(?:e-?mails?|inbox|mailbox|gmail|outlook|mailtjes|mailtje|berichten)\b/i.test(question) ||
-    /\b(?:read|check|summari[sz]e|show|list|fetch|search)\s+(?:(?:my|our|the|all|some|latest|recent|new|unread|last)\s+)?mail\b/i.test(question);
+    /\b(?:read|check|summari[sz]e|show|list|fetch|search|have)\s+(?:(?:my|our|the|all|some|any|latest|recent|new|unread|last)\s+)*mail\b/i.test(question);
 }

@@ -334,6 +334,44 @@ describe("ReadOnlyEmailReader", () => {
       expect(pageCount).toBe(1);
   });
 
+  it.each([
+    [["M01", "M01", "M02", "M03", "M04", "M05"]],
+    [["M05", "M03", "M01", "M01", "M04", "M02"]],
+  ])("selects five unique sorted Gmail messages despite duplicate listing IDs: %j", async (ids) => {
+    const metadataIds: string[] = [];
+    const bodyIds: string[] = [];
+    const fixtureTransport = gmailTransport();
+    const reader = createGmailEmailReader({
+      resolveConnection,
+      transport: async (url, options) => {
+        const parsed = new URL(url);
+        if (parsed.pathname.endsWith("/messages")) {
+          return jsonResponse({ messages: ids.map((id) => ({ id: `message-${id}` })) });
+        }
+        const id = parsed.pathname.split("/").at(-1)!;
+        if (parsed.searchParams.get("format") === "metadata") metadataIds.push(id);
+        if (parsed.searchParams.get("format") === "full") bodyIds.push(id);
+        return fixtureTransport(url, options);
+      },
+    });
+
+    const result = await request(reader, { connectionHandle: gmailConnection.handle });
+    expect(result).toMatchObject({
+      status: "ok",
+      coverage: "complete",
+      messages: [
+        { subject: "Visit", receivedAt: "2026-11-05T11:00:00.000Z" },
+        { subject: "Delivery", receivedAt: "2026-11-04T15:00:00.000Z" },
+        { subject: "Library", receivedAt: "2026-11-03T09:00:00.000Z" },
+        { subject: "Lunch", receivedAt: "2026-11-02T10:00:00.000Z" },
+        { subject: "Walk", receivedAt: "2026-11-02T10:00:00.000Z" },
+      ],
+    });
+    expect(new Set(result.messages.map((message) => message.source.reference)).size).toBe(5);
+    expect(metadataIds.sort()).toEqual(["message-M01", "message-M02", "message-M03", "message-M04", "message-M05"]);
+    expect(bodyIds.sort()).toEqual(["message-M01", "message-M02", "message-M03", "message-M04", "message-M05"]);
+  });
+
   it("treats a remaining Gmail page at the two-page candidate cap as partial", async () => {
     let page = 0;
     const reader = createGmailEmailReader({

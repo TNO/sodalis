@@ -801,7 +801,9 @@ provider queries, paging, MIME and normalization.
   time query conservatively widened by one second at each edge, then exact
   local filtering. Gmail listing returns IDs, not body/envelope data: fetch
   metadata for at most 100 candidates, then full messages for the selected
-  five. Recheck labels/draft status in returned metadata.
+  five. Deduplicate Gmail listing IDs within and across pages before metadata
+  requests and selection, so repeats cannot displace a unique message.
+  Recheck labels/draft status in returned metadata.
 - Follow provider continuation only on the fixed allowed mail host and same
   account path; no arbitrary URLs/redirects. Bound the reader to **15 seconds**
   or the remaining workflow budget, whichever is smaller, and at most four
