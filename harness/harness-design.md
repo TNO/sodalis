@@ -13,8 +13,10 @@ authoritative documents below rather than appending new design notes here.
 | Configuration, routes, startup, direct integration checks | [Server guide](../apps/server/README.md#companion-workflow-pi-harness) |
 | Recorded graph measurements and their limitations | [Evaluation evidence](../docs/evaluations/companion-harness.md) |
 | Remaining acceptance, unverified targets, deferred directions | [Task 0067](../TASKS/0067-companion-harness.md) |
+| Approved follow-up tickets and dependencies | [Task index](../TASKS/README.md#companion-investigation-harness) |
 
 The first read-only implementation is present and opt-in. It has no desktop
 action bridge or long-term memory integration; the existing turn path retains
 its behavior. Real-model reasoning and end-to-end latency evaluation are still
-pending. Pi embedding is not an operating-system sandbox.
+pending. The developer audit and future single-harness target are planned, not
+implemented. Pi embedding is not an operating-system sandbox.
