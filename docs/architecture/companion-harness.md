@@ -2,7 +2,8 @@
 
 Status: first implementation present; manually verified end to end for
 household/resident questions; sensor readings and full acceptance pending.
-Developer audit and one-path convergence are planned, not implemented.
+The development-only developer audit is implemented; one-path convergence is
+still planned.
 Updated: 2026-11-05.
 
 The opt-in Pi workflow investigates household questions through successive
@@ -376,26 +377,21 @@ Query plans are warmed at startup following the [cold-query findings](../evaluat
 
 ### Observability gap
 
-A workflow currently cannot be inspected. Intermediate model messages, tool
-calls and their arguments, tool results, harness decisions, and per-step timing
-stay inside the Pi session and are discarded with it. Public SSE events
-deliberately carry only `started` and the terminal outcome, and the server logs
-only failures (provider errors, unavailable graph/source, unexpected tool
-defects). So when an answer is wrong or missing, it is not possible to follow
-the evidence and execution events that led to the outcome. The approved,
-not-yet-implemented solution is a development-only, opt-in local text audit; see
-[task 0068](../../TASKS/0068-persistent-developer-audit.md).
+When `COMPANION_AUDIT=true`, `FileCompanionAuditWriter` appends one chronological
+human-readable transcript and one structured JSONL record per event from the
+same Pi event stream under repository-root `logs/`. The AI service's Compose
+configuration bind-mounts `./logs` at `/app/logs`, so files survive container
+shutdown. The default is off; startup rejects enabling it when `NODE_ENV` is
+`production`. The server guide documents these settings.
 
-The audit will write a chronological human transcript and structured JSONL from
-the same event stream under the git-ignored repository-root `logs/` directory,
-bind-mounted into the AI container so files survive container shutdown. It
-will record conversation messages; model/tool lifecycle; tool names,
-arguments, and results; harness validation/policy decisions; timestamps,
-durations, correlation IDs, and terminal outcomes, distinguishing tool
-selection, dispatch, and result. Only provider-supported reasoning summaries
-and harness metadata are in scope; hidden chain-of-thought is not. Credentials
-must be redacted. Spoken input is captured only as its text transcript, never
-audio bytes or artifacts.
+The records include resident text messages, model/turn metadata and timing,
+tool selection, dispatch and result (including names, arguments, validation
+decisions and durations), accepted steering, correlation IDs, and the terminal
+outcome. Only text content and explicit provider/model/usage metadata are
+recorded; hidden chain-of-thought is never included. Speech input reaches this
+workflow as a text transcript only; audio bytes, recordings and artifacts are
+not captured. Credential-like keys and values are redacted before either file
+is written.
 
 This sensitive developer diagnostic remains out of resident UI, public SSE,
 external uploads, and durable assistant memory. Developers manually delete
@@ -408,7 +404,8 @@ no compliance-grade guarantees and adds no resident-facing runtime behavior.
 
 ## Planned acceptance roadmap
 
-The first sequence is audit ([0068](../../TASKS/0068-persistent-developer-audit.md)),
+The audit task is implemented
+([0068](../../TASKS/0068-persistent-developer-audit.md)). Next are
 evidence-based diagnosis and bounded repair
 ([0069](../../TASKS/0069-diagnose-harness-data-retrieval.md)), then one
 repeatable sensor journey
@@ -474,7 +471,9 @@ skips without its local Neo4j settings.
 | Guarantee | Behavior tests |
 | --- | --- |
 | Tool-result-driven continuation, settled-answer gate, steering, cancellation, limits | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
-| HTTP lifecycle, configuration, literal provider values | [routes.test.ts](../../apps/server/src/assistant/harness/routes.test.ts) |
+| Audit correlation/lifecycle, text-only transcript, redaction, hidden-reasoning exclusion, write-error reporting | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
+| HTTP lifecycle, audit isolation from SSE and memory, configuration, literal provider values | [routes.test.ts](../../apps/server/src/assistant/harness/routes.test.ts) |
+| Repository-root audit bind mount persistence | [companion-compose.test.ts](../../scripts/companion-compose.test.ts) |
 | Bounded tool reads, explicit unavailable results, SQLite observations | [tools.test.ts](../../apps/server/src/assistant/harness/tools.test.ts) |
 | Actual imported schema and supported source reads, without models; local only, against the `home_simulator` Neo4j test container | [homeGraph.integration.test.ts](../../apps/server/src/assistant/harness/homeGraph.integration.test.ts) |
 | Speech-stop/steer distinction, in-transit answers, newer input | [WorkflowConversation.test.ts](../../packages/assistant/src/WorkflowConversation.test.ts) |

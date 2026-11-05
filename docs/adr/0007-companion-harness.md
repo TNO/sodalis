@@ -37,7 +37,9 @@ harness; do not introduce a generic workflow framework or plugin registry.
 
 The approved development-diagnosis target is an explicitly opt-in,
 development-only text audit written locally under the git-ignored
-repository-root `logs/` directory; it is not implemented yet
+repository-root `logs/` directory; it is implemented as described in the
+[current architecture](../architecture/companion-harness.md#observability-gap)
+and [server guide](../../apps/server/README.md#development-only-audit)
 ([task 0068](../../TASKS/0068-persistent-developer-audit.md)).
 The host bind-mounts that directory into the AI container so audit files survive
 container shutdown. A chronological human transcript and structured JSONL come

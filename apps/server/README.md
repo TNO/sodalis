@@ -246,6 +246,30 @@ silently switching modes. Reload the desktop after changing the server mode.
 Workflow mode offers no app actions or long-term-memory integration; turn mode
 retains both its exact-action confirmations and optional-memory behavior.
 
+### Development-only audit
+
+The local developer audit is off by default. Set `COMPANION_AUDIT=true` with
+`COMPANION_HARNESS=pi` and `NODE_ENV=development` to enable it; startup rejects
+an enabled audit when `NODE_ENV=production`. The stack launcher defaults to
+development, while direct Compose invocation defaults to production. The AI
+container writes a human-readable chronological transcript and structured
+JSONL under `/app/logs`; Compose bind-mounts the repository-root `./logs/`
+directory there, so the files survive container shutdown. The directory is
+git-ignored.
+
+Both files are written from the same internal Pi event stream. They include
+text messages, model and tool lifecycle, tool selection/dispatch/results,
+arguments, validation decisions, timestamps, durations, correlation IDs, and
+terminal outcomes. Credentials are redacted. Only provider/model metadata and
+text content are retained; hidden chain-of-thought is not. Spoken input is
+captured as its resulting text transcript only—never audio bytes, recordings,
+or artifacts. Audit records are separate from resident HTTP/SSE responses and
+workflow memory. They are never uploaded or added to durable assistant memory.
+Household information in these files may be sensitive: developers must delete
+them manually. There is no automatic expiry, quota manager, warning UI, or
+compliance-grade guarantee. Ordinary write failures are reported through the
+server's standard error logger; there is no resident-facing error behavior.
+
 The model uses the existing `LLM_PROVIDER` settings; `mock` answers with a
 fixed sentence without calling a model service. The explicit prompt, three
 read-only tools, resource restrictions, provider mapping, and host limits are

@@ -4,10 +4,17 @@ import { createCompanionSession } from "./companionSession.js";
 import { SqliteReadingsReader } from "./externalData.js";
 import { Neo4jHomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
+import { FileCompanionAuditWriter } from "./audit.js";
 import { CompanionWorkflows } from "./workflow.js";
-import { validateCompanionSettings, validateReadingsFile, type CompanionDataSettings } from "./settings.js";
+import {
+  validateCompanionAuditSettings,
+  validateCompanionSettings,
+  validateReadingsFile,
+  type CompanionAuditSettings,
+  type CompanionDataSettings,
+} from "./settings.js";
 
-export interface CompanionHarnessSettings extends LlmProviderSettings, CompanionDataSettings {}
+export interface CompanionHarnessSettings extends LlmProviderSettings, CompanionDataSettings, CompanionAuditSettings {}
 
 const DEFAULT_SCOPE = "cphs:simulation:couple-apartment";
 const DEFAULT_SQLITE_ENDPOINT = "local://simulation/timeseries.sqlite";
@@ -19,6 +26,7 @@ const DEFAULT_SQLITE_ENDPOINT = "local://simulation/timeseries.sqlite";
 export async function createCompanionHarnessFromEnv(
   settings: CompanionHarnessSettings,
 ): Promise<CompanionWorkflows | undefined> {
+  const auditEnabled = validateCompanionAuditSettings(settings);
   if (validateCompanionSettings(settings) === "off") return undefined;
   const file = settings.HOME_DATA_SQLITE_FILE?.trim();
   if (file) validateReadingsFile(file);
@@ -45,6 +53,7 @@ export async function createCompanionHarnessFromEnv(
     console.warn("COMPANION_HARNESS=pi without HOME_GRAPH_URL: home tools report unavailable.");
   }
   return new CompanionWorkflows({
+    ...(auditEnabled ? { audit: new FileCompanionAuditWriter() } : {}),
     createSession: ({ history, budget }) =>
       createCompanionSession({
         model,

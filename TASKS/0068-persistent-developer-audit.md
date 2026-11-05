@@ -1,6 +1,6 @@
 # 0068 Inspect a conversation through a persistent developer text audit
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: none

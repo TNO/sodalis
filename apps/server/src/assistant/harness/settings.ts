@@ -12,6 +12,23 @@ export interface CompanionDataSettings {
   readonly HOME_DATA_SQLITE_ENDPOINT?: string;
 }
 
+export interface CompanionAuditSettings {
+  readonly COMPANION_AUDIT?: string;
+  readonly NODE_ENV?: string;
+}
+
+export function validateCompanionAuditSettings(settings: CompanionAuditSettings): boolean {
+  const value = settings.COMPANION_AUDIT?.trim() || "false";
+  if (value !== "true" && value !== "false") {
+    throw new Error("COMPANION_AUDIT must be true or false.");
+  }
+  const nodeEnv = settings.NODE_ENV?.trim() || process.env.NODE_ENV;
+  if (value === "true" && nodeEnv === "production") {
+    throw new Error("COMPANION_AUDIT cannot be enabled in production.");
+  }
+  return value === "true";
+}
+
 function companionHarnessMode(value: string | undefined): "off" | "pi" {
   const mode = value?.trim() || "off";
   if (mode !== "off" && mode !== "pi") {

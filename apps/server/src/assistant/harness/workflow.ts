@@ -1,6 +1,7 @@
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ConversationMessage } from "@sodalis/assistant";
 import type { ToolBudget } from "./tools.js";
+import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
 
 /**
  * One foreground companion workflow per resident conversation: start, steer
@@ -68,6 +69,8 @@ export interface CompanionWorkflowsOptions {
   }) => Promise<AgentSession>;
   readonly limits?: Partial<WorkflowLimits>;
   readonly maxConcurrentWorkflows?: number;
+  /** Local developer diagnostics; omitted by default and never sent to residents. */
+  readonly audit?: CompanionAuditSink;
 }
 
 export interface WorkflowStartOptions {
@@ -87,6 +90,22 @@ function assistantText(content: readonly { type: string; text?: string }[]): str
     .map((part) => part.text)
     .join("")
     .trim();
+}
+
+function auditText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part): part is { type: "text"; text: string } =>
+      Boolean(part && typeof part === "object" && (part as { type?: unknown }).type === "text" &&
+        typeof (part as { text?: unknown }).text === "string"),
+    )
+    .map((part) => part.text)
+    .join("");
+}
+
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 class WorkflowRun {
@@ -112,6 +131,8 @@ class WorkflowRun {
   private steeringInputs = 0;
   private readonly timer: ReturnType<typeof setTimeout>;
   private resolveDone!: (event: TerminalWorkflowEvent) => void;
+  private readonly startedAt = Date.now();
+  private readonly turnStartedAt: number[] = [];
   readonly done = new Promise<TerminalWorkflowEvent>((resolve) => {
     this.resolveDone = resolve;
   });
@@ -121,6 +142,7 @@ class WorkflowRun {
     private readonly limits: WorkflowLimits,
     private readonly onEvent: (event: WorkflowEvent) => void,
     private readonly onFinished: () => void,
+    private readonly audit: CompanionAuditSink | undefined,
   ) {
     this.sessionId = input.sessionId;
     this.workflowId = input.workflowId;
@@ -134,6 +156,14 @@ class WorkflowRun {
   }
 
   async start(createSession: CompanionWorkflowsOptions["createSession"]): Promise<void> {
+    this.recordAudit("workflow.started", { inputId: this.input.inputId });
+    for (const [historyIndex, message] of this.input.messages.slice(0, -1).entries()) {
+      this.recordAudit(`${message.role}.message`, {
+        text: message.content,
+        source: "conversation_history",
+        historyIndex,
+      });
+    }
     this.emit({ type: "started", workflowId: this.workflowId, sequence: this.sequence++ });
     const question = this.input.messages.at(-1)!.content;
     let session: AgentSession;
@@ -172,6 +202,7 @@ class WorkflowRun {
     this.inputTexts.set(inputId, text);
     this.latestAcceptedInputId = inputId;
     this.candidate = undefined;
+    this.recordAudit("workflow.input.accepted", { inputId, text });
     if (!this.session) return "accepted";
     this.expectedUserMessages.push([inputId]);
     // A failed or unconsumed steer is resubmitted when the run settles.
@@ -190,20 +221,40 @@ class WorkflowRun {
   /** Stops server work after the client went away; no event can be delivered. */
   disconnect(): void {
     if (this.state !== "running") return;
+    this.recordAudit("workflow.terminal", { outcome: "disconnected", durationMs: Date.now() - this.startedAt });
     this.state = "done";
     this.release();
   }
 
   private handle(event: AgentSessionEvent): void {
     if (this.state !== "running") return;
+    this.auditSessionEvent(event);
     switch (event.type) {
       case "message_end": {
         const message = event.message;
         if (message.role === "user") {
+          this.recordAudit("user.message", { text: auditText(message.content) });
           const covered = this.expectedUserMessages.shift();
           if (covered?.length) this.latestDeliveredInputId = covered.at(-1);
           this.candidate = undefined;
         } else if (message.role === "assistant") {
+          this.recordAudit("assistant.message", {
+            text: auditText(message.content),
+            provider: message.provider,
+            model: message.model,
+            api: message.api,
+            stopReason: message.stopReason,
+            ...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
+            usage: message.usage,
+          });
+          for (const part of message.content) {
+            if (part.type !== "toolCall") continue;
+            this.recordAudit("tool.selected", {
+              toolCallId: part.id,
+              toolName: part.name,
+              arguments: part.arguments,
+            }, part.id);
+          }
           this.modelTurns += 1;
           this.modelError = message.stopReason === "error";
           this.modelErrorMessage = this.modelError ? message.errorMessage ?? "no error message" : undefined;
@@ -226,6 +277,58 @@ class WorkflowRun {
         return;
       default:
         return;
+    }
+  }
+
+  private auditSessionEvent(event: AgentSessionEvent): void {
+    const raw = event as unknown as Record<string, unknown>;
+    if (event.type === "agent_start") {
+      this.recordAudit("model.run.started");
+    } else if (event.type === "agent_end") {
+      this.recordAudit("model.run.ended", { willRetry: raw.willRetry });
+    } else if (event.type === "agent_settled") {
+      this.recordAudit("model.run.settled", { aborted: raw.aborted });
+    } else if (event.type === "turn_start") {
+      this.turnStartedAt.push(Date.now());
+      this.recordAudit("model.turn.started", { turn: this.modelTurns + 1 });
+    } else if (event.type === "turn_end") {
+      const startedAt = this.turnStartedAt.shift();
+      this.recordAudit("model.turn.completed", {
+        turn: this.modelTurns + 1,
+        durationMs: startedAt === undefined ? undefined : Date.now() - startedAt,
+        stopReason: recordOf(raw.message).stopReason,
+      });
+    } else if (event.type === "tool_execution_start") {
+      const toolCallId = String(raw.toolCallId ?? "");
+      this.recordAudit("tool.dispatched", {
+        toolCallId,
+        toolName: raw.toolName,
+        arguments: raw.args,
+      }, toolCallId || this.workflowId);
+    } else if (event.type === "tool_execution_end") {
+      const toolCallId = String(raw.toolCallId ?? "");
+      const result = recordOf(raw.result);
+      this.recordAudit("tool.result", {
+        toolCallId,
+        toolName: raw.toolName,
+        result,
+        isError: raw.isError,
+        durationMs: raw.durationMs,
+        validationDecision: this.toolDecision(result),
+      }, toolCallId || this.workflowId);
+    }
+  }
+
+  private toolDecision(result: Record<string, unknown>): string | undefined {
+    const direct = typeof result.status === "string" ? result.status : undefined;
+    if (direct) return direct;
+    const content = auditText(result.content);
+    try {
+      const payload: unknown = JSON.parse(content);
+      const status = recordOf(payload).status;
+      return typeof status === "string" ? status : undefined;
+    } catch {
+      return undefined;
     }
   }
 
@@ -296,6 +399,11 @@ class WorkflowRun {
   private finish(event: TerminalWorkflowEvent): void {
     if (this.state !== "running") return;
     this.state = "done";
+    this.recordAudit("workflow.terminal", {
+      outcome: event.type,
+      terminalCode: event.type === "failed" ? event.code : undefined,
+      durationMs: Date.now() - this.startedAt,
+    });
     this.emit(event);
     this.release();
     this.resolveDone(event);
@@ -321,6 +429,30 @@ class WorkflowRun {
       console.error(`Delivering workflow event for "${this.workflowId}" failed:`, error);
     }
   }
+
+  private recordAudit(
+    event: string,
+    details: Record<string, unknown> = {},
+    correlationId = this.workflowId,
+  ): void {
+    if (!this.audit) return;
+    const record = {
+      ...details,
+      event,
+      workflowId: this.workflowId,
+      sessionId: this.sessionId,
+      correlationId,
+      timestamp: new Date().toISOString(),
+    } as CompanionAuditEvent;
+    try {
+      const write = this.audit.write(record);
+      if (write && typeof write.then === "function") {
+        void write.catch((error: unknown) => console.error("Developer audit write failed:", error));
+      }
+    } catch (error) {
+      console.error("Developer audit write failed:", error);
+    }
+  }
 }
 
 export class CompanionWorkflows {
@@ -342,7 +474,7 @@ export class CompanionWorkflows {
     const run = new WorkflowRun(input, this.limits, options.onEvent, () => {
       if (this.runs.get(input.workflowId) === run) this.runs.delete(input.workflowId);
       options.signal?.removeEventListener("abort", onAbort);
-    });
+    }, this.options.audit);
     const onAbort = () => run.disconnect();
     this.runs.set(input.workflowId, run);
     options.signal?.addEventListener("abort", onAbort, { once: true });
