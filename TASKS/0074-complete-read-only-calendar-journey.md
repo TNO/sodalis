@@ -23,19 +23,13 @@ decision; neither adapter is implemented by the decision itself.
   discovery only. No configured source is unavailable; ambiguous selection asks
   for clarification. Do not expose provider URLs or account selectors as model
   inputs.
-- Microsoft: register the intended Microsoft identity tenant/account types and
-  exact server redirect URI. Configure client ID, allowed tenant/issuer, and
-  client credential if required. Obtain delegated `Calendars.ReadBasic` and
-  `openid`; add `offline_access` only for refresh. Handle tenant/admin policy
-  denial without broader scopes. Read `/v1.0/me/calendarView` for the bound
-  account's default calendar with explicit UTC bounds and minimal fields.
-- Google: enable Calendar API in a Google Cloud project, configure consent
-  screen/test users and exact web-client redirect URI, and provision client
-  credentials. Obtain `calendar.events.readonly` (full URI in the architecture)
-  and `openid`, with offline access only for refresh. Read
-  `/calendar/v3/calendars/primary/events`, expanding occurrences and following
-  bounded pagination. Document testing-mode grant expiry and any production
-  verification requirement; no service-account/domain-wide access.
+- Implement and document both adapters using the authoritative provider table in
+  [Delegated authorization and provider setup](../docs/architecture/companion-harness.md#delegated-authorization-and-provider-setup)
+  for required registration/configuration, OAuth grants, approved read endpoints
+  and request fields, and provider-specific restrictions. Verify the actual
+  registered-client requirements and consented scopes. Handle and document
+  tenant/admin policy denial without broader scopes, testing-mode grant expiry,
+  and any production verification requirement.
 - Implement host-owned code/PKCE exchange, state/nonce and verified account
   binding. Document exact callback routes, validated configuration names, and
   how to connect, reconnect, and disconnect. Reject callback replay, wrong
