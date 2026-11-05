@@ -36,6 +36,12 @@ decision; neither adapter is implemented by the decision itself.
   issuer/audience/resident/account, insufficient scope, and unconfigured
   redirects. Disconnect removes local authority immediately, deletes tokens,
   and attempts upstream revocation where supported.
+- Follow the shared
+  [delegated account authorization](../docs/architecture/companion-harness.md#delegated-account-authorization)
+  protocol ([ADR 0008](../docs/adr/0008-delegated-personal-account-access.md)),
+  using calendar-only client registrations. Whichever of this task and
+  [0072](0072-complete-read-only-email-journey.md) lands first implements the
+  shared connection protocol and secure credential store; the other reuses them.
 - Select and document a concrete OS credential store or encrypted server store
   with a separately managed key. Provision secrets outside version control,
   browser storage, fixtures, and CI; fail closed if secure storage is missing.
