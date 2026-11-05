@@ -30,6 +30,8 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      code: ${{ steps.code.outputs.code }}
+      node-os: ${{ steps.node-os.outputs.os }}
       images: ${{ steps.images.outputs.images }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -37,29 +39,76 @@ jobs:
         if: github.event_name == 'pull_request'
         with:
           filters: |
+            toolchain: &toolchain
+              - .github/workflows/ci.yml
+              - package.json
+              - pnpm-lock.yaml
+              - pnpm-workspace.yaml
+              - tsconfig.base.json
+              - vitest.config.ts
+            macos:
+              - *toolchain
+              - apps/desktop/**
+              - packages/desktop-host/**
+            app-images:
+              - *toolchain
+              - .dockerignore
+              - apps/**
+              - packages/**
+              - services/api/**
+              - services/gateway/**
             parakeet:
               - services/parakeet-tdt/**
               - services/speech-http/**
+      # True when any file lies outside the docs-only paths. Nested Markdown is
+      # not excluded: Aster's docs and avatar NOTICE.md ship in the desktop build.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: docs
+        if: github.event_name == 'pull_request'
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - "**"
+              - "!docs/**"
+              - "!TASKS/**"
+              - "!*.md"
+      - id: code
+        env:
+          CODE: ${{ github.event_name != 'pull_request' || steps.docs.outputs.code == 'true' }}
+        run: echo "code=$CODE" >> "$GITHUB_OUTPUT"
+      # macOS minutes are costly; PRs use it only for desktop and host code.
+      - id: node-os
+        env:
+          MACOS: ${{ github.event_name != 'pull_request' || steps.filter.outputs.macos == 'true' }}
+        run: |
+          if [ "$MACOS" = "true" ]; then
+            echo 'os=["ubuntu-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          fi
       - id: images
         env:
           # Empty unless called from another workflow.
           BUILD_IMAGES: ${{ format('{0}', inputs.build-images) }}
+          APP_IMAGES: ${{ github.event_name != 'pull_request' || steps.filter.outputs.app-images == 'true' }}
           PARAKEET: ${{ github.event_name != 'pull_request' || steps.filter.outputs.parakeet == 'true' }}
         run: |
-          if [ "$BUILD_IMAGES" = "false" ]; then
-            echo 'images=[]' >> "$GITHUB_OUTPUT"
-          elif [ "$PARAKEET" = "true" ]; then
-            echo 'images=["api","gateway","parakeet-tdt"]' >> "$GITHUB_OUTPUT"
-          else
-            echo 'images=["api","gateway"]' >> "$GITHUB_OUTPUT"
+          images=()
+          if [ "$BUILD_IMAGES" != "false" ]; then
+            if [ "$APP_IMAGES" = "true" ]; then images+=('"api"' '"gateway"'); fi
+            if [ "$PARAKEET" = "true" ]; then images+=('"parakeet-tdt"'); fi
           fi
+          echo "images=[$(IFS=,; echo "${images[*]}")]" >> "$GITHUB_OUTPUT"
 
   node:
     name: Node (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: ${{ fromJSON(needs.changes.outputs.node-os) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,6 +131,8 @@ jobs:
 
   python:
     name: Python
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,6 +151,8 @@ jobs:
 
   compose:
     name: Compose config
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -145,6 +198,8 @@ jobs:
 
   quality:
     name: Workflow lint and dependency audit
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
