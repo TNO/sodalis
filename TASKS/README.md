@@ -100,14 +100,30 @@ consolidated analysis belongs in [`docs/evaluations/`](../docs/evaluations/READM
 
 [ADR 0007](../docs/adr/0007-companion-harness.md) records the Pi integration
 decision. The [architecture](../docs/architecture/companion-harness.md) maps
-current behavior and tests; the
+current behavior and approved planned target; the
 [evaluation](../docs/evaluations/companion-harness.md) records graph-only
 findings and the first manual end-to-end check. The opt-in read-only
-implementation is present; developer tracing and sensor-reading journeys are
-the open [known gaps](0067-companion-harness.md#known-gaps).
+implementation is present; the audit, retrieval diagnosis, and sensor journey
+remain open.
 
 - [ ] [0067 Building and evaluating the companion harness](0067-companion-harness.md)
-  *(needs 0031; includes deferred directions, not scheduled requirements)*
+  *(needs 0031; umbrella for the current implementation and remaining acceptance)*
+- [ ] [0068 Inspect a conversation through a persistent developer text audit](0068-persistent-developer-audit.md)
+- [ ] [0069 Diagnose and repair harness data retrieval](0069-diagnose-harness-data-retrieval.md) *(needs 0068)*
+- [ ] [0070 Complete a sensor journey end to end](0070-complete-sensor-journey.md) *(needs 0069)*
+- [ ] [0071 Decide authorized read-only email access](0071-decide-read-only-email-access.md)
+- [ ] [0072 Complete a read-only email journey](0072-complete-read-only-email-journey.md) *(needs 0071; refine after decision)*
+- [ ] [0073 Decide authorized read-only calendar access](0073-decide-read-only-calendar-access.md)
+- [ ] [0074 Complete a read-only calendar journey](0074-complete-read-only-calendar-journey.md) *(needs 0073; refine after decision)*
+- [ ] [0075 Decide harness memory, recall, and context ownership](0075-decide-harness-memory-and-context.md)
+- [ ] [0076 Preserve consent-governed memory and recall in the harness](0076-preserve-memory-in-harness.md) *(needs 0075; refine after decision)*
+- [ ] [0077 Preserve confirmed desktop actions through the harness](0077-preserve-confirmed-actions-in-harness.md)
+- [ ] [0078 Verify and complete harness steering/interruption behavior](0078-verify-harness-steering.md) *(needs 0070; low priority)*
+- [ ] [0079 Retire turn mode and support one harness execution path](0079-converge-on-harness-execution-path.md) *(needs 0070, 0076, 0077, 0078; not 0067)*
+- [ ] [0080 Decide and wire deterministic graph integration CI coverage](0080-deterministic-graph-ci-coverage.md)
+- [ ] [0081 Decide longer-lived sessions, durable runs, and recurring-work scope](0081-decide-longer-lived-work.md) *(low-priority decision)*
+- [ ] [0082 Decide resident-visible progress and evidence](0082-decide-resident-progress-and-evidence.md) *(low-priority decision)*
+- [ ] [0083 Evaluate harness latency and execution budgets](0083-evaluate-harness-latency.md) *(needs 0070; low priority)*
 
 ## Long-term memory and future scale
 
