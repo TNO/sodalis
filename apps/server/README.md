@@ -234,6 +234,10 @@ service:
 | `POST /api/assistant/workflows` | `sessionId`, `workflowId`, `inputId`, `messages` (as for turns) | SSE: `started`, then exactly one of `answer {inputId, text}`, `failed {code, residentMessage}` or `cancelled` |
 | `POST /api/assistant/workflows/:id/steer` | `inputId`, `text` | `202 {status: accepted\|duplicate}` or `409 {status: not_running\|conflict}` |
 | `POST /api/assistant/workflows/:id/cancel` | `{}` | `200 {status: cancelled}` or `409 {status: not_running}` |
+| `GET /api/email/connection` | same-origin cookie | Provider/account status, in-memory CSRF token and data-processing disclosure; `no-store` |
+| `POST /api/email/connect` | `x-sodalis-csrf` header | Explicitly starts provider authorization; requires `sodalis_email_session` |
+| `GET /api/email/callback` | provider callback query and same-origin cookie | Validates one-time state/nonce, PKCE exchange and signed ID token; redirects without forwarding codes or tokens |
+| `DELETE /api/email/connection` | `x-sodalis-csrf` header | Removes local grant and attempts Google revocation; Graph is local-only |
 
 One workflow runs per conversation (`409` otherwise). New resident input while
 it runs is Pi steering, delivered after the current model turn and its tool
@@ -303,6 +307,36 @@ series at `HOME_DATA_SQLITE_FILE`, for references whose endpoint is
 calendar, weather, agenda) report `unavailable`. Results distinguish
 `current`, `stale` and `last_change` observations. Without `HOME_GRAPH_URL`
 the tools report `unavailable`.
+
+### Read-only email (task 0072)
+
+Set `EMAIL_PROVIDER=off` (the default) to disable email. `mock` enables the
+synthetic fixture behind an explicit desktop connect action without credentials.
+Real `graph` and `gmail` modes require the validated client ID, secret
+reference, exact callback URI, `EMAIL_RESIDENT_ID`, and Graph tenant selector
+documented in the [development-stack guide](../../docs/development-stack.md#read-only-email-task-0072).
+The client secret reference resolves only through the host OS credential
+store: Linux Secret Service (`service=sodalis-email`, `key=<reference>`) or
+macOS Keychain (`service=com.sodalis.email`, account `<reference>`). Missing
+or unavailable storage fails closed; the default Compose AI image is not given
+the host keyring. Never put the client secret or email tokens in `.env`, browser
+storage, prompts, logs or CI.
+
+The desktop connection panel discloses inbox/body access and the configured
+model's processing before connect. Only the exact recent-inbox question adds
+the fixed `read_recent_inbox` tool; broader email questions receive a
+limitation tool with no provider access. Email tool evidence is not logged or
+saved to long-term memory; active content-capturing audit blocks reads.
+`ReadOnlyEmailReader` returns distinct `ok`, `empty`, `unauthorized`,
+`unavailable` and `partial` statuses with UTC window, candidate coverage,
+sender/date/account/source evidence and body truncation/missing disclosure.
+Disconnect aborts the active connection's workflow and removes its in-memory
+token before upstream revocation is attempted.
+
+Graph/Gmail transports, OAuth/JWKS responses, fixtures and model behavior are
+tested with synthetic data only. Real provider consent/compatibility, Google
+deployment approval, external model processing and response quality remain
+unverified; live checks require explicit per-run consent and are not part of CI.
 
 ```sh
 COMPANION_HARNESS=pi LLM_PROVIDER=mock \

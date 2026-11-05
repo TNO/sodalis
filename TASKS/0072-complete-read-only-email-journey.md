@@ -1,6 +1,6 @@
 # 0072 Complete a read-only email journey
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: assistant
 Depends on: 0071
@@ -106,3 +106,13 @@ clock and synthetic fixture table as an independent expected result.
 - Without that consent, finish deterministic verification and record real
   OAuth/provider compatibility, model quality, latency and Google deployment
   approval as unverified. Do not present mocks as proof of live acceptance.
+
+## Completion record
+
+Implemented both provider adapters, the bounded mock, session-bound OAuth
+connection flow, same-origin desktop controls, email-only workflow tools and
+configuration/documentation. Deterministic behavior tests use synthetic
+responses only. `pnpm test`, `pnpm typecheck` and `pnpm build` pass; live
+provider compatibility, Google deployment approval, cloud-model handling and
+response quality remain unverified. No live provider or cloud-model checks
+were run.
