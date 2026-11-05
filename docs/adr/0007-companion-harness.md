@@ -35,12 +35,35 @@ existing turn path rather than forcing steering and cancellation into its
 one-generation text stream. Keep Pi-specific mechanics internal to the server
 harness; do not introduce a generic workflow framework or plugin registry.
 
+The approved development-diagnosis target is an explicitly opt-in,
+development-only text audit written locally under the git-ignored
+repository-root `logs/` directory; it is not implemented yet
+([task 0068](../../TASKS/0068-persistent-developer-audit.md)).
+The host bind-mounts that directory into the AI container so audit files survive
+container shutdown. A chronological human transcript and structured JSONL come
+from the same event stream. This narrow diagnostic persistence is not a Pi
+session archive, resident-visible evidence, external upload, or durable
+assistant memory. The audit is disabled by default, must be rejected in
+production, captures spoken input only as text, and never records audio bytes
+or artifacts. Developers manually delete sensitive logs; no automatic
+retention, capacity manager, or special warning UI is introduced.
+
+The harness is the planned sole supported assistant execution path, but only
+after confirmed desktop actions, consent-governed memory, and steering and
+interruption behavior reach parity. Until that work is complete, the current
+turn and workflow paths remain separate; this decision does not claim that
+convergence is implemented.
+
 ## Consequences
 
 - The model can adapt its investigation to returned evidence instead of following
   preselected calls. Host code, not prompt compliance, enforces execution bounds.
 - SDK embedding shares the server's permissions and failure domain. It is
   **not an operating-system sandbox**; stronger process isolation is deferred.
+- The developer audit deliberately changes the earlier constraint against
+  persisting beyond a developer session for a tightly scoped local diagnostic.
+  Household content in logs may be sensitive; manual audit deletion does not
+  satisfy or change memory consent, retention, or deletion policy.
 - A new workflow may repeat earlier retrieval. Longer-lived sessions, durable
   runs, caching, and additional readers require concrete journeys or measurements.
 - The workflow path currently has neither desktop actions nor long-term memory.
