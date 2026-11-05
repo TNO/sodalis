@@ -2,7 +2,7 @@
 
 Status: local graph measurements, a first manual end-to-end check, and a
 bounded audit diagnosis recorded; synthetic sensor contracts verified,
-actual-source journey blocked and live/latency evaluation pending.
+manual database retrieval verified and full journey/latency evidence pending.
 Date: 2026-11-05.
 
 ## Summary and recommendation
@@ -15,9 +15,11 @@ latency or model quality from these graph-only measurements.
 
 A first manual end-to-end conversation through the desktop, with a real model,
 answered questions about the home and correctly identified Jo and Robin as the
-people living there. It did not obtain any actual sensor reading. Because
-retrieved evidence and tool calls cannot yet be inspected, the cause could not
-be diagnosed; a developer trace is the prerequisite for further evaluation.
+people living there. That initial check did not obtain an actual sensor
+reading, and its cause remains unconfirmed. On 2026-11-05 the user reported
+successful manual connection to the `home_simulator` SQLite database and value
+retrieval. This subsequent result confirms database access in the tested setup,
+but does not by itself establish the full sensor-journey criteria.
 
 Retain this retrieval shape until representative manual journeys establish a
 reason to change it. No comparison yet establishes that combining reads,
@@ -26,7 +28,8 @@ batching, adding indexes, or caching produces better resident-facing results.
 ## Scope
 
 Neo4j graph discovery and the simulator's supported SQLite readings, without
-model calls, plus one manual end-to-end check with a real model. Architecture is in
+model calls, plus the initial manual end-to-end check with a real model and
+a subsequent user-reported database retrieval check. Architecture is in
 [companion-harness.md](../architecture/companion-harness.md); acceptance work is
 tracked in [task 0067](../../TASKS/0067-companion-harness.md).
 
@@ -50,7 +53,8 @@ test prerequisites are in the
 | Warm graph tool queries | Approximately 10-80 ms | Database work only; excludes model round trips and answer delivery |
 | First cold query planning | Approximately 5-7 s | Service now warms query plans at startup |
 | Manual end-to-end: household and residents | Answered about the home; named Jo and Robin as its residents | Graph discovery works through the full stack (desktop, gateway, AI container, graph network, Neo4j) with a real model |
-| Manual end-to-end: sensor readings | No actual sensor data obtained | The available audit shows no external-data read in the observed workflow; see [Analysis](#analysis) for trace limits |
+| Initial manual end-to-end: sensor readings | No actual sensor data obtained | The available audit shows no external-data read in the observed workflow; see [Analysis](#analysis) for trace limits |
+| Manual database follow-up (2026-11-05) | User reported successful connection and value retrieval from the `home_simulator` SQLite database | Database access verified in the manual setup; full journey details not reported |
 | End-to-end latency | Not measured | No conclusion about response-time goals |
 
 The inspected import also exposed important evidence limitations:
@@ -156,16 +160,30 @@ household contents or tool payloads are reproduced here. Capture is unchanged.
 No production defect was demonstrated. Scripted answers prove orchestration
 and evidence delivery only, not a real model's investigative decisions.
 The passing synthetic case is **not actual-source acceptance**. The fresh
-checkout supplies no paired, provenance-backed scoped graph/reference and
-matching readings snapshot. Existing integration tests require those external
+automated-test checkout supplied no paired, provenance-backed scoped
+graph/reference and matching readings snapshot. Existing integration tests require those external
 inputs; historical import findings do not establish the exact source resource
 or supply its data. Inventing that pair would hide the acceptance blocker.
-Task [0070](../../TASKS/0070-complete-sensor-journey.md#bounded-follow-up-to-unblock-acceptance)
-keeps a bounded follow-up to obtain approved local evidence and repeat this
-boundary with an honest historical/stale result if that is all it supports.
+Task [0070](../../TASKS/0070-complete-sensor-journey.md#remaining-acceptance-evidence)
+tracks the remaining provenance and full-journey evidence separately from
+the subsequent manual database retrieval.
 
-No live external or cloud check ran. Consent has not been given for a live
-run; source availability and real-model acceptance remain separately pending.
+No live external or cloud check ran during automated implementation.
+
+### Manual database follow-up (2026-11-05)
+
+The user reported that manual testing successfully connected to the
+`home_simulator` SQLite database and retrieved values. This supersedes the
+earlier database-access blocker in that setup; it does not identify the cause
+of the initial failed sensor check or prove a retrieval repair was needed.
+
+The report did not include the question, selected entity/reference, returned
+values, observation timestamps, freshness labels, audit correlation, model,
+or timings. Those details are not inferred. Full grounded-answer acceptance
+and repeatability against a provenance-backed source pair remain unverified.
+No database contents or audit payloads are copied into this evaluation.
+No additional live or cloud check was run by the implementation agent; any
+future such run still requires separate explicit consent.
 
 ## Limitations
 

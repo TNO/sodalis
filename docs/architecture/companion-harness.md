@@ -2,7 +2,7 @@
 
 Status: first implementation present; manually verified end to end for
 household/resident questions; synthetic sensor contracts verified,
-actual-source sensor acceptance blocked and live verification pending.
+manual database retrieval verified and full sensor-journey evidence pending.
 The development-only developer audit is implemented; read-only email/calendar
 adapters and one-path convergence are still planned.
 Updated: 2026-11-05.
@@ -615,11 +615,13 @@ content capture, resident SSE or memory behavior changed.
 These are synthetic contract fixtures, not a captured source snapshot or proof
 that a real model chooses correct tools or answers. No production retrieval
 defect was established, so scope, authorization, allowlists, validation and
-household/resident behavior remain unchanged. Actual-source acceptance is
-blocked on a provenance-backed graph/reference plus matching readings
-snapshot; live checks remain separately pending consent. The
+household/resident behavior remain unchanged. On 2026-11-05 the user reported
+successful manual connection to the `home_simulator` SQLite database and value
+retrieval. This confirms access in that manual setup, not all journey criteria:
+source/reference provenance, answer timestamp/freshness and per-run audit
+correlation were not reported. Additional live checks still require consent. The
 [evaluation](../evaluations/companion-harness.md#0070-deterministic-sensor-journey)
-and [0070 follow-up](../../TASKS/0070-complete-sensor-journey.md#bounded-follow-up-to-unblock-acceptance)
+and [0070 follow-up](../../TASKS/0070-complete-sensor-journey.md#remaining-acceptance-evidence)
 record the limits without reproducing household content or audit payloads.
 
 ## Planned acceptance roadmap
@@ -629,7 +631,7 @@ The audit task is implemented
 diagnosis is complete (0069; no repair was justified by the available trace).
 Next is actual-source acceptance of the sensor journey
 ([0070](../../TASKS/0070-complete-sensor-journey.md); synthetic contract cases
-verified, source evidence blocked). The known cause of the
+verified, manual database retrieval reported, full journey evidence pending). The known cause of the
 historical missing reading remains unconfirmed because the sanitized audit
 cannot uniquely match its workflows to that manual question.
 

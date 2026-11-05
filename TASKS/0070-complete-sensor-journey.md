@@ -1,14 +1,15 @@
 # 0070 Complete a sensor journey end to end
 
-Status: blocked (deterministic contract coverage complete; actual-source acceptance pending)
+Status: in progress (manual database retrieval verified; full journey evidence pending)
 Priority: high
 Subsystem: assistant
 Depends on: 0069
 
 ## Context
 
-The first household/resident journey has been manually verified, but a
-sensor-reading journey has not. This is the first accepted end-to-end data
+The first household/resident journey has been manually verified. Subsequent
+manual testing confirmed database connectivity and successful value retrieval;
+full sensor-journey evidence remains pending. This is the first accepted end-to-end data
 journey after diagnosing the retrieval gap; preserve the existing graph
 household/resident behavior rather than rewriting the knowledge graph.
 
@@ -62,29 +63,36 @@ dispatched or performed. Audit capture and production policies are unchanged.
 
 This is **synthetic contract evidence, not an actual-source passing journey**.
 The database reuses the existing scripted workflow's synthetic reference and
-observation. It does not establish a household mapping or reading. No paired,
-provenance-backed simulator graph/reference and readings snapshot is supplied
-in this fresh checkout; the existing direct integration test requires external
+observation. It does not establish a household mapping or reading. At the time
+of automated verification, no paired, provenance-backed simulator
+graph/reference and readings snapshot was supplied in the fresh checkout;
+the existing direct integration test requires external
 Neo4j settings and a matching SQLite file. Recorded import findings alone do
 not supply that file or its exact supported series metadata. Inventing these
 to mark acceptance complete would be misleading.
 
 Consolidated results and limitations are in the
 [evaluation](../docs/evaluations/companion-harness.md#0070-deterministic-sensor-journey).
-No live external or cloud check ran: consent for a run has not been given.
-Actual source availability, real-model reasoning and live acceptance remain
-unverified. Neither this ticket nor dependent acceptance is marked complete.
+On 2026-11-05 the user reported successful manual database connection and
+value retrieval using the `home_simulator` SQLite database. See the
+[manual follow-up](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05)
+for the reported result and limits. This supersedes the database-access
+blocker, but does not establish all journey acceptance criteria.
+No additional live external or cloud check was run by the implementation
+agent. Neither this ticket nor dependent acceptance is marked complete.
 
-### Bounded follow-up to unblock acceptance
+### Remaining acceptance evidence
 
-1. Supply an approved local, provenance-backed pair: the scoped graph entity,
+1. Record sanitized provenance for the manually tested pair: the scoped graph entity,
    location/ownership and supported reference metadata, plus its matching
    SQLite readings snapshot. Establish the exact reference resource from that
    evidence, not a reference name or guessed room mapping. Do not copy private
    data into this public repository.
-2. Run the same discovery/read/answer boundary against that pair with a fixed
-   check time. If historical, report stale evidence honestly; if conflicting,
-   retain an honest limitation rather than relabeling the source.
+2. Record whether the manual journey established discovery, reference resolution,
+   a grounded answer with source, timestamp and freshness, and correlated audit
+   outcomes. These details were not supplied with the successful retrieval
+   report. If historical, report stale evidence honestly; if conflicting, retain
+   an honest limitation rather than relabeling the source.
 3. Keep any later real-source/model check separate. Obtain explicit consent
    for that run and check provider selection in `.env` and any overlay before
    running it. Record only sanitized conclusions here and in the evaluation.

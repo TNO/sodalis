@@ -83,9 +83,9 @@ developer's session" constraint for local diagnostic logs only. It adds no
 resident-facing behavior or compliance-grade guarantees and does not change
 memory consent, retention, or deletion. Tests use deterministic mock events.
 
-### No actual sensor data obtained
+### Historical missing sensor reading and subsequent retrieval
 
-The manual check never returned an actual sensor reading. The cause is
+The initial manual check never returned an actual sensor reading. The cause is
 unknown; possible causes recorded in the
 [evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)
 are not findings. Task [0069](0069-diagnose-harness-data-retrieval.md) requires
@@ -98,10 +98,12 @@ On 2026-11-05, 0070 added six deterministic public-workflow contract cases
 using a scripted model and the real local SQLite reader. They correlate tool
 selection, dispatch, result and terminal outcome without broadening the audit.
 These synthetic fixtures do not establish an actual household reading.
-0070 remains blocked on a provenance-backed graph/reference and readings
-snapshot; its bounded follow-up and verification limits are in that ticket
-and the [evaluation](../docs/evaluations/companion-harness.md#0070-deterministic-sensor-journey).
-No live check ran; live acceptance remains separately pending explicit consent.
+The user subsequently reported successful manual connection to the
+`home_simulator` SQLite database and value retrieval on 2026-11-05.
+Full journey evidence remains pending; the reported result and its limits
+are recorded in the
+[evaluation](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05).
+No additional live check was run by the implementation agent.
 
 ## Accepted sensor journey
 
