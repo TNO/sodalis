@@ -88,22 +88,16 @@ memory consent, retention, or deletion. Tests use deterministic mock events.
 The initial manual check never returned an actual sensor reading. The cause is
 unknown; possible causes recorded in the
 [evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)
-are not findings. Task [0069](0069-diagnose-harness-data-retrieval.md) requires
-evidence before a bounded repair. Then task
-[0070](0070-complete-sensor-journey.md) requires a repeatable, grounded journey
-that reports the actual source, timestamp, and freshness. A known historical
-snapshot may return stale data; it must not be presented as fresh.
-
-On 2026-11-05, 0070 added six deterministic public-workflow contract cases
-using a scripted model and the real local SQLite reader. They correlate tool
-selection, dispatch, result and terminal outcome without broadening the audit.
-These synthetic fixtures do not establish an actual household reading.
-The user subsequently reported successful manual connection to the
-`home_simulator` SQLite database and value retrieval on 2026-11-05.
-Full journey evidence remains pending; the reported result and its limits
-are recorded in the
-[evaluation](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05).
-No additional live check was run by the implementation agent.
+are not findings. Task [0069](0069-diagnose-harness-data-retrieval.md) completed
+the bounded [audit diagnosis](../docs/evaluations/companion-harness.md#0068-audit-diagnosis).
+Task [0070](0070-complete-sensor-journey.md) completed the deterministic local
+sensor journey; see the
+[source-backed snapshot evidence and limits](../docs/evaluations/companion-harness.md#local-simulator-snapshot-follow-up-2026-11-05)
+and the separate
+[manual retrieval report](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05).
+Real-model quality and live-source acceptance remain unestablished; no
+additional live check was run. This local completion does not close the
+umbrella's remaining roadmap tasks.
 
 ## Accepted sensor journey
 

@@ -39,19 +39,10 @@ failure before changing retrieval behavior.
 This task is diagnosis and a bounded repair, not permission to change prompts,
 tools, simulator data, or graph mappings without evidence.
 
-## Outcome
+## Completion
 
-The 0068 audit's sanitized lifecycle metadata records no selection or dispatch
-of `read_external_data`; the observed tool lifecycles stop at
-`find_entities`/`inspect_neighborhood`. This supports pre-read non-selection
-for an observed workflow, but the metadata cannot uniquely match it to the
-historical manual sensor question. No validation/policy rejection, source
-unavailability, empty result, or stale result is evidenced for that workflow.
-
-The deterministic local tool/workflow tests passed (25 tests), covering
-validation, supported reads, unsupported/unreachable sources, empty data,
-staleness, and workflow lifecycle. No live external check was run, and no
-in-repository defect was confirmed; therefore no behavior change or regression
-test was warranted. The bounded follow-up is [0070](0070-complete-sensor-journey.md):
-reproduce the complete journey locally, and keep any live-source verification
-separate and consent-gated.
+Completed the bounded diagnosis and local verification; see the
+[audit diagnosis, results and limits](../docs/evaluations/companion-harness.md#0068-audit-diagnosis).
+No confirmed in-repository defect required a repair. The bounded follow-up
+[0070](0070-complete-sensor-journey.md) is now complete within its deterministic
+local scope. No live external check was run.

@@ -1,6 +1,6 @@
 # 0070 Complete a sensor journey end to end
 
-Status: complete (provenance-backed local snapshot journey; not live/model-quality acceptance)
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0069
@@ -8,10 +8,12 @@ Depends on: 0069
 ## Context
 
 The first household/resident journey has been manually verified. Subsequent
-manual testing confirmed database connectivity and successful value retrieval;
-full sensor-journey evidence remains pending. This is the first accepted end-to-end data
-journey after diagnosing the retrieval gap; preserve the existing graph
-household/resident behavior rather than rewriting the knowledge graph.
+manual testing confirmed database connectivity and successful value retrieval.
+The sensor journey is now complete within the deterministic local snapshot
+scope; see the [source-backed completion evidence](../docs/evaluations/companion-harness.md#local-simulator-snapshot-follow-up-2026-11-05).
+Real-model quality and live-source acceptance are not established. Preserve
+the existing graph household/resident behavior rather than rewriting the
+knowledge graph.
 
 Task 0069's sanitized audit evidence shows an observed workflow terminating
 after `find_entities` and `inspect_neighborhood`, without selecting or
@@ -50,59 +52,19 @@ absent live-source check as a successful reading.
 Keep acceptance grounded in what the configured source actually returns. No
 latency threshold is selected by this task.
 
-## Outcome and verification limits
+## Completion
 
-The public workflow boundary now exercises discovery, reference resolution and
-the real SQLite reader with a deterministic local database and scripted Pi
-model. Six cases cover a recent fixture observation, wrong entity,
-unreachable source, empty series, stale observation and conflicting evidence.
-Each run checks selection/dispatch/result correlation by tool-call ID within
-its workflow/session, and joins the terminal outcome by workflow ID. Cases
-that clarify or report conflict assert that no external read was selected,
-dispatched or performed. Audit capture and production policies are unchanged.
+Completed the deterministic local sensor journey. Consolidated evidence is in
+the [synthetic contract results](../docs/evaluations/companion-harness.md#0070-deterministic-sensor-journey)
+and [source-backed snapshot results and limits](../docs/evaluations/companion-harness.md#local-simulator-snapshot-follow-up-2026-11-05);
+the [local reproduction procedure](../docs/development-stack.md#offline-sensor-snapshot-journey)
+documents how to repeat it. The separate
+[manual retrieval report](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05)
+retains its own verification limits.
 
-The original six cases remain **synthetic contract evidence**, not evidence
-of a household mapping. The subsequent local follow-up inspected the accessible
-`home_simulator` project read-only and added two opt-in workflow cases against
-its actual paired graph export and SQLite snapshot. No simulator file was
-modified or copied into Sodalis. SHA-256 pins bind the local test to the
-inspected pair; ownership, installed location, service, capability/unit and
-reading owner must agree before it runs.
-
-The generated temperature series belongs to the bathroom-installed sensor.
-It is not the separately configured, unsupported bedroom database reference.
-Both local runs obtain an actual numeric observation using the production
-SQLite reader, assert it against an independent read-only source oracle,
-and settle an answer containing source, observation time and clock-relative
-freshness. The snapshot ends at `2026-10-19T23:59:00+02:00`: it is recent only
-at the historical fixed check (`2026-10-19T22:01:00Z`, age 2 minutes), and
-stale at `2026-11-05T12:00:00Z` (age 23,881 minutes). Both runs assert
-per-tool selection/dispatch/result and workflow-terminal audit correlation.
-
-Consolidated results and limitations are in the
-[evaluation](../docs/evaluations/companion-harness.md#0070-deterministic-sensor-journey).
-On 2026-11-05 the user reported successful manual database connection and
-value retrieval using the `home_simulator` SQLite database. See the
-[manual follow-up](../docs/evaluations/companion-harness.md#manual-database-follow-up-2026-11-05)
-for the reported result and limits. This supersedes the database-access
-blocker, but does not establish all journey acceptance criteria.
-No live external or cloud check ran. Scripted orchestration is not real-model
-quality evidence, and this result does not complete dependent tickets.
-
-### Acceptance evidence and remaining limits
-
-1. Local source provenance, supported resource, grounded answer and correlated
-   audit are now demonstrated by the opt-in snapshot workflow. The
-   [evaluation](../docs/evaluations/companion-harness.md#local-simulator-snapshot-follow-up-2026-11-05)
-   records provenance and its limits; the
-   [local reproduction procedure](../docs/development-stack.md#offline-sensor-snapshot-journey)
-   needs files only, not a running service or credentials.
-2. The user's manual retrieval report still supplies no timestamp, freshness,
-   terminal-answer or audit details. The local automated result does not
-   retroactively establish those facts or explain the initial failure.
-3. Live Neo4j/HTTP/cloud and real-model checks were not required or performed.
-   Any later such run needs separate consent (and cloud-provider selection
-   checks). They are not a blocker to this ticket's deterministic local scope.
+Real-model quality and live-source acceptance remain unestablished; no live
+external or cloud check ran. This local completion does not complete dependent
+tickets or authorize any later live check.
 
 ## Agent Notes
 
