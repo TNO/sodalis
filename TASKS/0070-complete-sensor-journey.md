@@ -35,6 +35,12 @@ absent live-source check as a successful reading.
   check requires separate explicit user consent for that run; absent consent
   or access remains an explicit blocker, not a successful live check. Cloud
   provider commands also follow the repository's provider-selection checks.
+- For each deterministic run, use the developer audit's existing correlation
+  metadata to associate tool selection, dispatch, and result/terminal-outcome
+  events with that same workflow, including whether `read_external_data` was
+  selected, dispatched, and what outcome it produced. Follow 0068's audit
+  contract and safeguards; do not broaden capture or copy sensitive household
+  content, tool payloads, or audit records into task/evaluation documentation.
 - Update the architecture and task evidence without changing unrelated graph
   household/resident behavior.
 
