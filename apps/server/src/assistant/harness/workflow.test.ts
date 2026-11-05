@@ -8,18 +8,21 @@ import {
   type FauxResponseStep,
 } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { mkdirSync, rmSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { FileCompanionAuditWriter } from "./audit.js";
 import type { CompanionModel } from "./companionModel.js";
 import { createCompanionSession } from "./companionSession.js";
-import type { ExternalDataReader } from "./externalData.js";
+import { SqliteReadingsReader, type ExternalDataReader } from "./externalData.js";
 import type { HomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
 import { CompanionWorkflows, type WorkflowEvent, type WorkflowLimits } from "./workflow.js";
 import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
+import { loadSimulatorSnapshot } from "./simulatorSnapshot.test-support.js";
 
 const ROOM = "home/bedroom";
 const SENSOR = "home/temp-sensor";
@@ -99,6 +102,8 @@ async function harness(options: {
   limits?: Partial<WorkflowLimits>;
   responses: FauxResponseStep[];
   audit?: CompanionAuditSink;
+  reader?: ExternalDataReader;
+  now?: () => number;
 }): Promise<Harness> {
   const faux = fauxProvider();
   const modelRuntime = await ModelRuntime.create({
@@ -122,7 +127,10 @@ async function harness(options: {
       const session = await createCompanionSession({
         model,
         history,
-        tools: createHomeTools({ graph, reader, budget }),
+        tools: createHomeTools({
+          graph, reader: options.reader ?? reader, budget,
+          ...(options.now ? { now: options.now } : {}),
+        }),
       });
       const dispose = vi.fn(session.dispose.bind(session));
       session.dispose = dispose;
@@ -168,6 +176,334 @@ function userTexts(context: { messages: readonly unknown[] }): string[] {
       typeof message.content === "string"
         ? message.content
         : (message.content as { text?: string }[]).map((part) => part.text ?? "").join(""));
+}
+
+// These are the existing scripted workflow's synthetic reference and reading,
+// not a captured simulator snapshot or evidence of a real bedroom mapping.
+const journeyDirectory = resolve(`.sensor-journey-${randomUUID()}`);
+const journeyFile = resolve(journeyDirectory, "readings.sqlite");
+const journeyNow = Date.parse("2026-11-04T10:02:00Z");
+beforeAll(() => {
+  mkdirSync(journeyDirectory);
+  const database = new DatabaseSync(journeyFile);
+  try {
+    database.exec("CREATE TABLE readings (series TEXT, timestamp TEXT, property TEXT, value REAL, event_type TEXT)");
+    database.prepare("INSERT INTO readings VALUES (?, ?, ?, ?, ?)").run(
+      "series", "2026-11-04T11:00:00+01:00", "Temperature", 19.2, "measurement",
+    );
+  } finally {
+    database.close();
+  }
+});
+afterAll(() => rmSync(journeyDirectory, { recursive: true, force: true }));
+
+// Explicit local opt-in only: CI must never open household snapshots.
+const snapshotDirectory = process.env.CI ? undefined : process.env.SODALIS_SENSOR_SNAPSHOT_DIR;
+describe.skipIf(!snapshotDirectory)("local simulator snapshot through the public workflow", () => {
+  it.each([
+    ["recent-at-fixed-check", "2026-10-19T22:01:00Z", "current", 2],
+    ["historical-at-fixed-check", "2026-11-05T12:00:00Z", "stale", 23881],
+  ] as const)("grounds %s evidence and correlates the entire run", async (label, checkedAt, freshness, ageMinutes) => {
+    const snapshot = await loadSimulatorSnapshot(snapshotDirectory!);
+    const now = () => Date.parse(checkedAt);
+    const source = new SqliteReadingsReader({
+      endpoint: snapshot.reference.endpoint!, file: snapshot.file, now,
+    });
+    const read = vi.spyOn(source, "read");
+    const answer = `${snapshot.reference.name} reports ${snapshot.observation.value} ${snapshot.unit}, observed at ${snapshot.observation.observedAt}, for the sensor installed in ${snapshot.room.name}. At ${checkedAt} this snapshot observation is ${ageMinutes} minutes old (${freshness}). This is a local simulator snapshot, not a live/current room reading.`;
+    const h = await harness({
+      graph: snapshot.graph, reader: source, now,
+      responses: [
+        fauxAssistantMessage(fauxToolCall("find_entities", { query: snapshot.room.name, kind: "room" })),
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            status: "ok", candidates: [{ id: snapshot.room.id }],
+          });
+          return fauxAssistantMessage(fauxToolCall("inspect_neighborhood", { entityIds: [snapshot.room.id] }));
+        },
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            relationships: [{ from: snapshot.sensor.id, type: "INSTALLED_IN", to: snapshot.room.id }],
+            externalData: [{ id: snapshot.reference.id, ownerIds: [snapshot.sensor.id], readable: true }],
+          });
+          return fauxAssistantMessage(fauxToolCall("read_external_data", { referenceId: snapshot.reference.id }));
+        },
+        (context) => {
+          const text = toolResultTexts(context).at(-1)!;
+          expect(text).not.toMatch(/local:|sqlite|endpoint|adapter/);
+          expect(JSON.parse(text)).toMatchObject({
+            status: "ok", referenceId: snapshot.reference.id, name: snapshot.reference.name,
+            unit: snapshot.unit, latest: snapshot.observation, freshness, ageMinutes,
+            checkedAt: new Date(checkedAt).toISOString(),
+          });
+          return fauxAssistantMessage(fauxText(answer));
+        },
+      ],
+    });
+    const workflowId = `simulator-${label}`;
+    expect(await started(h.start({ workflowId, question: `What does the temperature sensor installed in ${snapshot.room.name} report?` })))
+      .toMatchObject({ type: "answer", workflowId, text: answer });
+    expect(read).toHaveBeenCalledOnce();
+    assertJourneyAudit(h.auditEvents, workflowId, [
+      ["find_entities", "ok"], ["inspect_neighborhood", "ok"], ["read_external_data", "ok"],
+    ]);
+    expect(auditedRead(h.auditEvents)).toMatchObject({
+      latest: snapshot.observation, freshness, ageMinutes, checkedAt: new Date(checkedAt).toISOString(),
+    });
+  });
+});
+
+describe("synthetic sensor journey through the public workflow", () => {
+  it("discovers a reference, reads SQLite, and delivers source, timestamp and freshness with a correlated audit", async () => {
+    const answer = "The synthetic bedroom fixture reports 19.2 degrees Celsius from Temperature history, observed at 2026-11-04T11:00:00+01:00. It is current at the fixture check time, two minutes later; this is not a live reading.";
+    const graph = fakeGraph({
+      resolveReference: vi.fn(async () => ({
+        status: "ok" as const,
+        reference: {
+          id: REFERENCE, name: "Temperature history", adapter: "sqlite",
+          endpoint: "local://simulation/timeseries.sqlite", resource: "series",
+          capabilities: [{ id: "sensor/measurement/Temperature", unit: "degree Celsius" }],
+        },
+      })),
+    });
+    const source = new SqliteReadingsReader({
+      endpoint: "local://simulation/timeseries.sqlite", file: journeyFile, now: () => journeyNow,
+    });
+    const read = vi.spyOn(source, "read");
+    const h = await harness({
+      graph, reader: source, now: () => journeyNow,
+      responses: [
+        fauxAssistantMessage(fauxToolCall("find_entities", { query: "bedroom" })),
+        (context) => {
+          const resultText = toolResultTexts(context).at(-1)!;
+          expect(resultText).not.toMatch(/local:|sqlite|endpoint|adapter/);
+          expect(JSON.parse(resultText)).toMatchObject({
+            status: "ok", candidates: [{ id: ROOM }],
+          });
+          return fauxAssistantMessage(fauxToolCall("inspect_neighborhood", { entityIds: [ROOM] }));
+        },
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            relationships: [{ from: SENSOR, type: "INSTALLED_IN", to: ROOM }],
+            externalData: [{ id: REFERENCE, ownerIds: [SENSOR], readable: true }],
+          });
+          return fauxAssistantMessage(fauxToolCall("read_external_data", { referenceId: REFERENCE }));
+        },
+        (context) => {
+          const resultText = toolResultTexts(context).at(-1)!;
+          expect(resultText).not.toMatch(/local:|sqlite|endpoint|adapter/);
+          expect(JSON.parse(resultText)).toMatchObject({
+            status: "ok", referenceId: REFERENCE, name: "Temperature history", unit: "degree Celsius",
+            latest: { value: 19.2, observedAt: "2026-11-04T11:00:00+01:00" },
+            freshness: "current", ageMinutes: 2, checkedAt: "2026-11-04T10:02:00.000Z",
+          });
+          return fauxAssistantMessage(fauxText(answer));
+        },
+      ],
+    });
+    const terminal = await started(h.start({ workflowId: "sensor-current" }));
+    expect(terminal).toMatchObject({ type: "answer", workflowId: "sensor-current", text: answer });
+    expect(read).toHaveBeenCalledOnce();
+    expect(graph.resolveReference).toHaveBeenCalledWith(REFERENCE, expect.any(AbortSignal));
+    assertJourneyAudit(h.auditEvents, "sensor-current", [
+      ["find_entities", "ok"], ["inspect_neighborhood", "ok"], ["read_external_data", "ok"],
+    ]);
+    expect(auditedRead(h.auditEvents)).toMatchObject({
+      status: "ok", referenceId: REFERENCE, freshness: "current", ageMinutes: 2,
+      latest: { value: 19.2, observedAt: "2026-11-04T11:00:00+01:00" },
+    });
+  });
+
+  it("reports a historical reading as stale, not a current room temperature", async () => {
+    await assertReadJourney({
+      workflowId: "sensor-stale",
+      now: Date.parse("2026-11-04T11:05:00Z"),
+      expected: {
+        status: "ok", referenceId: REFERENCE, name: "Temperature history",
+        latest: { value: 19.2, observedAt: "2026-11-04T11:00:00+01:00" },
+        freshness: "stale", ageMinutes: 65, checkedAt: "2026-11-04T11:05:00.000Z",
+      },
+      answer: "Temperature history last reported 19.2 degrees Celsius at 2026-11-04T11:00:00+01:00. At the fixture check time this is 65 minutes old and stale; I cannot establish the current temperature.",
+    });
+  });
+
+  it("reports an unreachable configured source without substituting a reading", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await assertReadJourney({
+      workflowId: "sensor-unreachable", file: resolve(journeyDirectory, "missing.sqlite"),
+      expected: { status: "unavailable", referenceId: REFERENCE, reason: "source_unreachable" },
+      answer: "The fixture's Temperature history source is unavailable. I have no observation or observation timestamp and cannot establish the temperature or its freshness.",
+    });
+  });
+
+  it("reports an empty series without treating absent data as a zero reading", async () => {
+    await assertReadJourney({
+      workflowId: "sensor-empty", resource: "unknown",
+      expected: { status: "no_data", referenceId: REFERENCE, name: "Temperature history" },
+      answer: "The fixture's Temperature history series contains no observations. There is no reading, observation timestamp or freshness to report.",
+    });
+  });
+
+  it("clarifies a wrong-entity lookup rather than reading another room's sensor", async () => {
+    const graph = fakeGraph();
+    const read = vi.fn(reader.read);
+    const answer = "The fixture lookup returned Slaapkamer 1, a bedroom, not the living room you asked about. Which room did you mean? I have not read a living-room sensor.";
+    const h = await harness({
+      graph, reader: { ...reader, read },
+      responses: [
+        fauxAssistantMessage(fauxToolCall("find_entities", { query: "living room" })),
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            status: "ok", candidates: [{ id: ROOM, name: "Slaapkamer 1", kinds: ["Bedroom", "Space"] }],
+          });
+          return fauxAssistantMessage(fauxText(answer));
+        },
+      ],
+    });
+    expect(await started(h.start({ workflowId: "sensor-wrong-entity", question: "What is the living room temperature?" })))
+      .toMatchObject({ type: "answer", text: answer });
+    expect(graph.inspectNeighborhood).not.toHaveBeenCalled();
+    expect(graph.resolveReference).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+    assertJourneyAudit(h.auditEvents, "sensor-wrong-entity", [["find_entities", "ok"]]);
+  });
+
+  it("reports conflicting location and reference evidence without inventing a bedroom reading", async () => {
+    const graph = fakeGraph({
+      inspectNeighborhood: vi.fn(async () => ({
+        status: "ok" as const,
+        entities: [
+          { id: ROOM, name: "Slaapkamer 1", kinds: ["Bedroom"] },
+          { id: "home/bathroom", name: "Badkamer", kinds: ["Space"] },
+          { id: SENSOR, name: "Temperature sensor", kinds: ["Sensor"] },
+        ],
+        relationships: [{ from: SENSOR, type: "INSTALLED_IN", to: "home/bathroom" }],
+        externalData: [{
+          id: REFERENCE, name: "Bedroom temperature database series", ownerIds: [SENSOR], readable: false,
+        }],
+        notFound: [], truncated: false,
+      })),
+    });
+    const read = vi.fn(reader.read);
+    const answer = "The fixture places this sensor in Badkamer, but its reference is named Bedroom temperature database series and is not readable. That conflicting evidence does not establish a bedroom reading or a current observation.";
+    const h = await harness({
+      graph, reader: { ...reader, read },
+      responses: [
+        fauxAssistantMessage(fauxToolCall("find_entities", { query: "bedroom" })),
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            status: "ok", candidates: [{ id: ROOM }],
+          });
+          return fauxAssistantMessage(fauxToolCall("inspect_neighborhood", { entityIds: [ROOM] }));
+        },
+        (context) => {
+          expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+            relationships: [{ from: SENSOR, type: "INSTALLED_IN", to: "home/bathroom" }],
+            externalData: [{ name: "Bedroom temperature database series", readable: false }],
+          });
+          return fauxAssistantMessage(fauxText(answer));
+        },
+      ],
+    });
+    expect(await started(h.start({ workflowId: "sensor-conflict" })))
+      .toMatchObject({ type: "answer", text: answer });
+    expect(graph.resolveReference).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+    assertJourneyAudit(h.auditEvents, "sensor-conflict", [["find_entities", "ok"], ["inspect_neighborhood", "ok"]]);
+  });
+});
+
+async function assertReadJourney(input: {
+  workflowId: string;
+  now?: number;
+  resource?: string;
+  file?: string;
+  adapter?: string;
+  expected: Record<string, unknown> & { status: string };
+  answer: string;
+}) {
+  const graph = fakeGraph({
+    resolveReference: vi.fn(async () => ({
+      status: "ok" as const,
+      reference: {
+        id: REFERENCE, name: "Temperature history", adapter: input.adapter ?? "sqlite",
+        endpoint: "local://simulation/timeseries.sqlite", resource: input.resource ?? "series",
+        capabilities: [{ id: "sensor/measurement/Temperature", unit: "degree Celsius" }],
+      },
+    })),
+  });
+  const now = () => input.now ?? journeyNow;
+  const source = new SqliteReadingsReader({
+    endpoint: "local://simulation/timeseries.sqlite", file: input.file ?? journeyFile, now,
+  });
+  const read = vi.spyOn(source, "read");
+  const h = await harness({
+    graph, reader: source, now,
+    responses: [
+      fauxAssistantMessage(fauxToolCall("find_entities", { query: "bedroom" })),
+      (context) => {
+        expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+          status: "ok", candidates: [{ id: ROOM }],
+        });
+        return fauxAssistantMessage(fauxToolCall("inspect_neighborhood", { entityIds: [ROOM] }));
+      },
+      (context) => {
+        expect(JSON.parse(toolResultTexts(context).at(-1)!)).toMatchObject({
+          status: "ok", externalData: [{ id: REFERENCE, ownerIds: [SENSOR] }],
+        });
+        return fauxAssistantMessage(fauxToolCall("read_external_data", { referenceId: REFERENCE }));
+      },
+      (context) => {
+        const resultText = toolResultTexts(context).at(-1)!;
+        expect(resultText).not.toMatch(/local:|sqlite|endpoint|adapter/);
+        const result = JSON.parse(resultText) as Record<string, unknown>;
+        expect(result).toMatchObject(input.expected);
+        if (input.expected.status !== "ok") expect(result).not.toHaveProperty("latest");
+        return fauxAssistantMessage(fauxText(input.answer));
+      },
+    ],
+  });
+  const terminal = await started(h.start({ workflowId: input.workflowId }));
+  expect(terminal).toMatchObject({ type: "answer", text: input.answer, workflowId: input.workflowId });
+  expect(read).toHaveBeenCalledOnce();
+  assertJourneyAudit(h.auditEvents, input.workflowId, [
+    ["find_entities", "ok"], ["inspect_neighborhood", "ok"], ["read_external_data", input.expected.status],
+  ]);
+  expect(auditedRead(h.auditEvents)).toMatchObject(input.expected);
+}
+
+function auditedRead(events: CompanionAuditEvent[]): unknown {
+  const event = events.find((event) => event.event === "tool.result" && event.toolName === "read_external_data")!;
+  const result = event.result as { content: { text: string }[] };
+  return JSON.parse(result.content[0]!.text);
+}
+
+function assertJourneyAudit(
+  events: CompanionAuditEvent[],
+  workflowId: string,
+  tools: readonly (readonly [string, string])[],
+) {
+  expect(events.every((event) => event.workflowId === workflowId && event.sessionId === "session-1")).toBe(true);
+  expect(events.filter((event) => event.event === "workflow.started")).toMatchObject([
+    { workflowId, correlationId: workflowId },
+  ]);
+  for (const kind of ["tool.selected", "tool.dispatched", "tool.result"]) {
+    expect(events.filter((event) => event.event === kind).map((event) => event.toolName))
+      .toEqual(tools.map(([name]) => name));
+  }
+  for (const [name, outcome] of tools) {
+    const lifecycle = events.filter((event) => event.toolName === name);
+    const selected = lifecycle.find((event) => event.event === "tool.selected")!;
+    expect(selected.toolCallId).toEqual(expect.any(String));
+    expect(selected.toolCallId).not.toBe("");
+    expect(lifecycle.map((event) => event.event)).toEqual(["tool.selected", "tool.dispatched", "tool.result"]);
+    expect(lifecycle.every((event) =>
+      event.correlationId === selected.toolCallId && event.toolCallId === selected.toolCallId)).toBe(true);
+    expect(lifecycle.at(-1)).toMatchObject({ validationDecision: outcome, isError: false });
+  }
+  expect(events.filter((event) => event.event === "workflow.terminal")).toMatchObject([
+    { workflowId, correlationId: workflowId, outcome: "answer" },
+  ]);
 }
 
 async function started(result: ReturnType<CompanionWorkflows["start"]>) {

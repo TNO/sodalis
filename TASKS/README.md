@@ -103,14 +103,16 @@ decision. The [architecture](../docs/architecture/companion-harness.md) maps
 current behavior and approved planned target; the
 [evaluation](../docs/evaluations/companion-harness.md) records graph-only
 findings and the first manual end-to-end check. The opt-in read-only
-implementation is present; the audit, retrieval diagnosis, and sensor journey
-remain open.
+implementation is present; the audit and evidence-based retrieval diagnosis
+are complete. The sensor journey has deterministic contract coverage and
+manual verification of database connectivity and value retrieval; full journey
+evidence remains pending.
 
 - [ ] [0067 Building and evaluating the companion harness](0067-companion-harness.md)
   *(needs 0031; umbrella for the current implementation and remaining acceptance)*
-- [ ] [0068 Inspect a conversation through a persistent developer text audit](0068-persistent-developer-audit.md)
-- [ ] [0069 Diagnose and repair harness data retrieval](0069-diagnose-harness-data-retrieval.md) *(needs 0068)*
-- [ ] [0070 Complete a sensor journey end to end](0070-complete-sensor-journey.md) *(needs 0069)*
+- [x] [0068 Inspect a conversation through a persistent developer text audit](0068-persistent-developer-audit.md)
+- [x] [0069 Diagnose and repair harness data retrieval](0069-diagnose-harness-data-retrieval.md) *(needs 0068)*
+- [x] [0070 Complete a sensor journey end to end](0070-complete-sensor-journey.md) *(needs 0069; provenance-backed offline snapshot journey and adverse contracts verified; not live/model-quality acceptance)*
 - [x] [0071 Decide authorized read-only email access](0071-decide-read-only-email-access.md)
 - [ ] [0072 Complete a read-only email journey](0072-complete-read-only-email-journey.md) *(needs 0071; refined, ready for implementation)*
 - [x] [0073 Decide authorized read-only calendar access](0073-decide-read-only-calendar-access.md)

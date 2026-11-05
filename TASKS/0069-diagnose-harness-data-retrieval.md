@@ -1,6 +1,6 @@
 # 0069 Diagnose and repair harness data retrieval
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0068
@@ -38,3 +38,11 @@ failure before changing retrieval behavior.
 
 This task is diagnosis and a bounded repair, not permission to change prompts,
 tools, simulator data, or graph mappings without evidence.
+
+## Completion
+
+Completed the bounded diagnosis and local verification; see the
+[audit diagnosis, results and limits](../docs/evaluations/companion-harness.md#0068-audit-diagnosis).
+No confirmed in-repository defect required a repair. The bounded follow-up
+[0070](0070-complete-sensor-journey.md) is now complete within its deterministic
+local scope. No live external check was run.
