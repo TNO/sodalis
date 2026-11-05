@@ -1275,12 +1275,27 @@ summarizes it for branch protection. CI never contacts a cloud provider and
 has no provider secrets, so live tests such as
 `AzureRealtimeSttEngine.live.test.ts` skip.
 
+A pull request that only changes `docs/**`, `TASKS/**` or root-level `*.md`
+files skips every job below; `ci-ok` still reports success. Markdown elsewhere
+(for example Aster's docs or avatar `NOTICE.md`, which ship in the desktop
+build) still runs the full CI. Runs on `main` and tags always run every job.
+
+Other pull requests also skip work their paths cannot affect:
+
+- The macOS Node job runs only when a PR touches `apps/desktop/**`,
+  `packages/desktop-host/**`, or the shared toolchain (`ci.yml`,
+  `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`,
+  `tsconfig.base.json`, `vitest.config.ts`).
+- The `api` and `gateway` image builds run only when a PR touches `apps/**`,
+  `packages/**`, `services/api/**`, `services/gateway/**`, `.dockerignore`, or
+  that shared toolchain.
+
 | Job | Runs | Reproduce locally |
 | --- | --- | --- |
-| Node (Ubuntu, macOS) | `pnpm typecheck`, `pnpm test`, `pnpm build`; Ubuntu installs FFmpeg so transcoder tests run | the same commands |
+| Node (Ubuntu, macOS) | `pnpm typecheck`, `pnpm test`, `pnpm build`; Ubuntu installs FFmpeg so transcoder tests run; macOS only for desktop/host or toolchain changes on PRs | the same commands |
 | Python | speech-http and TTS comparison `unittest` suites with FFmpeg | `pnpm test:python` |
 | Compose config | `pnpm stack:config` for `.env.example`, with and without `SODALIS_LOCAL_IMAGES=true` | the same command |
-| Image build | Builds `api` and `gateway`, and `parakeet-tdt` when its service files change | `docker build -f services/<image>/Dockerfile .` |
+| Image build | Builds `api` and `gateway` when app, package, Dockerfile or toolchain files change, and `parakeet-tdt` when its service files change | `docker build -f services/<image>/Dockerfile .` |
 | Quality | actionlint; npm dependency audit blocks high/critical vulnerabilities | `pnpm audit:dependencies`; `docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12` |
 
 Strict TypeScript checks, behaviour tests, actionlint, and the npm audit form
