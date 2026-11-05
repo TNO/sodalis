@@ -1,7 +1,8 @@
 # Companion harness: graph retrieval findings
 
-Status: local graph measurements and a first manual end-to-end check recorded;
-sensor-reading journeys and latency evaluation pending.
+Status: local graph measurements, a first manual end-to-end check, and a
+bounded audit diagnosis recorded; a repeatable sensor-reading journey and
+latency evaluation remain pending.
 Date: 2026-11-04.
 
 ## Summary and recommendation
@@ -49,7 +50,7 @@ test prerequisites are in the
 | Warm graph tool queries | Approximately 10-80 ms | Database work only; excludes model round trips and answer delivery |
 | First cold query planning | Approximately 5-7 s | Service now warms query plans at startup |
 | Manual end-to-end: household and residents | Answered about the home; named Jo and Robin as its residents | Graph discovery works through the full stack (desktop, gateway, AI container, graph network, Neo4j) with a real model |
-| Manual end-to-end: sensor readings | No actual sensor data obtained | Cause not diagnosed; see [Analysis](#analysis) |
+| Manual end-to-end: sensor readings | No actual sensor data obtained | The available audit shows no external-data read in the observed workflow; see [Analysis](#analysis) for trace limits |
 | End-to-end latency | Not measured | No conclusion about response-time goals |
 
 The inspected import also exposed important evidence limitations:
@@ -97,6 +98,35 @@ Acceptance should reward clarification, qualified partial answers, and honest
 unavailability. Inventing a sensor-to-room mapping or treating configured state
 as live data would hide actual source limitations.
 
+### 0068 audit diagnosis
+
+The 0068 audit files contain nine workflow starts and terminal outcomes, with
+ten tool selections, dispatches, and results. The only tools in those lifecycle
+records are `find_entities` and `inspect_neighborhood`; no
+`read_external_data` call was selected or dispatched. One recorded workflow
+returned `ok` from entity lookup and neighborhood inspection, then produced a
+terminal answer. This places that observed workflow before source access: the
+audit does not show a read being rejected by tool validation or policy, nor a
+network/authentication/mount failure, empty result, or stale result.
+
+The audit metadata alone does not uniquely associate that workflow with the
+original manual sensor question. We did not inspect or repeat household
+messages, tool arguments, or result payloads. Therefore the evidence supports
+pre-read non-selection in the observed workflow, but does not establish that it
+was the original manual check's cause. The separately recorded import findings
+above (conflicting sensor/reference location, unsupported source, and stale
+simulated readings) are relevant constraints, but are not shown to have been
+reached in this workflow.
+
+The deterministic local tool/workflow fixtures passed (25 tests): they
+distinguish invalid arguments, supported reads, unsupported or unreachable
+sources, empty data, stale data, and workflow tool lifecycle behavior. They do
+not identify the exact model-selection decision in the historical manual
+conversation or establish live source availability. No live external check was
+run. No in-repository retrieval defect was confirmed, so no prompt, tool,
+simulator, graph-mapping, or authorization change was made; task 0070 is the
+bounded follow-up for a repeatable sensor journey.
+
 ## Limitations
 
 - Small, local import; performance does not establish scaling behavior.
@@ -105,8 +135,10 @@ as live data would hide actual source limitations.
 - Only one qualitative live-model check (no recorded model, transcript, or
   timings); no provider-compatibility, speech, or end-to-end latency result.
   Scripted-model tests prove lifecycle behavior, not investigative skill.
-- Workflows cannot yet be traced, so failures cannot be attributed to
-  retrieval, source access, or model reasoning.
+- The available audit provides tool lifecycle metadata, but the original manual
+  sensor question cannot be uniquely matched without inspecting household
+  content. Source availability and result freshness were not exercised in that
+  historical workflow.
 - Stale fixtures and unsupported references constrain answerability.
 
 ## Open items

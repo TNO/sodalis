@@ -12,6 +12,13 @@ sensor-reading journey has not. This is the first accepted end-to-end data
 journey after diagnosing the retrieval gap; preserve the existing graph
 household/resident behavior rather than rewriting the knowledge graph.
 
+Task 0069's sanitized audit evidence shows an observed workflow terminating
+after `find_entities` and `inspect_neighborhood`, without selecting or
+dispatching `read_external_data`. It does not uniquely identify the historical
+manual sensor question or establish source availability. Use this task to
+exercise the full read path with deterministic local data; do not treat an
+absent live-source check as a successful reading.
+
 ## Acceptance Criteria
 
 - Complete a representative question by resolving the intended graph entity,
