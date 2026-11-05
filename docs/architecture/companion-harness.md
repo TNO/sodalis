@@ -2,7 +2,8 @@
 
 Status: first implementation present; manually verified end to end for
 household/resident questions; sensor readings and full acceptance pending.
-Updated: 2026-11-04.
+Developer audit and one-path convergence are planned, not implemented.
+Updated: 2026-11-05.
 
 The opt-in Pi workflow investigates household questions through successive
 read-only tool calls. It is a companion, not a coding agent. The architectural
@@ -11,7 +12,8 @@ Configuration, route bodies, response codes, and local startup belong in the
 [server guide](../../apps/server/README.md#companion-workflow-pi-harness).
 Measured findings belong in the [evaluation](../evaluations/companion-harness.md);
 remaining acceptance work and deferred ideas belong in
-[task 0067](../../TASKS/0067-companion-harness.md).
+[task 0067](../../TASKS/0067-companion-harness.md) and its
+[numbered follow-up tickets](../../TASKS/README.md#companion-investigation-harness).
 
 ## Turn mode versus workflow mode
 
@@ -69,6 +71,19 @@ behavior while the read-only Pi investigation is evaluated. Bringing those
 capabilities into Pi requires explicit implementation and policy work, not
 simply changing the mode flag. Real-model reasoning quality and latency remain
 acceptance work; see [task 0067](../../TASKS/0067-companion-harness.md).
+
+### Planned execution-path target
+
+The approved target is for the harness to become the only supported assistant
+execution path after confirmed desktop actions, consent-governed memory, and
+steering/interruption behavior reach parity. Until then, the current selector
+and both paths remain as documented above. This target is not shipped behavior.
+Tasks [0076](../../TASKS/0076-preserve-memory-in-harness.md),
+[0077](../../TASKS/0077-preserve-confirmed-actions-in-harness.md),
+[0078](../../TASKS/0078-verify-harness-steering.md), and
+[0079](../../TASKS/0079-converge-on-harness-execution-path.md) track that
+sequence. Email and calendar work, durable/recurring runs, and resident-visible
+evidence are not prerequisites for convergence.
 
 Implementation entry points are
 [ConversationOrchestrator](../../packages/assistant/src/index.ts),
@@ -362,14 +377,72 @@ Query plans are warmed at startup following the [cold-query findings](../evaluat
 ### Observability gap
 
 A workflow currently cannot be inspected. Intermediate model messages, tool
-calls and their arguments, tool results, the history and evidence sent to the
-model, and per-step timing stay inside the Pi session and are discarded with
-it. Public SSE events deliberately carry only `started` and the terminal
-outcome, and the server logs only failures (provider errors, unavailable
-graph/source, unexpected tool defects). So when an answer is wrong or missing,
-it is not possible to tell whether retrieval, source access, or the model's
-reasoning was at fault. A developer-only trace mode is planned; see
-[task 0067](../../TASKS/0067-companion-harness.md#known-gaps).
+calls and their arguments, tool results, harness decisions, and per-step timing
+stay inside the Pi session and are discarded with it. Public SSE events
+deliberately carry only `started` and the terminal outcome, and the server logs
+only failures (provider errors, unavailable graph/source, unexpected tool
+defects). So when an answer is wrong or missing, it is not possible to follow
+the evidence and execution events that led to the outcome. The approved,
+not-yet-implemented solution is a development-only, opt-in local text audit; see
+[task 0068](../../TASKS/0068-persistent-developer-audit.md).
+
+The audit will write a chronological human transcript and structured JSONL from
+the same event stream under the git-ignored repository-root `logs/` directory,
+bind-mounted into the AI container so files survive container shutdown. It
+will record conversation messages; model/tool lifecycle; tool names,
+arguments, and results; harness validation/policy decisions; timestamps,
+durations, correlation IDs, and terminal outcomes, distinguishing tool
+selection, dispatch, and result. Only provider-supported reasoning summaries
+and harness metadata are in scope; hidden chain-of-thought is not. Credentials
+must be redacted. Spoken input is captured only as its text transcript, never
+audio bytes or artifacts.
+
+This sensitive developer diagnostic remains out of resident UI, public SSE,
+external uploads, and durable assistant memory. Developers manually delete
+logs; no automatic expiry/deletion, capacity manager, warning UI, or retention
+service is planned. Ordinary write errors use standard server error logging.
+This intentionally supersedes the earlier planned constraint against
+persistence beyond a developer session, narrowly for local development audit.
+It does not change memory consent, retention, or deletion. The diagnostic has
+no compliance-grade guarantees and adds no resident-facing runtime behavior.
+
+## Planned acceptance roadmap
+
+The first sequence is audit ([0068](../../TASKS/0068-persistent-developer-audit.md)),
+evidence-based diagnosis and bounded repair
+([0069](../../TASKS/0069-diagnose-harness-data-retrieval.md)), then one
+repeatable sensor journey
+([0070](../../TASKS/0070-complete-sensor-journey.md)). The known cause of the
+missing reading is not established.
+
+Read-only email and calendar each require an independent access decision before
+their journey tickets ([0071](../../TASKS/0071-decide-read-only-email-access.md),
+[0072](../../TASKS/0072-complete-read-only-email-journey.md),
+[0073](../../TASKS/0073-decide-read-only-calendar-access.md), and
+[0074](../../TASKS/0074-complete-read-only-calendar-journey.md)). Memory policy
+is decided before harness integration
+([0075](../../TASKS/0075-decide-harness-memory-and-context.md),
+[0076](../../TASKS/0076-preserve-memory-in-harness.md)); existing confirmed
+actions and steering parity are separately tracked
+([0077](../../TASKS/0077-preserve-confirmed-actions-in-harness.md),
+[0078](../../TASKS/0078-verify-harness-steering.md)). Only the sensor journey,
+memory integration, action parity, and steering verification block the planned
+one-path convergence in task
+[0079](../../TASKS/0079-converge-on-harness-execution-path.md).
+
+Graph-test CI coverage and decisions on longer-lived work or resident-visible
+progress/evidence are independent work
+([0080](../../TASKS/0080-deterministic-graph-ci-coverage.md),
+[0081](../../TASKS/0081-decide-longer-lived-work.md),
+[0082](../../TASKS/0082-decide-resident-progress-and-evidence.md)). Latency
+evaluation follows the sensor journey
+([0083](../../TASKS/0083-evaluate-harness-latency.md)); no response-time target
+is currently approved.
+
+Implementation tickets update this architecture with current/planned behavior
+and verification evidence. Architectural decisions and trade-offs belong in
+ADRs; consolidated evaluation findings belong in
+[`docs/evaluations/`](../evaluations/README.md).
 
 ## Existing turn path and memory
 
