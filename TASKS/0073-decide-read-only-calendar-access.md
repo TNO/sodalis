@@ -1,6 +1,6 @@
 # 0073 Decide authorized read-only calendar access
 
-Status: open
+Status: done
 Priority: medium
 Subsystem: assistant
 Depends on: none
@@ -26,7 +26,18 @@ before adding a read-only calendar journey.
 - Record the decision in the architecture; use an ADR only if it resolves an
   architectural trade-off.
 
-## Implementation Notes
+## Decision
 
-No calendar provider or authorization mechanism is selected by this task.
-Endpoint metadata alone is not account authorization.
+The user selected a provider-neutral read-only calendar interface, with both
+Microsoft Graph and Google Calendar adapters in the initial implementation.
+The [architecture contract](../docs/architecture/companion-harness.md#approved-read-only-calendar-contract-planned)
+records the shared normalized outcomes, delegated OAuth grants and secure
+credential requirements, single-source appointment/timezone contract,
+deterministic fixtures, and live-verification limits. It specializes ADR 0007
+without requiring a new ADR. Endpoint metadata alone is not account authorization.
+
+Task [0074](0074-complete-read-only-calendar-journey.md) is refined for both
+adapters and remains open. This task implements no provider, authorization
+flow, or runtime behavior and makes no live requests. Verification is a
+documentation consistency/link review and `git diff --check`; no code tests
+are invented for this documentation-only decision.
