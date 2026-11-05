@@ -1,6 +1,6 @@
 # 0069 Diagnose and repair harness data retrieval
 
-Status: open
+Status: done
 Priority: high
 Subsystem: assistant
 Depends on: 0068
@@ -38,3 +38,20 @@ failure before changing retrieval behavior.
 
 This task is diagnosis and a bounded repair, not permission to change prompts,
 tools, simulator data, or graph mappings without evidence.
+
+## Outcome
+
+The 0068 audit's sanitized lifecycle metadata records no selection or dispatch
+of `read_external_data`; the observed tool lifecycles stop at
+`find_entities`/`inspect_neighborhood`. This supports pre-read non-selection
+for an observed workflow, but the metadata cannot uniquely match it to the
+historical manual sensor question. No validation/policy rejection, source
+unavailability, empty result, or stale result is evidenced for that workflow.
+
+The deterministic local tool/workflow tests passed (25 tests), covering
+validation, supported reads, unsupported/unreachable sources, empty data,
+staleness, and workflow lifecycle. No live external check was run, and no
+in-repository defect was confirmed; therefore no behavior change or regression
+test was warranted. The bounded follow-up is [0070](0070-complete-sensor-journey.md):
+reproduce the complete journey locally, and keep any live-source verification
+separate and consent-gated.

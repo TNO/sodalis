@@ -571,15 +571,36 @@ persistence beyond a developer session, narrowly for local development audit.
 It does not change memory consent, retention, or deletion. The diagnostic has
 no compliance-grade guarantees and adds no resident-facing runtime behavior.
 
+### Retrieval diagnosis (0069)
+
+The sanitized 0068 audit metadata records nine workflow starts and terminal
+outcomes, and ten tool selections, dispatches, and results. Only
+`find_entities` and `inspect_neighborhood` appear; no `read_external_data`
+call was selected or dispatched. One observed answered workflow completed
+entity lookup and neighborhood inspection with `ok` results before terminating.
+This is evidence of a pre-source-read path in that workflow, not evidence that a
+read was rejected or that its source was unavailable, empty, or stale.
+
+The sanitized metadata does not uniquely identify which workflow corresponds
+to the historical manual sensor question. No household messages, arguments, or
+result payloads were inspected. Therefore the specific historical cause remains
+unconfirmed, and no in-repository defect or repair was established. Existing
+local fixtures cover the read boundary's validation and source outcomes; their
+25 relevant tests pass. No live external check was run, so no claim is made
+about current graph, mount, network, authentication, or sensor availability.
+Task [0070](../../TASKS/0070-complete-sensor-journey.md) is the bounded follow-up
+to reproduce the complete journey with deterministic local data and separately
+seek consent before any live-source check.
+
 ## Planned acceptance roadmap
 
 The audit task is implemented
 ([0068](../../TASKS/0068-persistent-developer-audit.md)). Next are
-evidence-based diagnosis and bounded repair
-([0069](../../TASKS/0069-diagnose-harness-data-retrieval.md)), then one
-repeatable sensor journey
+the evidence-based diagnosis (0069; no repair was justified by the available
+trace), then one repeatable sensor journey
 ([0070](../../TASKS/0070-complete-sensor-journey.md)). The known cause of the
-missing reading is not established.
+historical missing reading remains unconfirmed because the sanitized audit
+cannot uniquely match its workflows to that manual question.
 
 The read-only email access decision
 ([0071](../../TASKS/0071-decide-read-only-email-access.md)) is complete;
