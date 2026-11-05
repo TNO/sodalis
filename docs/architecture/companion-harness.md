@@ -381,7 +381,13 @@ When `COMPANION_AUDIT=true`, `FileCompanionAuditWriter` appends one chronologica
 human-readable transcript and one structured JSONL record per event from the
 same Pi event stream under repository-root `logs/`. The AI service's Compose
 configuration bind-mounts `./logs` at `/app/logs`, so files survive container
-shutdown. The default is off; startup rejects enabling it when `NODE_ENV` is
+shutdown. The launcher creates the host directory with mode `0700` before
+starting containers. Files use `0600`; a root writer assigns ownership to the
+bind directory's owner/group, preserving host-editor access without exposing
+household logs to other users. Existing root-owned logs require the manual
+ownership repair documented in the server guide. The AI process identity and
+memory-volume behavior are unchanged.
+The default is off; startup rejects enabling it when `NODE_ENV` is
 `production`. The server guide documents these settings.
 
 The records include resident text messages, model/turn metadata and timing,
@@ -474,6 +480,7 @@ skips without its local Neo4j settings.
 | Audit correlation/lifecycle, text-only transcript, redaction, hidden-reasoning exclusion, write-error reporting | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
 | HTTP lifecycle, audit isolation from SSE and memory, configuration, literal provider values | [routes.test.ts](../../apps/server/src/assistant/harness/routes.test.ts) |
 | Repository-root audit bind mount persistence | [companion-compose.test.ts](../../scripts/companion-compose.test.ts) |
+| Private audit files readable by the host after a root container exits (local Docker image required; skipped in CI) | [audit-permissions.test.ts](../../scripts/audit-permissions.test.ts) |
 | Bounded tool reads, explicit unavailable results, SQLite observations | [tools.test.ts](../../apps/server/src/assistant/harness/tools.test.ts) |
 | Actual imported schema and supported source reads, without models; local only, against the `home_simulator` Neo4j test container | [homeGraph.integration.test.ts](../../apps/server/src/assistant/harness/homeGraph.integration.test.ts) |
 | Speech-stop/steer distinction, in-transit answers, newer input | [WorkflowConversation.test.ts](../../packages/assistant/src/WorkflowConversation.test.ts) |

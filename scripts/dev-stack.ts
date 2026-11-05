@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix } from "./stack-config.js";
@@ -24,6 +24,13 @@ const settings = {
 };
 const selection = resolveStack(settings);
 if (operation === "up") {
+  const logs = resolve(root, "logs");
+  try {
+    mkdirSync(logs, { recursive: true, mode: 0o700 });
+    accessSync(logs, constants.R_OK | constants.W_OK | constants.X_OK);
+  } catch (error) {
+    throw new Error("The repository logs/ directory must be accessible to your user. Repair its ownership before starting the stack; see apps/server/README.md.", { cause: error });
+  }
   const readings = selection.environment.HOME_DATA_SQLITE_SOURCE;
   if (readings) validateReadingsFile(readings);
   for (const model of selection.models) {

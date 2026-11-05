@@ -48,3 +48,10 @@ not resident-visible evidence, durable assistant memory, or a compliance log.
 The root `logs/` path is repository-relative, not the operating-system
 `/logs`. Keep the audit separate from the memory system: manual audit deletion
 does not satisfy or change memory consent, retention, or deletion policy.
+
+Host-editor access is preserved without widening file permissions: the launcher
+creates the bind directory as the host user, and root-container audit writes
+assign files to that directory's owner/group. A local, network-disabled Docker
+regression verifies both files remain `0600` and readable after container exit;
+it self-skips without the local image and in CI. Earlier root-owned logs need
+the one-time manual repair in the server guide.

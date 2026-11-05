@@ -1,4 +1,4 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFile, chown, mkdir, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -75,6 +75,14 @@ export class FileCompanionAuditWriter implements CompanionAuditSink {
         appendFile(this.jsonlPath, jsonLine, { encoding: "utf8", mode: 0o600 }),
         appendFile(this.transcriptPath, humanLine, { encoding: "utf8", mode: 0o600 }),
       ]);
+      // Root containers must leave private bind-mounted files readable by the host owner.
+      if (process.getuid?.() === 0) {
+        const owner = await stat(dirname(this.jsonlPath));
+        await Promise.all([
+          chown(this.jsonlPath, owner.uid, owner.gid),
+          chown(this.transcriptPath, owner.uid, owner.gid),
+        ]);
+      }
     });
     this.pending = operation.catch((error: unknown) => {
       console.error("Developer audit write failed:", error);

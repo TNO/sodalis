@@ -257,6 +257,23 @@ JSONL under `/app/logs`; Compose bind-mounts the repository-root `./logs/`
 directory there, so the files survive container shutdown. The directory is
 git-ignored.
 
+The stack launcher creates `logs/` as the invoking host user before starting
+containers (mode `0700`). New audit files remain private (`0600`); a root AI
+container assigns them to the bind directory's owner and group so that the
+developer can open them in VS Code without sudo. Direct Compose users must
+create the directory themselves first: `mkdir -p -m 700 ./logs`.
+
+If an earlier deployment already created root-owned logs, stop the stack and
+repair only this checkout's audit directory from the repository root:
+
+```sh
+sudo chown -R "$(id -u):$(id -g)" ./logs
+chmod 700 ./logs
+```
+
+This one-time repair is manual; the launcher reports inaccessible directories
+rather than elevating privileges or making sensitive logs world-readable.
+
 Both files are written from the same internal Pi event stream. They include
 text messages, model and tool lifecycle, tool selection/dispatch/results,
 arguments, validation decisions, timestamps, durations, correlation IDs, and
