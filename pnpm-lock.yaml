@@ -242,8 +242,8 @@ importers:
         specifier: ^4.13.16
         version: 4.13.16
       microsoft-cognitiveservices-speech-sdk:
-        specifier: 1.52.0
-        version: 1.52.0
+        specifier: 1.53.0
+        version: 1.53.0
       neo4j-driver:
         specifier: 6.3.0
         version: 6.3.0
@@ -1484,8 +1484,8 @@ packages:
   meshoptimizer@0.22.0:
     resolution: {integrity: sha512-IebiK79sqIy+E4EgOr+CAw+Ke8hAspXKzBd0JdgEmPHiAwmvEj2S4h1rfvo+o/BnfEYd/jAOg5IeeIjzlzSnDg==}
 
-  microsoft-cognitiveservices-speech-sdk@1.52.0:
-    resolution: {integrity: sha512-JhNNz/Cg8cx92TrX9IYNYVPgarrFZZSaPFjTkZgaQJMBZpgfCaNMjnpuYpr4NHT5h0QnS38IrUgmNbGrO6/xUQ==}
+  microsoft-cognitiveservices-speech-sdk@1.53.0:
+    resolution: {integrity: sha512-laJQ8Pb9i69U7JrRYjt6cdr8jYgfAR6sHgfdQvaBPBnxx8gnFMnLf1Jd7/VKj/wZfsFiVnu0ctYOMY/JMG7dEg==}
 
   minimatch@11.0.3:
     resolution: {integrity: sha512-iny/40PEGkNJQ5/Pv6z3nm6FbRAby32GeZRjCUJk2WnNDbgPSTcdI+DDvLqsgBdD4cD5sMtMheqPPnehCCa8Nw==}
@@ -3072,7 +3072,7 @@ snapshots:
 
   meshoptimizer@0.22.0: {}
 
-  microsoft-cognitiveservices-speech-sdk@1.52.0:
+  microsoft-cognitiveservices-speech-sdk@1.53.0:
     dependencies:
       '@azure/core-auth': 1.11.0
       '@types/webrtc': 0.0.37
