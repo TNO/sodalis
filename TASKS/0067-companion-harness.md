@@ -1,7 +1,7 @@
 # 0067 Building and evaluating the companion harness
 
-Status: in progress (implemented and manually verified for household/resident
-questions; developer tracing and sensor-reading journeys outstanding)
+Status: in progress (current two-path implementation; approved follow-up
+acceptance remains in tasks 0068–0083)
 Priority: high
 Subsystem: assistant
 Depends on: 0031
@@ -16,10 +16,14 @@ current implementation. Setup is in the
 The [evaluation](../docs/evaluations/companion-harness.md) is the authoritative
 home for measured findings, not these progress notes.
 
-## Delivery sequence
+The current implementation and its verification remain distinct from the
+approved target. The numbered
+[acceptance roadmap](README.md#companion-investigation-harness) breaks the
+remaining work into independent, verifiable slices; this umbrella remains open.
 
-The first four implementation stages are present and the repository gates pass;
-stage 5 is partly done (see [Known gaps](#known-gaps)):
+## Current implementation
+
+The first four implementation stages are present:
 
 1. Define lifecycle/event contracts and scripted-model behavior checks.
 2. Embed explicit Pi sessions, prompt/tools, limits, and event translation,
@@ -35,58 +39,63 @@ stage 5 is partly done (see [Known gaps](#known-gaps)):
    prefix), which the Neo4j container is expected to join as `neo4j`; the
    Sodalis stack creates it and must start first. See the
    [stack guide](../docs/development-stack.md#shared-graph-network).
-5. Verify deterministic behavior and repository gates; manually evaluate
-   real-model reasoning and latency before refining retrieval.
+
+The implementation notes record deterministic behavior checks and repository
+gates passing at that time. The accepted follow-up verification and remaining
+evidence are tracked by tasks 0068–0083; that historical result does not imply
+current acceptance.
 
 ## Known gaps
 
 Found during the first manual end-to-end check on 2026-11-04 (results in the
 [evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)).
 
-### Workflows cannot be inspected or debugged
+### Developer audit is not implemented
 
-There is no way to see what was retrieved and sent to the LLM, which tool calls
-were made with which arguments and results, or how long each step took. Only
-failures are logged, and the public SSE stream deliberately carries only the
-terminal outcome (see the
+There is no way to follow retrieved evidence, model/tool events, and their
+relation to an outcome, or to inspect tool arguments, results, and step
+durations. Only failures are logged, and the public SSE stream deliberately
+carries only the terminal outcome (see the
 [architecture](../docs/architecture/companion-harness.md#observability-gap)).
 This makes wrong or missing answers effectively impossible to diagnose, and it
-blocks the rest of the acceptance work below.
+blocks the accepted diagnosis and sensor journey.
 
-Next step: an explicit, opt-in developer mode, off by default, that records a
-per-workflow trace:
+Approved follow-up [0068](0068-persistent-developer-audit.md) adds an
+explicitly opt-in, development-only audit, disabled by default and rejected in
+production. It writes a chronological human transcript and structured JSONL
+from the same event stream to the git-ignored repository-root `logs/` directory,
+bind-mounted into the AI container so files survive container shutdown. It
+captures messages; model/tool lifecycle; tool names, arguments, and results;
+harness policy/validation decisions; timestamps, durations, correlation IDs,
+and terminal outcomes; and distinguishes tool selection, dispatch, and result.
+Only provider-supported reasoning summaries and harness metadata are allowed,
+never hidden chain-of-thought. Credentials are redacted; spoken input is
+captured only as text, never as audio bytes, recordings, or artifacts.
 
-- the history, system prompt version and steering inputs submitted to Pi;
-- each model request/response, including intermediate text and stop reason;
-- each tool call with arguments, result (or error/`unavailable`), whether it
-  was a repeated call, and duration;
-- the terminal outcome and which budget or limit ended the run, if any.
-
-Constraints: traces hold household and resident data, so they must stay out
-of the resident UI and public stream, must not be enabled by the standard
-example, and must not be persisted beyond the developer's session or sent to
-third parties. Output can be developer logs or a dev-only route/event; that
-choice and its name are open. Pi's session events are the natural source.
-Storing such traces durably, for example in long-term memory, is a possible
-later direction and requires
-[ADR 0005](../docs/adr/0005-long-term-memory.md) consent, provenance,
-retention and deletion; it is not part of this step.
+The audit remains outside resident UI, public SSE, external uploads, and
+durable assistant memory. Developers manually delete sensitive household logs.
+No automatic expiry/deletion, capacity manager, warning UI, or retention
+service is planned. Ordinary write errors use standard server error logging.
+This intentionally supersedes the earlier planned "not persisted beyond the
+developer's session" constraint for local diagnostic logs only. It adds no
+resident-facing behavior or compliance-grade guarantees and does not change
+memory consent, retention, or deletion. Tests use deterministic mock events.
 
 ### No actual sensor data obtained
 
-The manual check never returned an actual sensor reading, although the direct
-integration test reads the same snapshot without a model. The cause is not
-established (the model not calling `read_external_data`, an unreadable or
-unmatched reference, a missing readings mount, or withheld stale values; see the
-[evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)).
-Diagnose it with the developer trace once available, before changing prompts,
-tools or the simulator data. The snapshot's readings end on 2026-10-19, so even a
-successful read is `stale`; a journey asking for current readings must expect a
-qualified answer.
+The manual check never returned an actual sensor reading. The cause is
+unknown; possible causes recorded in the
+[evaluation](../docs/evaluations/companion-harness.md#manual-end-to-end-check)
+are not findings. Task [0069](0069-diagnose-harness-data-retrieval.md) requires
+evidence before a bounded repair. Then task
+[0070](0070-complete-sensor-journey.md) requires a repeatable, grounded journey
+that reports the actual source, timestamp, and freshness. A known historical
+snapshot may return stale data; it must not be presented as fresh.
 
-## Remaining acceptance work
+## Accepted sensor journey
 
-Use adaptive investigation, not a fixed sequence of preselected calls:
+Task [0070](0070-complete-sensor-journey.md) accepts an adaptive investigation,
+not a fixed sequence of preselected calls:
 
 1. Ask about a room, device, or measurement.
 2. Find candidates and inspect relevant relationships.
@@ -102,23 +111,18 @@ Representative questions:
 - "What is the temperature in the bedroom?" Discover the sensor and reference,
   then obtain a timestamped observation only if the actual evidence permits it.
 
-If live appliance-state references are missing, the second journey is a starting
-point, not permission to invent mappings. Include ambiguous rooms, unsupported
-or unavailable sources, stale observations, and conflicting evidence. Preserve
-the actual [import findings](../docs/evaluations/companion-harness.md#results).
-Do not modify the separate `home_simulator` project to force a successful demo.
+If live appliance-state references are missing, a question is not permission to
+invent mappings. Cover wrong entity, unavailable, empty, stale, and conflicting
+evidence where relevant; preserve the actual
+[import findings](../docs/evaluations/companion-harness.md#results). Do not
+modify the separate `home_simulator` project to force a successful demo.
 
-Provisional responsiveness targets on the selected deployment/model:
-
-- Acknowledgment within one second.
-- Useful answer within five seconds for ordinary warm-path household questions.
-
-These are unverified goals, not guarantees or cancellation deadlines. Observe
-median/p95, model round trips, graph work, and cold/unavailable-source cases.
-Longer investigations should remain interruptible and give brief progress
-feedback rather than technical tool narration. Compare bounded lookup plus read
-with returning more useful evidence during graph retrieval only after measuring
-database work and end-to-end/model-round-trip costs.
+Earlier draft timings of a one-second acknowledgment and five-second answer
+were not accepted as targets. No response-time threshold is currently
+approved. Task [0083](0083-evaluate-harness-latency.md) may establish
+measurements, including p50/p95 when meaningful, without inventing a target.
+Any live external check requires separate explicit user consent for that run;
+cloud-provider commands also follow the repository's provider-selection checks.
 
 ## Verification policy
 
@@ -139,65 +143,56 @@ database work and end-to-end/model-round-trip costs.
   under the repository's existing gates. Documentation relocation is not a
   claim that implementation gates or manual acceptance have passed.
 
-## Planned follow-up: graph checks in CI
+## Deterministic graph integration coverage
 
-Not implemented. Direct graph checks currently run only locally, against the
-`home_simulator` Neo4j test container (see the server guide). Snapshot data
-stays in that private repository; this public repository holds no simulator
-data. A future CI step should:
+Direct graph checks currently run only locally, against the test container in
+the separate `home_simulator` project; no simulator data is stored here. Task
+[0080](0080-deterministic-graph-ci-coverage.md) decides whether this check
+remains a reproducible local gate or moves into CI, then wires the selected
+deterministic gate. CI must use mock/local services, require no cloud
+credentials, and never run live provider tests or expose private simulator
+data.
 
-1. Start the test graph in a dedicated CI job: Neo4j from the pinned upstream
-   image, loaded with the `home_simulator` snapshot. Choose how CI obtains the
-   private snapshot, for example a private registry image built in
-   `home_simulator`, or a read-only checkout credential scoped to that repository.
-2. Run `homeGraph.integration.test.ts` with `HOME_GRAPH_TEST_*` and
-   `HOME_DATA_TEST_SQLITE`, waiting for readiness and query warm-up (the first
-   cold queries took seconds).
-3. Keep snapshot contents out of public logs, caches and artifacts. Run only on
-   trusted branches, because secrets are unavailable to fork pull requests.
-   Never use cloud-provider secrets or model calls (ADR 0006).
-4. Record the snapshot's simulator commit (`SOURCE.json`) with the result, and
-   update fixed test expectations when the snapshot is refreshed.
+## Accepted roadmap and explicit deferrals
 
-Decide whether the job blocks `ci-ok` only after it has run reliably.
+The approved roadmap is broken into bounded tasks, not authorization for
+unselected capabilities:
 
-## Deferred directions, not scheduled requirements
-
-These preserve design wishes; listing them does not authorize frameworks,
-connectors, extra model calls, or expansion of the initial scope.
-
-| Direction | Purpose and condition for revisiting |
+| Scope | Tracking |
 | --- | --- |
-| Faster interruption handling | Native steering can wait behind slow tools. Add immediate host progress feedback or another interaction path only if measurements warrant it; keep speech stopping distinct from cancellation. |
-| Longer-lived Pi sessions | Reduce repeated follow-up retrieval only after resolving context bounds, stale evidence, and history ownership. This does not supply layered memory. |
-| Sentence-streamed final speech | Revisit buffering only if latency warrants it; first distinguish speakable final text from intermediate/tool-bearing messages and handle steering races. |
-| Appended home-state context | Experiment with an explicitly supplied, sourced/fresh summary, potentially `APPEND_SYSTEM.md` injected through controlled resources. Keep data separate from instructions and fall back to tools. No discovery, generator, refresh policy, or extra model calls selected. |
-| Indexes, batching, caching | Optimize after measurement. Separate graph metadata from source contents with freshness/invalidation and future authorization-aware reuse. |
-| Additional external-data readers | Add source-specific code for concrete formats/protocols/authentication. A common HTTP contract may enable reuse; no plugin registry assumed. |
-| Layered memory integration | Investigate current call sites and ADR 0005 before choosing an interface; preserve consent, provenance, retention, and deletion. No strategy selected for Pi context/compaction. |
-| Recurring or event-triggered tasks | Add explicit opt-in triggers, scope/revocation, and a separate lifecycle for an actual journey. Permission to summarize does not imply permission to send/modify. |
-| Pi-driven desktop/device actions | Add a typed semantic execution bridge only when needed; preserve desktop-host isolation, exact-action confirmation, cancellation, and honest reporting of committed effects. |
-| Personal email/calendar and finer authorization | Add account-specific access and consent for a concrete connector, not ambient cross-app access. Fetch changing contents afresh. |
-| Cross-app task execution | Evolve the current focus-scoped action policy explicitly when building the bridge; focus alone must not grant authority, nor may DOM access or blanket authorization. |
-| Stronger process isolation | Consider a subprocess or OS isolation if deployment requires it. In-process SDK tools share server permissions/failure domain. |
-| Durable runs/restart recovery | Introduce host-owned persistence only for concrete longer tasks under retention/deletion policy; do not enable implicit Pi transcript archives. |
-| Resident-visible evidence | Reuse compact tool evidence for on-request/expandable presentation when needed. |
+| Local development audit, evidence-based retrieval diagnosis, first sensor journey | [0068](0068-persistent-developer-audit.md), [0069](0069-diagnose-harness-data-retrieval.md), [0070](0070-complete-sensor-journey.md) |
+| Read-only email and calendar provider/access decisions, followed by refined implementation tasks | [0071](0071-decide-read-only-email-access.md) → [0072](0072-complete-read-only-email-journey.md); [0073](0073-decide-read-only-calendar-access.md) → [0074](0074-complete-read-only-calendar-journey.md) |
+| Existing consent-governed memory and context ownership | [0075](0075-decide-harness-memory-and-context.md) → [0076](0076-preserve-memory-in-harness.md); reuse existing work in tasks 0039 and 0045–0053 |
+| Confirmed actions and steering/interruption parity | [0077](0077-preserve-confirmed-actions-in-harness.md); [0078](0078-verify-harness-steering.md), after 0070 |
+| Retire the duplicate turn path after feature parity | [0079](0079-converge-on-harness-execution-path.md); depends on 0070, 0076, 0077, and 0078, not on this umbrella |
+| Deterministic graph check placement | [0080](0080-deterministic-graph-ci-coverage.md) |
+| Decisions only: longer-lived work; resident-visible progress/evidence | [0081](0081-decide-longer-lived-work.md); [0082](0082-decide-resident-progress-and-evidence.md) |
+| Reproducible latency and budget evaluation | [0083](0083-evaluate-harness-latency.md), after 0070 |
 
-### Deferred capability sketches
+Email and calendar scope is read-only: relevant recent messages summarized
+with sender/date/source, and appointments in a requested period with timezone
+and source. No sending, drafting, calendar writes, or hidden cross-source
+synthesis is approved. Account authorization must come from the connector, not
+graph endpoint metadata. Each provider and access model remains undecided until
+its decision task is complete.
 
-- **Email:** "Summarize my unread emails from today and draft a reply to this
-  one." Investigate integration with existing email applications and an email
-  view in the browser desktop. Desired selectors include latest email, latest
-  unread email, latest five emails, or latest five unread emails. Draft creation
-  and editing are distinct from sending; sending requires explicit consent.
-  Existing fixture Mail actions do not constitute a real connector.
-- **Web search:** retrieve and summarize new knowledge through a predefined
-  search engine (for example latest news), or open the search in a browser when
-  the resident wants further information. No search provider or browser bridge
-  is selected.
-- **Thuisarts:** preliminary idea only: consult
-  [thuisarts.nl](https://www.thuisarts.nl/) for medical-information requests.
-  Not a ready design, connector, or approved medical capability.
+The following remain explicit non-goals unless separately decided and tracked:
+
+- Web search, browser bridges, and medical-information connectors such as
+  Thuisarts; none is a selected or approved capability.
+- Sentence-streamed final speech, appended home-state context, indexing,
+  batching, caching, or other retrieval optimization without measurements.
+- Stronger operating-system/process isolation; the embedded SDK continues to
+  share the server's permissions and failure domain.
+- Durable runs, restart recovery, or recurring/event-triggered work. Task 0081
+  is a decision only; no such implementation is scheduled.
+- Resident-visible progress/evidence UI. Task 0082 is a decision only and is
+  separate from sensitive developer audit logs.
+
+No live external check is authorized by these tickets. Obtain separate,
+explicit user consent before each such run; commands that can send data to a
+cloud provider also require checking the selected providers and applicable
+configuration.
 
 ## Agent Notes
 
