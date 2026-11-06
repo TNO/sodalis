@@ -11,6 +11,11 @@ for a lowercase character folder/id (Anna: `anna`), `<MHC>` for its Unreal
 MetaHuman Character asset (Anna: `MHC_Anna`), and `<repo>` for your Sodalis
 checkout. Replace these placeholders in commands and filenames.
 
+To restore the finished Anna without rebuilding, run `pnpm avatar:anna`
+with GitHub CLI access to `TNO/sodalis-licensed-avatars`, then restart
+`pnpm dev`. See [private asset restoration](../../tools/avatar-authoring/metahuman/README.md#restore-anna-on-demand)
+for the pinned build, authentication, and source backups.
+
 ![Anna in Sodalis, Bust framing](images/metahuman/anna-bust.jpg)
 
 > **Licence.** MetaHumans fall under the Unreal Engine EULA. Converted
