@@ -8,7 +8,6 @@ import type {
 } from "@sodalis/assistant";
 import { formatRecallResult, isRecallReply, mayBeRecallReply, parseRecallCall, type MemoryService } from "@sodalis/memory";
 import { registerWorkflowRoutes } from "./harness/routes.js";
-import { registerEmailRoutes } from "./harness/emailRoutes.js";
 import type { CompanionWorkflows } from "./harness/workflow.js";
 import { registerMemoryRoutes } from "./memoryRoutes.js";
 import { BodyLimitError, ID_PATTERN, isRecord, readBoundedBody, readMessages } from "./requestBody.js";
@@ -260,16 +259,7 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
   );
 
   if (options.workflows) {
-    if (options.workflows.emailConnections) {
-      registerEmailRoutes(app, options.workflows.emailConnections);
-    }
-    registerWorkflowRoutes(
-      app,
-      options.workflows,
-      options.workflows.emailConnections
-        ? (sessionId) => options.workflows!.emailConnections!.connectionSignalForSession(sessionId)
-        : undefined,
-    );
+    registerWorkflowRoutes(app, options.workflows);
   }
 
   if (options.memory) {

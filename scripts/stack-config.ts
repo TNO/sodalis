@@ -53,15 +53,6 @@ export function resolveStack(settings: Settings): StackSelection {
   environment.COMPANION_HARNESS = validateCompanionSettings(settings);
   environment.EMAIL_PROVIDER = validateEmailSettings(settings);
   for (const key of [
-    "EMAIL_RESIDENT_ID",
-    "EMAIL_OAUTH_CLIENT_ID",
-    "EMAIL_OAUTH_CLIENT_SECRET_REF",
-    "EMAIL_OAUTH_REDIRECT_URI",
-    "EMAIL_GRAPH_TENANT",
-  ] as const) {
-    environment[key] = settings[key]?.trim() || "";
-  }
-  for (const key of [
     "HOME_GRAPH_URL", "HOME_GRAPH_USER", "HOME_GRAPH_PASSWORD", "HOME_GRAPH_DATABASE",
     "HOME_GRAPH_SCOPE", "HOME_DATA_SQLITE_ENDPOINT",
   ] as const) {

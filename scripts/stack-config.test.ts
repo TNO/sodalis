@@ -49,37 +49,19 @@ describe("development stack selection", () => {
     expect(() => resolveStack({ ...base, COMPANION_AUDIT: "maybe" })).toThrow(/COMPANION_AUDIT/);
   });
 
-  it("wires one explicitly selected email provider and only a secure-store reference", () => {
+  it("wires only the off/mock email selection and rejects old provider values", () => {
     const mock = resolveStack({
       ...base,
       COMPANION_HARNESS: "pi",
       EMAIL_PROVIDER: "mock",
-      EMAIL_RESIDENT_ID: "resident-local",
     });
     expect(mock.environment).toMatchObject({
       EMAIL_PROVIDER: "mock",
-      EMAIL_RESIDENT_ID: "resident-local",
-      EMAIL_OAUTH_CLIENT_ID: "",
-      EMAIL_OAUTH_CLIENT_SECRET_REF: "",
     });
-    const graph = resolveStack({
-      ...base,
-      COMPANION_HARNESS: "pi",
-      EMAIL_PROVIDER: "graph",
-      EMAIL_RESIDENT_ID: "resident-local",
-      EMAIL_OAUTH_CLIENT_ID: "graph-email-client",
-      EMAIL_OAUTH_CLIENT_SECRET_REF: "sodalis-email-client",
-      EMAIL_OAUTH_REDIRECT_URI: "http://localhost:4176/api/email/callback",
-      EMAIL_GRAPH_TENANT: "common",
-    });
-    expect(graph.environment).toMatchObject({
-      EMAIL_PROVIDER: "graph",
-      EMAIL_OAUTH_CLIENT_ID: "graph-email-client",
-      EMAIL_OAUTH_CLIENT_SECRET_REF: "sodalis-email-client",
-      EMAIL_GRAPH_TENANT: "common",
-    });
-    expect(graph.environment).not.toHaveProperty("EMAIL_OAUTH_CLIENT_SECRET");
-    expect(() => resolveStack({ ...base, EMAIL_PROVIDER: "graph" })).toThrow(/COMPANION_HARNESS/);
+    expect(mock.environment).not.toHaveProperty("EMAIL_OAUTH_CLIENT_ID");
+    expect(mock.environment).not.toHaveProperty("EMAIL_OAUTH_CLIENT_SECRET_REF");
+    expect(() => resolveStack({ ...base, EMAIL_PROVIDER: "graph" })).toThrow(/EMAIL_PROVIDER/);
+    expect(() => resolveStack({ ...base, EMAIL_PROVIDER: "gmail" })).toThrow(/EMAIL_PROVIDER/);
   });
 
   it.each([

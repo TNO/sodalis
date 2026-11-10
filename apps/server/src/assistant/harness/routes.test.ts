@@ -101,6 +101,24 @@ describe("companion workflow routes", () => {
     expect((await post(app, "/api/assistant/workflows", start)).status).toBe(404);
   });
 
+  it("does not register email account authorization routes in mock mode", async () => {
+    const workflows = (await createCompanionHarnessFromEnv({
+      COMPANION_HARNESS: "pi",
+      EMAIL_PROVIDER: "mock",
+      LLM_PROVIDER: "mock",
+    }))!;
+    const app = createAssistantApp({ workflows });
+
+    for (const [path, method] of [
+      ["/api/email/connection", "GET"],
+      ["/api/email/connect", "POST"],
+      ["/api/email/callback", "GET"],
+      ["/api/email/connection", "DELETE"],
+    ] as const) {
+      expect((await app.request(path, { method })).status).toBe(404);
+    }
+  });
+
   it("streams a lifecycle with the mock model and no graph", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const companion = (await createCompanionHarnessFromEnv({ COMPANION_HARNESS: "pi", LLM_PROVIDER: "mock" }))!;

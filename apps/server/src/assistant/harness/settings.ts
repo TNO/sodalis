@@ -20,83 +20,24 @@ export interface CompanionAuditSettings {
 export interface EmailSettings {
   readonly COMPANION_HARNESS?: string;
   readonly EMAIL_PROVIDER?: string;
-  readonly EMAIL_RESIDENT_ID?: string;
-  readonly EMAIL_OAUTH_CLIENT_ID?: string;
-  readonly EMAIL_OAUTH_CLIENT_SECRET_REF?: string;
-  readonly EMAIL_OAUTH_REDIRECT_URI?: string;
-  readonly EMAIL_GRAPH_TENANT?: string;
 }
 
-export type EmailProviderSetting = "off" | "mock" | "graph" | "gmail";
+export type EmailProviderSetting = "off" | "mock";
 
 function emailProvider(value: string | undefined): EmailProviderSetting {
-  const provider = value?.trim() || "off";
-  if (provider !== "off" && provider !== "mock" && provider !== "graph" && provider !== "gmail") {
-    throw new Error("EMAIL_PROVIDER must be off, mock, graph or gmail.");
+  const provider = value === undefined ? "off" : value.trim();
+  if (provider !== "off" && provider !== "mock") {
+    throw new Error("EMAIL_PROVIDER must be off or mock.");
   }
   return provider;
 }
 
-function validateEmailRedirect(value: string): void {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error("EMAIL_OAUTH_REDIRECT_URI must be an absolute same-origin callback URL.");
-  }
-  const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
-  if (
-    (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) ||
-    url.username || url.password || url.search || url.hash ||
-    url.pathname !== "/api/email/callback"
-  ) {
-    throw new Error("EMAIL_OAUTH_REDIRECT_URI must be HTTPS, except HTTP on loopback, and use /api/email/callback.");
-  }
-}
-
-/** Validate exact provider selection before constructing the host reader. */
+/** Validate the only delivered email modes before constructing a reader. */
 export function validateEmailSettings(settings: EmailSettings): EmailProviderSetting {
   const provider = emailProvider(settings.EMAIL_PROVIDER);
-  const fields = [
-    "EMAIL_RESIDENT_ID",
-    "EMAIL_OAUTH_CLIENT_ID",
-    "EMAIL_OAUTH_CLIENT_SECRET_REF",
-    "EMAIL_OAUTH_REDIRECT_URI",
-    "EMAIL_GRAPH_TENANT",
-  ] as const;
-  const configured = fields.filter((key) => settings[key]?.trim());
-  if (provider === "off") {
-    if (configured.length) throw new Error(`${configured[0]} requires EMAIL_PROVIDER to be enabled.`);
-    return provider;
-  }
+  if (provider === "off") return provider;
   if (settings.COMPANION_HARNESS?.trim() !== "pi") {
     throw new Error("EMAIL_PROVIDER requires COMPANION_HARNESS=pi.");
-  }
-  if (!settings.EMAIL_RESIDENT_ID?.trim()) throw new Error("Set EMAIL_RESIDENT_ID for email access.");
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(settings.EMAIL_RESIDENT_ID.trim())) {
-    throw new Error("EMAIL_RESIDENT_ID must be a non-secret local resident identifier.");
-  }
-  if (provider === "mock") {
-    const oauth = configured.find((key) => key !== "EMAIL_RESIDENT_ID");
-    if (oauth) throw new Error(`${oauth} is not used by EMAIL_PROVIDER=mock.`);
-    return provider;
-  }
-  if (!settings.EMAIL_OAUTH_CLIENT_ID?.trim()) throw new Error("Set EMAIL_OAUTH_CLIENT_ID for the selected email provider.");
-  if (!settings.EMAIL_OAUTH_CLIENT_SECRET_REF?.trim()) throw new Error("Set EMAIL_OAUTH_CLIENT_SECRET_REF for the selected email provider.");
-  if (!settings.EMAIL_OAUTH_REDIRECT_URI?.trim()) throw new Error("Set EMAIL_OAUTH_REDIRECT_URI for the selected email provider.");
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(settings.EMAIL_OAUTH_CLIENT_SECRET_REF.trim())) {
-    throw new Error("EMAIL_OAUTH_CLIENT_SECRET_REF must be a non-secret credential-store key.");
-  }
-  validateEmailRedirect(settings.EMAIL_OAUTH_REDIRECT_URI.trim());
-  if (provider === "graph") {
-    const tenant = settings.EMAIL_GRAPH_TENANT?.trim();
-    if (!tenant) throw new Error("Set EMAIL_GRAPH_TENANT for Microsoft Graph email access.");
-    if (!["common", "consumers", "organizations"].includes(tenant) &&
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenant)) {
-      throw new Error("EMAIL_GRAPH_TENANT must be common, consumers, organizations or a tenant UUID.");
-    }
-  } else if (settings.EMAIL_GRAPH_TENANT?.trim()) {
-    throw new Error("EMAIL_GRAPH_TENANT is only valid with EMAIL_PROVIDER=graph.");
   }
   return provider;
 }

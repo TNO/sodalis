@@ -1180,40 +1180,6 @@ body {
   line-height: 1.55;
 }
 
-.email-connection {
-  display: grid;
-  gap: 0.6rem;
-  padding: 0.9rem;
-  border: 1px solid var(--shell-subtle-border);
-  border-radius: 0.75rem;
-  color: var(--shell-text);
-}
-
-.email-connection h3,
-.email-connection p {
-  margin: 0;
-  line-height: 1.45;
-}
-
-.email-connection button {
-  min-height: 44px;
-  border: 1px solid var(--shell-border);
-  border-radius: 7px;
-  background: var(--shell-panel);
-  color: var(--shell-text);
-  font: inherit;
-}
-
-.email-connection button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-
-.email-connection-note {
-  color: var(--shell-muted);
-  font-size: 0.9rem;
-}
-
 .assistant-note {
   margin-top: auto;
   padding-top: 0.75rem;

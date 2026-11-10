@@ -1,6 +1,7 @@
 # Pi ecosystem packages for the read-only email and calendar readers
 
-- **Status:** Research complete; no code implemented or installed
+- **Status:** Historical research complete; no code implemented or installed;
+  real-provider design is deferred and not supported
 - **Date:** 2026-11-05
 
 ## Summary and recommendation
@@ -10,14 +11,16 @@ Sodalis embeds Pi (`@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`,
 [`apps/server/package.json`](../../apps/server/package.json)) as the
 model/tool-loop runtime, per [ADR 0007](../adr/0007-companion-harness.md).
 Tasks [0072](../../TASKS/0072-complete-read-only-email-journey.md) and
-[0074](../../TASKS/0074-complete-read-only-calendar-journey.md) need: (1)
-Microsoft Graph and Gmail/Google Calendar HTTP access, (2) an authorization-code
-OAuth + PKCE + CSRF + ID-token-validation coordinator, and (3) host-only secure
-credential storage, as specified in
+[0074](../../TASKS/0074-complete-read-only-calendar-journey.md) are now
+mock-only; this research documents the earlier, deferred design for possible
+real-provider work. If that work is explicitly approved in the future, it
+would need (1) Microsoft Graph and Gmail/Google Calendar HTTP access, (2) an
+authorization-code OAuth + PKCE + CSRF + ID-token-validation coordinator, and
+(3) host-only secure credential storage, as specified in
 [ADR 0008](../adr/0008-delegated-personal-account-access.md) and the
 [delegated account authorization](../architecture/companion-harness.md#delegated-account-authorization)
 and [read-only email](../architecture/companion-harness.md#read-only-email-access-decision-0071)/
-[calendar](../architecture/companion-harness.md#approved-read-only-calendar-contract-planned)
+[calendar](../architecture/companion-harness.md#read-only-calendar-design-deferred-no-runtime)
 architecture sections.
 
 **Recommendation: do not add any Pi-ecosystem package (official or
@@ -35,13 +38,10 @@ Gmail or Microsoft 365 access (`@gongrzhe/server-gmail-autoauth-mcp`,
 `@softeria/ms-365-mcp-server`, `pi-mcp-adapter`, `pi-mcp-extension`) are
 ambient-tool importers that hand the model broad, self-selected provider
 scopes and endpoints — the opposite of ADR 0007's and ADR 0008's host-owned,
-narrowly-scoped boundary — and must not be used. Instead, build 0072/0074
-directly on official, independently-maintained provider and security SDKs
-(Microsoft Graph JS client or plain `fetch` against the documented REST
-endpoints, `@azure/msal-node`, `googleapis`/`google-auth-library`) behind
-Sodalis's own `ReadOnlyEmailReader`/`readCalendar` adapters and OAuth
-coordinator, exactly as the architecture already specifies, and choose a
-dedicated OS-credential-store binding for host-only secret storage.
+narrowly-scoped boundary — and must not be used. The current tasks remain
+mock-only. Any future real-provider proposal, after explicit approval and the
+readiness gates in task 0084, should be separately designed behind Sodalis-owned
+interfaces and must not infer authorization from package availability.
 
 ## Scope
 

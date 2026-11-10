@@ -2,7 +2,6 @@ import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-
 import type { ConversationMessage } from "@sodalis/assistant";
 import type { ToolBudget } from "./tools.js";
 import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
-import type { EmailConnectionCoordinator } from "./emailAuthorization.js";
 
 /**
  * One foreground companion workflow per resident conversation: start, steer
@@ -49,9 +48,7 @@ const RESIDENT_MESSAGES: Record<WorkflowFailureCode, string> = {
 export interface WorkflowStartInput {
   readonly sessionId: string;
   readonly workflowId: string;
-  /** Opaque HTTP-only account session, never supplied in the request body. */
-  readonly hostSessionId?: string;
-  /** Avoids content-capturing audit and error detail for account-related workflows. */
+  /** Avoids content-capturing audit and error detail for email-related workflows. */
   readonly sensitive?: boolean;
   /** Identifies the resident input that is the last message. */
   readonly inputId: string;
@@ -71,14 +68,12 @@ export interface CompanionWorkflowsOptions {
   readonly createSession: (input: {
     readonly history: readonly ConversationMessage[];
     readonly question: string;
-    readonly hostSessionId?: string;
     readonly budget: ToolBudget;
   }) => Promise<AgentSession>;
   readonly limits?: Partial<WorkflowLimits>;
   readonly maxConcurrentWorkflows?: number;
   /** Local developer diagnostics; omitted by default and never sent to residents. */
   readonly audit?: CompanionAuditSink;
-  readonly emailConnections?: EmailConnectionCoordinator;
 }
 
 export interface WorkflowStartOptions {
@@ -179,7 +174,6 @@ class WorkflowRun {
       session = await createSession({
         history: this.input.messages.slice(0, -1),
         question: this.input.messages.at(-1)!.content,
-        ...(this.input.hostSessionId ? { hostSessionId: this.input.hostSessionId } : {}),
         budget: { onUnproductive: () => this.stopAtLimit("limit") },
       });
     } catch (error) {
@@ -475,12 +469,10 @@ export class CompanionWorkflows {
   private readonly runs = new Map<string, WorkflowRun>();
   private readonly limits: WorkflowLimits;
   private readonly maxConcurrentWorkflows: number;
-  readonly emailConnections: EmailConnectionCoordinator | undefined;
 
   constructor(private readonly options: CompanionWorkflowsOptions) {
     this.limits = { ...WORKFLOW_LIMITS, ...options.limits };
     this.maxConcurrentWorkflows = options.maxConcurrentWorkflows ?? 4;
-    this.emailConnections = options.emailConnections;
   }
 
   start(input: WorkflowStartInput, options: WorkflowStartOptions): WorkflowStartResult {

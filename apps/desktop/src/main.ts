@@ -21,7 +21,6 @@ import {
   type DesktopHost,
 } from "@sodalis/desktop-host";
 import { createDesktopAssistantActionRuntime } from "./assistant/createDesktopAssistantActions.js";
-import { createEmailConnectionPanel } from "./assistant/EmailConnectionPanel.js";
 import { createSampleNotes } from "./integrations/SampleNotes.js";
 import "mithril-materialized/index.css";
 import "./styles.css";
@@ -34,7 +33,6 @@ const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 const DesktopShell = () => {
-  const EmailConnectionPanel = createEmailConnectionPanel();
   const state: {
     host?: DesktopHost;
     applications: DesktopApplication[];
@@ -235,7 +233,6 @@ const DesktopShell = () => {
               ]),
               m(AvatarChoice, { selection: avatarSelection }),
               m(CompanionSettings, { store: companionPreferences }),
-              m(EmailConnectionPanel),
               import.meta.env.DEV
                 ? m(AvatarLab, {
                     scene: state.avatarScene,

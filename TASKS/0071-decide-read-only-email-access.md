@@ -1,4 +1,4 @@
-# 0071 Decide authorized read-only email access
+# 0071 Decide future read-only email access
 
 Status: done
 Priority: medium
@@ -27,24 +27,22 @@ implementation; graph endpoint metadata does not grant account access.
 
 ## Decision and completion evidence
 
-Completed 2026-11-05, following the user's choice to support **both Microsoft
-Graph (Outlook) and Gmail API behind a provider-neutral Sodalis interface**.
-The [read-only email access decision](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
-is the source of truth for the provider table and scopes, configuration,
-approved question, bounded selection and coverage, evidence, outcomes,
-exclusions and deterministic fixtures. Connection, session binding, ID-token
-validation, disconnect and secret storage follow the shared
-[delegated account authorization](../docs/architecture/companion-harness.md#delegated-account-authorization)
-protocol. [ADR 0008](../docs/adr/0008-delegated-personal-account-access.md)
-records the trade-offs. These are separate client registrations per
-capability, email tokens held only in memory, a new host session, and
-disclosed processing by the configured (possibly cloud) model.
+Completed 2026-11-05 as a **design decision**: the future target considered
+Microsoft Graph (Outlook) and Gmail API behind a provider-neutral Sodalis
+interface. This did not deliver or authorize account access. The
+[architecture](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
+retains the provider table, scopes, bounded question/evidence contract,
+exclusions and synthetic fixtures as deferred design. Shared authorization
+and secret-storage trade-offs remain in
+[ADR 0008](../docs/adr/0008-delegated-personal-account-access.md), also future
+direction only.
 
-Task [0072](0072-complete-read-only-email-journey.md) is refined with the
-contract, setup, acceptance cases and verification constraints, and is ready
-for implementation.
+The current [0072](0072-complete-read-only-email-journey.md) implementation is
+narrowed to the provider-neutral contract and explicitly selected mock
+fixtures. Real Graph/Gmail readers, OAuth and connection UI are deferred until
+further notice. [Task 0084](0084-gating-future-real-provider-access.md) records
+concrete prerequisites and does not authorize restoring those capabilities.
 
-Verification: documentation-only changes reviewed against the acceptance
-criteria and the official provider references linked from the architecture.
-No runtime connector is implemented by this ticket. No live provider/cloud
-checks or code tests were run.
+Verification: documentation-only design reviewed against its acceptance
+criteria and official provider references. No runtime connector is delivered
+by this decision. No live provider/cloud checks or code tests were run.

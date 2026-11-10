@@ -1,19 +1,26 @@
 # Security review: read-only email journey
 
-Status: Complete. Static review only; no vulnerabilities found.
+> **Scope and status (2026-11-10): Historical review only.** This static
+> review examined the prior real-provider implementation. That implementation
+> has been removed and real account access is deferred by the current
+> mock-only revision. The historical “no vulnerabilities found” result does
+> **not** assess, review, or certify this revision. It is not approval to
+> restore provider code or connect accounts.
+
+Status: Historical static review of the prior real-provider branch; no
+vulnerabilities were reported in that reviewed scope.
 Date: 2026-11-10
 Task: [0072](../../TASKS/0072-complete-read-only-email-journey.md)
 
 ## Summary and recommendation
 
-We reviewed the read-only email journey on branch
+At the time, we reviewed the read-only email journey on branch
 `integration/0072-read-only-email-journey` and found **no exploitable
-vulnerabilities**. The connect flow, the OAuth callback, token handling, the
-provider reads and the assistant tool surface each limit what an attacker or
-the model can reach. The branch can merge from a security standpoint. Before
-connecting real accounts outside development, work through the
-[open items](#open-items), which cover hardening and process rather than
-defects.
+vulnerabilities in that implementation**. This finding and the branch-specific
+merge opinion apply only to the reviewed code, which is no longer present. The
+current mock-only revision has a different scope and has not been assessed by
+this report. Any future real-account work is deferred and must first satisfy
+the [readiness gates](../../TASKS/0084-gating-future-real-provider-access.md).
 
 ## Scope
 
@@ -110,14 +117,23 @@ that can't be read across origins.
 
 ## Open items
 
-- Before connecting real accounts, run a
-  [dynamic check of the connect and callback flow](#dynamic-check-of-the-connect-and-callback-flow)
-  against a staging deployment.
-- Consider making the summary prompt or the UI tell the user that email
-  content can be misleading or phishing.
+These are historical findings and future gates, not approval to add provider
+code or connect accounts. [Task 0084](../../TASKS/0084-gating-future-real-provider-access.md)
+records them and explicitly does not authorize implementation.
+
+### Before any future staging account checks
+
+- Run the [dynamic connect/callback security checks](#dynamic-check-of-the-connect-and-callback-flow)
+  against a staging deployment, but only after explicit future approval.
+- Review dependencies before any real-provider deployment.
+
+### Before any future real-resident pilot
+
 - Complete [Google verification and the organisational review](#google-verification-and-organisational-review)
-  before any rollout beyond named test users.
-- Run a dependency audit as part of the release checks.
+  applicable to the selected provider and tenant.
+- Complete a DPIA; execute DPAs with no-retention/no-training terms for model
+  and hosting providers; obtain privacy and information-security approval.
+- Decide on user-facing disclosure and misleading/phishing-email guidance.
 
 ### Google verification and organisational review
 
@@ -137,8 +153,8 @@ is also restricted and cannot supply bodies.
 
 - **While in testing:** an OAuth client whose consent screen is in *Testing*
   works only for test users listed on that screen. Google also shows them an
-  "unverified app" warning. This is enough for development and a small pilot
-  with named accounts, but residents can't connect by themselves.
+  "unverified app" warning. Testing-mode access alone does not approve any
+  pilot; residents cannot connect by themselves.
 - **For any other users:** the app needs restricted-scope OAuth app
   verification. Google checks the app's domain, privacy policy, a demo video
   of the consent and scope use, and a justification of why a narrower scope
@@ -171,7 +187,8 @@ is also restricted and cannot supply bodies.
   restrict third-party apps that ask for Gmail scopes (API access controls). In
   that case connecting fails with an access error even after verification. The
   journey must report this as "not available"; it must not fall back to
-  another account. The current code already fails closed.
+  another account. The previously reviewed code failed closed for this case;
+  that provider path has since been removed.
 
 **Microsoft: tenant and consent policy.** `Mail.Read` is a delegated
 permission that users can normally consent to. Many organisational tenants,
@@ -197,13 +214,14 @@ residents:
 - Agree who owns the Google Cloud project and Entra app registration, the
   client secrets, and the verification relationship with Google.
 
-Until these steps are done, keep the provider in `mock` mode, or limit real
-connections to named test users on the Google consent screen and to
+Until these steps are done and real access is explicitly approved in a future
+decision, keep `EMAIL_PROVIDER=off` or use the explicitly selected synthetic
+`mock`. Do not connect real accounts, including named test users or
 development tenants.
 
 ### Dynamic check of the connect and callback flow
 
-The unit tests already exercise the flow's logic against mocked providers:
+The historical unit tests exercised the flow's logic against mocked providers:
 `emailRoutes.test.ts`, `emailAuthorization.test.ts` and the desktop
 `EmailConnectionClient.test.ts`. They cover:
 
@@ -215,10 +233,12 @@ The unit tests already exercise the flow's logic against mocked providers:
 - disconnect races
 - revocation failure
 
-What they can't show is how the real deployment behaves, so the dynamic check
-targets exactly that. Run it once before the first real-account pilot, and
-again whenever the gateway, the OAuth code or the provider registration
-changes.
+Those tests and implementation were removed in the mock-only revision. They
+cannot show how a future real deployment behaves. Only after explicit future
+approval and applicable organizational gates, run the dynamic check before any
+staging real-account use and repeat it whenever the gateway, OAuth code, or
+provider registration changes. Task 0084 tracks the prerequisite gates; it
+does not authorize restoring real-provider code.
 
 **Setup.**
 

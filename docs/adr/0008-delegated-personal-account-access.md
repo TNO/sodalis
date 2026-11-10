@@ -1,17 +1,24 @@
-# ADR 0008: Delegate read-only personal-account access through one host coordinator
+# ADR 0008: Future delegated read-only personal-account access
 
-- **Status:** Accepted
+- **Status:** Accepted as future direction; real account authorization and provider
+  implementations are deferred until further notice and are not delivered or
+  supported.
 - **Date:** 2026-11-05
+
+This ADR preserves the design trade-offs for possible future work. It does not
+authorize implementation, deployment, account connection, or live-provider
+testing. Reconsideration requires explicit future approval and completion of
+[task 0084](../../TASKS/0084-gating-future-real-provider-access.md).
 
 ## Context
 
 Tasks [0071](../../TASKS/0071-decide-read-only-email-access.md) and
-[0073](../../TASKS/0073-decide-read-only-calendar-access.md) approved read-only
-email and calendar readers for Microsoft Graph and Google. Both need
-user-delegated OAuth, but the server has no host session, no resident identity
-beyond configuration, and no credential store. [ADR 0007](0007-companion-harness.md)
-allows configured readers but explicitly does not authorize personal-account
-access.
+[0073](../../TASKS/0073-decide-read-only-calendar-access.md) recorded possible
+future read-only email and calendar designs for Microsoft Graph and Google.
+The current implementation is mock-only: no real account authorization,
+provider reader, host session, or credential store is present. [ADR
+0007](0007-companion-harness.md) allows configured readers but explicitly does
+not authorize personal-account access.
 
 Several choices are trade-offs rather than implementation details:
 
@@ -28,14 +35,15 @@ Several choices are trade-offs rather than implementation details:
   may be a cloud model. Reading email or appointments into that model sends
   personal content off-device.
 
-## Decision
+## Future direction (not implemented or approved for rollout)
 
-- **One host-owned connection coordinator** implements authorization-code
+- If explicitly authorized later, **one host-owned connection coordinator**
+  should implement authorization-code
   OAuth with PKCE S256, `state`, `nonce`, ID-token validation (including
-  Microsoft tenant-aware issuer checks), session binding and disconnect. It does
-  not own a universal token store. Each capability keeps its own grant, scopes,
-  token policy and source binding. The first of tasks 0072 and 0074 to land
-  implements it; the other reuses it.
+  Microsoft tenant-aware issuer checks), session binding and disconnect. It
+  would not own a universal token store. Each capability would keep its own
+  grant, scopes, token policy and source binding. A future approved capability
+  task could implement it first; another could then reuse it.
 - **Separate client registrations per capability and provider.** Email and
   calendar never share an OAuth client, consent, or token. Disconnect revokes
   upstream where the provider supports per-client revocation (Google) and is
@@ -53,23 +61,24 @@ Several choices are trade-offs rather than implementation details:
   references. Missing storage fails closed.
 - **Disclosed model processing.** Minimized, bounded evidence (no tokens or
   raw payloads) is processed by the configured `LLM_PROVIDER`, which may be
-  cloud-hosted. The connect screen states this. A resident who wants
+  cloud-hosted. Any future connect screen would state this. A resident who wants
   local-only handling selects a local model; the readers do not themselves
   require one. Account content is never ingested into long-term memory or
   developer content audits.
 
-## Consequences
+## Potential consequences if separately approved and implemented
 
-- Validation, CSRF and session logic exist once and receive one behavior-test
-  suite. Both journeys depend on whichever task implements it first.
-- Residents and operators register and configure two OAuth clients per
-  provider when both capabilities are enabled. That costs extra setup and,
-  for Gmail, possibly separate restricted-scope verification.
-- Email requires reconnecting after expiry or restart; this is accepted in
+- Validation, CSRF and session logic would exist once and receive one
+  behavior-test suite. Both journeys would depend on whichever task implements
+  it first.
+- If both capabilities are separately approved, residents and operators would
+  register and configure two OAuth clients per provider. That costs extra
+  setup and, for Gmail, possibly separate restricted-scope verification.
+- Email would require reconnecting after expiry or restart; this is accepted in
   exchange for holding no long-lived mailbox authority.
-- Graph disconnect cannot revoke upstream; residents remove consent in their
+- Graph disconnect cannot revoke upstream; residents would remove consent in their
   Microsoft account settings, and the UI must say so.
-- With a cloud `LLM_PROVIDER`, email and calendar content leaves the device.
+- With a cloud `LLM_PROVIDER`, email and calendar content would leave the device.
   This is a disclosed, per-deployment choice that departs from the local-first
   preference; live checks still need per-run consent.
 - [ADR 0003](0003-trusted-desktop-boundary.md), [ADR 0005](0005-long-term-memory.md)

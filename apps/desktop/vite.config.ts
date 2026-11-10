@@ -41,11 +41,6 @@ export default defineConfig({
           process.env.SODALIS_AI_API_URL ?? gateway ?? "http://127.0.0.1:3002",
         changeOrigin: true,
       },
-      "/api/email": {
-        target:
-          process.env.SODALIS_AI_API_URL ?? gateway ?? "http://127.0.0.1:3002",
-        changeOrigin: false,
-      },
       "/api/home": {
         target:
           process.env.SODALIS_HOME_API_URL ?? gateway ?? "http://127.0.0.1:3003",
