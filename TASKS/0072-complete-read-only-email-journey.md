@@ -13,6 +13,7 @@ Ready for implementation following completed
 is the source of truth. Implement both Microsoft Graph (Outlook) and Gmail API,
 not a provider-specific shortcut or an extension of the fixture Mail app.
 See the [Pi ecosystem packages evaluation](../docs/evaluations/pi-packages-for-account-readers.md) for why no Pi/MCP package is reused for provider access, OAuth, or credential storage.
+See the [email journey security review](../docs/evaluations/email-journey-security-review.md) for the security findings on this implementation.
 This ticket covers a local, single-resident foreground journey, not a
 production multi-user identity system or a claim of live provider acceptance.
 
