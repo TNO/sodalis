@@ -1,6 +1,6 @@
 # 0084 Make the developer audit explainable and readable offline
 
-Status: open
+Status: done
 Triage: ready-for-agent
 Priority: high
 Subsystem: assistant
@@ -37,58 +37,58 @@ tool was selected, or enumerate internally considered alternatives.
 
 ### Usage and credential redaction
 
-- [ ] Preserve valid numeric input, output, cache, and total token counts in
+- [x] Preserve valid numeric input, output, cache, and total token counts in
   known host-owned model-usage telemetry, in JSONL, text, and HTML. Identify
   provider-reported usage separately from missing or synthetic history usage;
   do not turn unavailable counts into zero or misleading workflow totals.
-- [ ] Scope the exception to recognized numeric usage fields, not every key
+- [x] Scope the exception to recognized numeric usage fields, not every key
   containing "token" or every numeric value. Credential keys, nested secret
   containers, bearer tokens, and inline credentials remain redacted. A
   credential-shaped string in a usage field must not bypass sanitization.
-- [ ] Do not claim to recover previously redacted totals. Historical logs
+- [x] Do not claim to recover previously redacted totals. Historical logs
   retain an explicit redacted/unavailable state.
 
 ### Observable tool-selection evidence
 
-- [ ] Capture the effective system prompt, offered tool names/descriptions/
+- [x] Capture the effective system prompt, offered tool names/descriptions/
   argument schemas, model identity and existing reasoning settings, and ordered
   model-visible history, accepted steering input, and prior tool results for
   each model request. Inspect the supported SDK request boundary so SDK-added
   context is included; do not substitute the source prompt constant for the
   effective input or claim an exact provider-wire capture without evidence.
-- [ ] Correlate each request, response, selected tool call, dispatch, result,
+- [x] Correlate each request, response, selected tool call, dispatch, result,
   host validation/budget decision, and terminal outcome by workflow, model
   turn/request, and tool-call identity. Show selection separately from
   permission to execute. Support multiple calls per turn and workflows that
   answer without tools.
-- [ ] An initial context record plus ordered changes/references is acceptable
+- [x] An initial context record plus ordered changes/references is acceptable
   if it reconstructs the input to each request unambiguously. Label omitted,
   redacted, or inaccessible information explicitly rather than inventing it.
   Keep model narration separate from host decisions and resident answers.
-- [ ] Include a reasoning summary only when the configured provider and SDK
+- [x] Include a reasoning summary only when the configured provider and SDK
   explicitly expose a supported summary distinct from opaque thinking or
   private reasoning. Label its source and treat it as a model explanation,
   not proof of internal causation. Otherwise record an explicit unavailable
   status and reason. Never dump raw thinking blocks or reasoning signatures.
-- [ ] Do not add inference calls, enable thinking, change reasoning effort,
+- [x] Do not add inference calls, enable thinking, change reasoning effort,
   switch provider APIs, or ask the model for explanations solely for logging.
   Audit enablement must not change prompts, tools, answers, or execution policy.
 
 ### On-demand offline HTML report
 
-- [ ] Provide a documented local command that reads a selected JSONL audit and
+- [x] Provide a documented local command that reads a selected JSONL audit and
   writes a standalone HTML file. No running stack, model call, credentials,
   diagnostic HTTP server, network connection, or external assets are required.
-- [ ] Group records by session/workflow and show a chronological timeline with
+- [x] Group records by session/workflow and show a chronological timeline with
   expandable model turns and correlated tool calls. Make the question, terminal
   outcome, durations, available token usage, decision context, selected
   arguments, host decisions, and results easy to locate. Retain access to the
   sanitized underlying event details.
-- [ ] Render older logs without the new context records, incomplete workflows,
+- [x] Render older logs without the new context records, incomplete workflows,
   and interleaved workflows honestly. A truncated final JSONL record produces
   a visible partial-log warning; other malformed records produce a clear
   line-numbered error, not silent omission or success-shaped output.
-- [ ] Treat every log value as untrusted display data, never executable HTML,
+- [x] Treat every log value as untrusted display data, never executable HTML,
   script, or an automatically fetched resource. Apply shared sanitization to
   report inputs as defense in depth, including legacy files. Keep generated
   reports private, git-ignored, and inside the local audit storage boundary;
@@ -96,27 +96,27 @@ tool was selected, or enumerate internally considered alternatives.
 
 ### Boundaries, tests, and documentation
 
-- [ ] Preserve the existing opt-in and production guard, text-only speech
+- [x] Preserve the existing opt-in and production guard, text-only speech
   capture, file ownership/private permissions, container persistence, and
   ordinary audit-write error reporting. Keep raw records and reports out of
   resident UI/HTTP/SSE, external uploads, and durable assistant memory.
-- [ ] Preserve existing content exclusions, including personal-account content.
+- [x] Preserve existing content exclusions, including personal-account content.
   More context capture does not authorize new capabilities, imported-app/DOM
   access, credentials, audio, or recording artifacts. Developers manually
   delete logs and reports; add no retention service or quota manager.
-- [ ] Add deterministic behavior tests at the audit/workflow and report-command
+- [x] Add deterministic behavior tests at the audit/workflow and report-command
   interfaces. Cover numeric usage versus nested/inline secrets, a multi-turn
   tool journey and steering context, no-tool answers, available/unsupported
   summaries with private thinking excluded, legacy/interleaved/incomplete and
   malformed logs, and adversarial HTML/script content remaining inert.
-- [ ] Verify with local mocks that enabling the audit leaves model inputs,
+- [x] Verify with local mocks that enabling the audit leaves model inputs,
   workflow behavior, resident transport, and memory boundaries unchanged.
   Demonstrate the token-count regression failing before the fix and passing
   afterward, with the original synthetic writer scenario also passing.
-- [ ] Update the server guide and current architecture with the capture
+- [x] Update the server guide and current architecture with the capture
   contract, report command, summary limitations, unavailable historical data,
   and manual deletion responsibility. Use synthetic examples only.
-- [ ] Run `pnpm test`, `pnpm typecheck`, and `pnpm build` for implementation.
+- [x] Run `pnpm test`, `pnpm typecheck`, and `pnpm build` for implementation.
   No live/cloud check is necessary; any later cloud run requires separate
   explicit consent and provider-selection checks.
 

@@ -277,15 +277,46 @@ rather than elevating privileges or making sensitive logs world-readable.
 Both files are written from the same internal Pi event stream. They include
 text messages, model and tool lifecycle, tool selection/dispatch/results,
 arguments, validation decisions, timestamps, durations, correlation IDs, and
-terminal outcomes. Credentials are redacted. Only provider/model metadata and
-text content are retained; hidden chain-of-thought is not. Spoken input is
-captured as its resulting text transcript only—never audio bytes, recordings,
-or artifacts. Audit records are separate from resident HTTP/SSE responses and
-workflow memory. They are never uploaded or added to durable assistant memory.
-Household information in these files may be sensitive: developers must delete
-them manually. There is no automatic expiry, quota manager, warning UI, or
-compliance-grade guarantee. Ordinary write failures are reported through the
-server's standard error logger; there is no resident-facing error behavior.
+terminal outcomes. For each request, the public Pi `context_with_system`
+boundary records the effective prompt and ordered model-visible messages,
+active tool definitions, model identity and reasoning settings;
+`before_provider_request` records the SDK-converted payload, not exact
+provider-wire bytes. Requests and tool calls correlate with workflow, turn,
+request and call IDs. Selection is distinct from host execution and validation.
+This shows available context and host decisions, not why a tool was selected.
+
+Pi 1.5.0 exposes no supported reasoning summary distinct from opaque/private
+reasoning, so the audit records an explicit unavailable status and reason.
+Thinking, reasoning and signature blocks are excluded. Only non-negative safe
+integer input, output, cache-read, cache-write and total counts in known
+assistant-message usage telemetry bypass token-key redaction. Credential keys,
+nested secrets, inline credentials, credential-shaped usage strings, and other
+token-like keys remain redacted. Usage is provider-reported only when Pi
+reports a non-zero count; missing or zero-only counts are unavailable, not
+zero workflow totals. Previously redacted historical counts cannot be
+recovered. Spoken input is captured only as text; audio bytes, recordings and
+artifacts are not captured.
+
+Create a standalone offline report without starting the stack or making a
+model/network request:
+
+```sh
+pnpm audit:report logs/<audit-file>.jsonl [logs/<report-file>.html]
+```
+
+The default output name matches the input. Input and output must be direct
+children of the git-ignored `logs/` directory; symlinks and paths elsewhere
+are rejected. Reports are sanitized again on read, use private `0600`
+permissions, escape all log values, and contain no scripts or external assets.
+They group interleaved workflows and show chronological events with expandable
+requests and tool calls. Older logs are labeled as lacking request context and
+reliable usage. A truncated final JSONL line gets a visible partial-log warning;
+other malformed lines fail with their line number. Developers manually delete
+logs and generated reports; there is no automatic expiry, quota manager,
+warning UI, or compliance-grade guarantee. Audit records are separate from
+resident HTTP/SSE responses and workflow memory, and are never uploaded or
+added to durable assistant memory. Ordinary write failures use the server's
+standard error logger; there is no resident-facing error behavior.
 
 The model uses the existing `LLM_PROVIDER` settings; `mock` answers with a
 fixed sentence without calling a model service. The explicit prompt, three

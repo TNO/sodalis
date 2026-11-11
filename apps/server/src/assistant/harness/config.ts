@@ -54,7 +54,7 @@ export async function createCompanionHarnessFromEnv(
   }
   return new CompanionWorkflows({
     ...(auditEnabled ? { audit: new FileCompanionAuditWriter() } : {}),
-    createSession: ({ history, budget }) =>
+    createSession: ({ history, budget, observeModelRequest }) =>
       createCompanionSession({
         model,
         history,
@@ -63,6 +63,7 @@ export async function createCompanionHarnessFromEnv(
           ...(reader ? { reader } : {}),
           budget,
         }),
+        ...(observeModelRequest ? { observeModelRequest } : {}),
       }),
   });
 }

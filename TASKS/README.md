@@ -111,7 +111,7 @@ evidence remains pending.
 - [ ] [0067 Building and evaluating the companion harness](0067-companion-harness.md)
   *(needs 0031; umbrella for the current implementation and remaining acceptance)*
 - [x] [0068 Inspect a conversation through a persistent developer text audit](0068-persistent-developer-audit.md)
-- [ ] [0084 Make the developer audit explainable and readable offline](0084-explainable-offline-developer-audit.md) *(needs 0068, complete; ready for implementation)*
+- [x] [0084 Make the developer audit explainable and readable offline](0084-explainable-offline-developer-audit.md) *(needs 0068)*
 - [x] [0069 Diagnose and repair harness data retrieval](0069-diagnose-harness-data-retrieval.md) *(needs 0068)*
 - [x] [0070 Complete a sensor journey end to end](0070-complete-sensor-journey.md) *(needs 0069; provenance-backed offline snapshot journey and adverse contracts verified; not live/model-quality acceptance)*
 - [x] [0071 Decide authorized read-only email access](0071-decide-read-only-email-access.md)
