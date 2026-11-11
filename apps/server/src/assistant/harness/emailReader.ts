@@ -6,6 +6,8 @@ const DEFAULT_PAGE_SIZE = 20;
 
 export type EmailContainer = "inbox" | "all_mail";
 export type MockEmailFolder = "inbox" | "archive" | "sent" | "drafts" | "spam" | "trash" | "deleted";
+export type EmailSourceKind = "synthetic" | "provider";
+export type EmailSentAtProvenance = "provider" | "sender_supplied" | "synthetic" | "missing";
 export type EmailReadStatus =
   | "ok"
   | "empty"
@@ -14,6 +16,32 @@ export type EmailReadStatus =
   | "unsupported"
   | "invalid_request"
   | "cancelled";
+
+declare const emailSourceLabelBrand: unique symbol;
+export type SafeEmailSourceLabel = string & { readonly [emailSourceLabelBrand]: true };
+
+/** Host-selected display evidence with no provider identifiers or endpoint URLs. */
+export interface EmailSource {
+  readonly kind: EmailSourceKind;
+  readonly label: SafeEmailSourceLabel;
+  readonly container: EmailContainer;
+}
+
+export function createEmailSource(
+  kind: EmailSourceKind,
+  label: string,
+  container: EmailContainer,
+): EmailSource {
+  const safeLabel = label.trim();
+  if (
+    (kind !== "synthetic" && kind !== "provider") ||
+    (container !== "inbox" && container !== "all_mail") ||
+    !/^(?=.*\p{L})[\p{L}\p{N} _'-]{1,80}$/u.test(safeLabel)
+  ) {
+    throw new Error("Email source must use a safe display label and supported container.");
+  }
+  return { kind, label: safeLabel as SafeEmailSourceLabel, container };
+}
 
 export interface EmailTimeWindow {
   readonly from: string;
@@ -42,29 +70,30 @@ export interface EmailListRequest {
   readonly signal?: AbortSignal;
 }
 
-export interface EmailSentAt {
-  readonly availability: "available" | "missing";
-  readonly provenance: "mock";
-  readonly value?: string;
-}
+export type EmailSentAt =
+  | {
+      readonly availability: "available";
+      readonly provenance: Exclude<EmailSentAtProvenance, "missing">;
+      readonly value: string;
+    }
+  | {
+      readonly availability: "missing";
+      readonly provenance: "missing";
+    };
 
 export interface EmailMessageMetadata {
   readonly messageRef: string;
   readonly sender: { readonly name: string; readonly address: string };
   readonly subject: string;
   readonly sentAt: EmailSentAt;
-  readonly receivedAt: string;
+  readonly receivedAt?: string;
   readonly unread: boolean;
-  readonly source: {
-    readonly kind: "synthetic";
-    readonly label: string;
-    readonly container: EmailContainer;
-  };
+  readonly source: EmailSource;
 }
 
 export interface EmailListResult {
   readonly status: EmailReadStatus;
-  readonly sourceLabel: string;
+  readonly sourceLabel: SafeEmailSourceLabel;
   readonly container: EmailContainer;
   readonly coverage: "complete" | "continuation" | "incomplete";
   readonly messages: readonly EmailMessageMetadata[];
@@ -74,12 +103,8 @@ export interface EmailListResult {
 
 export interface EmailContentResult {
   readonly status: EmailReadStatus;
-  readonly sourceLabel?: string;
-  readonly source?: {
-    readonly kind: "synthetic";
-    readonly label: string;
-    readonly container: EmailContainer;
-  };
+  readonly sourceLabel?: SafeEmailSourceLabel;
+  readonly source?: EmailSource;
   readonly messageRef?: string;
   readonly text?: string;
   readonly availability?: "available" | "missing" | "truncated";
@@ -89,7 +114,7 @@ export interface EmailContentResult {
 
 export interface EmailUnreadCountResult {
   readonly status: EmailReadStatus;
-  readonly sourceLabel?: string;
+  readonly sourceLabel?: SafeEmailSourceLabel;
   readonly container?: EmailContainer;
   readonly count?: number;
   readonly accuracy?: "exact" | "estimated";
@@ -104,7 +129,7 @@ export interface ReadOnlyEmailReader {
 
 export interface MockEmail {
   readonly id: string;
-  readonly receivedAt: string;
+  readonly receivedAt?: string;
   readonly sentAt?: string;
   readonly senderName?: string;
   readonly senderAddress?: string;
@@ -214,9 +239,14 @@ function truncateUtf8(value: string, maxBytes: number): { text: string; truncate
   return { text, truncated: false };
 }
 
-function sourceLabel(container: EmailContainer): string {
-  return container === "inbox" ? "Synthetic inbox" : "Synthetic all mail";
+function mockSource(container: EmailContainer): EmailSource {
+  return createEmailSource(
+    "synthetic",
+    container === "inbox" ? "Synthetic inbox" : "Synthetic all mail",
+    container,
+  );
 }
+const INVALID_RESULT_SOURCE_LABEL = mockSource("inbox").label;
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -268,11 +298,14 @@ function matchesWindow(timestamp: string | undefined, window: EmailTimeWindow | 
 function emailSourceMessage(
   message: MockEmail,
   messageRef: string,
-  container: EmailContainer,
+  source: EmailSource,
 ): EmailMessageMetadata {
   const sentAt = isUtcTimestamp(message.sentAt)
-    ? { availability: "available" as const, provenance: "mock" as const, value: new Date(message.sentAt).toISOString() }
-    : { availability: "missing" as const, provenance: "mock" as const };
+    ? { availability: "available" as const, provenance: "synthetic" as const, value: new Date(message.sentAt).toISOString() }
+    : { availability: "missing" as const, provenance: "missing" as const };
+  const receivedAt = isUtcTimestamp(message.receivedAt)
+    ? new Date(message.receivedAt).toISOString()
+    : undefined;
   return {
     messageRef,
     sender: {
@@ -281,30 +314,26 @@ function emailSourceMessage(
     },
     subject: normalizeText(message.subject, "Subject unavailable"),
     sentAt,
-    receivedAt: new Date(Date.parse(message.receivedAt)).toISOString(),
+    ...(receivedAt ? { receivedAt } : {}),
     unread: message.unread ?? false,
-    source: {
-      kind: "synthetic",
-      label: sourceLabel(container),
-      container,
-    },
+    source,
   };
 }
 
 export function createMockEmailReader(options: MockEmailReaderOptions = {}): ReadOnlyEmailReader {
   const messages = options.messages ?? EMAIL_FIXTURE_MESSAGES;
   const sourceId = opaqueToken(canonical(messages));
-  const messageRefs = new Map<string, { readonly message: MockEmail; readonly container: EmailContainer }>();
+  const messageRefs = new Map<string, { readonly message: MockEmail; readonly source: EmailSource }>();
   const refByMessage = new Map<string, string>();
   const cursorPositions = new Map<string, { readonly query: string; readonly offset: number }>();
 
-  const messageRef = (message: MockEmail, container: EmailContainer): string => {
-    const key = `${container}:${message.id}`;
+  const messageRef = (message: MockEmail, source: EmailSource): string => {
+    const key = `${source.container}:${message.id}`;
     let ref = refByMessage.get(key);
     if (!ref) {
-      ref = `mail.${sourceId}.${opaqueToken(`${container}:${message.id}`)}`;
+      ref = `mail.${sourceId}.${opaqueToken(`${source.container}:${message.id}`)}`;
       refByMessage.set(key, ref);
-      messageRefs.set(ref, { message, container });
+      messageRefs.set(ref, { message, source });
     }
     return ref;
   };
@@ -315,28 +344,28 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
     async listMessages(request = {}) {
       const filters = request.filters === undefined ? {} : request.filters;
       if (!validFilters(filters)) {
-        return { status: "invalid_request", sourceLabel: "Synthetic mailbox", container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_filters" };
+        return { status: "invalid_request", sourceLabel: INVALID_RESULT_SOURCE_LABEL, container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_filters" };
       }
       if (hasUnsupportedContainer(filters)) {
-        return { status: "unsupported", sourceLabel: "Synthetic mailbox", container: "inbox", coverage: "incomplete", messages: [], reason: "unsupported_container" };
+        return { status: "unsupported", sourceLabel: INVALID_RESULT_SOURCE_LABEL, container: "inbox", coverage: "incomplete", messages: [], reason: "unsupported_container" };
       }
       if (
         request.sort !== undefined &&
         (!request.sort || !["sentAt", "receivedAt"].includes(request.sort.field) ||
           !["asc", "desc"].includes(request.sort.direction))
       ) {
-        return { status: "invalid_request", sourceLabel: "Synthetic mailbox", container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_sort" };
+        return { status: "invalid_request", sourceLabel: INVALID_RESULT_SOURCE_LABEL, container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_sort" };
       }
       const pageSize = request.pageSize ?? DEFAULT_PAGE_SIZE;
       if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_EMAIL_PAGE_SIZE) {
-        return { status: "invalid_request", sourceLabel: "Synthetic mailbox", container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_page_size" };
+        return { status: "invalid_request", sourceLabel: INVALID_RESULT_SOURCE_LABEL, container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_page_size" };
       }
       if (request.cursor !== undefined && (typeof request.cursor !== "string" || !request.cursor.length || request.cursor.length > 500)) {
-        return { status: "invalid_request", sourceLabel: "Synthetic mailbox", container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_cursor" };
+        return { status: "invalid_request", sourceLabel: INVALID_RESULT_SOURCE_LABEL, container: "inbox", coverage: "incomplete", messages: [], reason: "invalid_cursor" };
       }
 
       const container = filters.container ?? "inbox";
-      const label = sourceLabel(container);
+      const source = mockSource(container);
       const result = (
         status: EmailReadStatus,
         coverage: EmailListResult["coverage"],
@@ -345,7 +374,7 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
         reason?: string,
       ): EmailListResult => ({
         status,
-        sourceLabel: label,
+        sourceLabel: source.label,
         container,
         coverage,
         messages: items,
@@ -374,8 +403,8 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
       }
 
       const candidates = messages
-        .filter((message) => isUtcTimestamp(message.receivedAt) && eligibleInContainer(message, container))
-        .map((message) => ({ message, ref: messageRef(message, container) }))
+        .filter((message) => eligibleInContainer(message, container))
+        .map((message) => ({ message, ref: messageRef(message, source) }))
         .filter(({ message }) => filters.sender === undefined ||
           `${message.senderName ?? ""} ${message.senderAddress ?? ""}`.toLocaleLowerCase().includes(filters.sender.trim().toLocaleLowerCase()))
         .filter(({ message }) => filters.subject === undefined ||
@@ -384,8 +413,10 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
         .filter(({ message }) => matchesWindow(message.sentAt, filters.sentAt))
         .filter(({ message }) => matchesWindow(message.receivedAt, filters.receivedAt))
         .sort((left, right) => {
-          const leftTime = Date.parse(sort.field === "sentAt" ? left.message.sentAt ?? "" : left.message.receivedAt);
-          const rightTime = Date.parse(sort.field === "sentAt" ? right.message.sentAt ?? "" : right.message.receivedAt);
+          const leftTimestamp = sort.field === "sentAt" ? left.message.sentAt : left.message.receivedAt;
+          const rightTimestamp = sort.field === "sentAt" ? right.message.sentAt : right.message.receivedAt;
+          const leftTime = leftTimestamp === undefined ? Number.NaN : Date.parse(leftTimestamp);
+          const rightTime = rightTimestamp === undefined ? Number.NaN : Date.parse(rightTimestamp);
           const leftValid = Number.isFinite(leftTime);
           const rightValid = Number.isFinite(rightTime);
           if (leftValid !== rightValid) return leftValid ? -1 : 1;
@@ -396,7 +427,7 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
         });
       const page = candidates.slice(offset, offset + pageSize);
       const metadata = page.map(({ message, ref }) =>
-        emailSourceMessage(message, ref, container),
+        emailSourceMessage(message, ref, source),
       );
       const more = offset + page.length < candidates.length;
       if (!page.length) return result("empty", "complete");
@@ -418,8 +449,8 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
         return {
           status: "ok",
           messageRef: ref,
-          sourceLabel: sourceLabel(entry.container),
-          source: { kind: "synthetic", label: sourceLabel(entry.container), container: entry.container },
+          sourceLabel: entry.source.label,
+          source: entry.source,
           text: "",
           availability: "missing",
           truncated: false,
@@ -430,8 +461,8 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
       return {
         status: "ok",
         messageRef: ref,
-        sourceLabel: sourceLabel(entry.container),
-        source: { kind: "synthetic", label: sourceLabel(entry.container), container: entry.container },
+        sourceLabel: entry.source.label,
+        source: entry.source,
         text: clipped.text,
         availability: clipped.truncated ? "truncated" : "available",
         truncated: clipped.truncated,
@@ -445,13 +476,12 @@ export function createMockEmailReader(options: MockEmailReaderOptions = {}): Rea
       }
       if (options.status === "unavailable") return { status: "unavailable", reason: "source_unavailable" };
       const count = messages.filter((message) =>
-        isUtcTimestamp(message.receivedAt) &&
         eligibleInContainer(message, container) &&
         (message.unread ?? false),
       ).length;
       return {
         status: "ok",
-        sourceLabel: sourceLabel(container),
+        sourceLabel: mockSource(container).label,
         container,
         count,
         accuracy: "exact",

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createEmailSource,
   createMockEmailReader,
   MAX_EMAIL_BODY_BYTES,
   type EmailListRequest,
   type MockEmail,
+  type ReadOnlyEmailReader,
 } from "./emailReader.js";
 
 const BASE_MESSAGES: readonly MockEmail[] = [
@@ -116,7 +118,7 @@ describe("ReadOnlyEmailReader generic mock contract", () => {
         sentAt: {
           value: "2026-11-04T08:00:00.000Z",
           availability: "available",
-          provenance: "mock",
+          provenance: "synthetic",
         },
         receivedAt: "2026-11-05T11:00:00.000Z",
         unread: true,
@@ -219,6 +221,112 @@ describe("ReadOnlyEmailReader generic mock contract", () => {
     }))).toMatchObject({ status: "unsupported", reason: "unsupported_container" });
   });
 
+  it("lists all_mail sent messages with missing receivedAt and sorts missing times last", async () => {
+    const reader = createMockEmailReader({
+      messages: [
+        { id: "inbox-new", receivedAt: "2026-11-05T11:00:00Z", subject: "New", folder: "inbox" },
+        { id: "inbox-old", receivedAt: "2026-11-05T10:00:00Z", subject: "Old", folder: "inbox" },
+        { id: "sent-no-received", sentAt: "2026-11-05T10:00:00Z", subject: "Sent", unread: true, folder: "sent" },
+      ],
+    });
+    const result = await reader.listMessages(listRequest({
+      filters: { container: "all_mail" },
+      pageSize: 100,
+    }));
+
+    expect(result.status).toBe("ok");
+    expect(result.messages).toHaveLength(3);
+    expect(result.messages.map(({ subject }) => subject)).toEqual(["New", "Old", "Sent"]);
+    expect(result.messages[2]?.receivedAt).toBeUndefined();
+    const ascending = await reader.listMessages(listRequest({
+      filters: { container: "all_mail" },
+      sort: { field: "receivedAt", direction: "asc" },
+      pageSize: 100,
+    }));
+    expect(ascending.messages.map(({ subject }) => subject)).toEqual(["Old", "New", "Sent"]);
+    expect(await reader.countUnread("all_mail")).toMatchObject({ status: "ok", count: 1, accuracy: "exact" });
+    expect(await reader.listMessages(listRequest({
+      filters: {
+        container: "all_mail",
+        receivedAt: { from: "2026-11-01T00:00:00Z", to: "2026-11-06T00:00:00Z" },
+      },
+      pageSize: 100,
+    }))).toMatchObject({ status: "ok", messages: [{ subject: "New" }, { subject: "Old" }] });
+  });
+
+  it("supports provider adapters with neutral safe source and timestamp provenance types", async () => {
+    const source = createEmailSource("provider", "Work mailbox", "all_mail");
+    const providerReader: ReadOnlyEmailReader = {
+      async listMessages() {
+        return {
+          status: "ok",
+          sourceLabel: source.label,
+          container: "all_mail",
+          coverage: "complete",
+          messages: [
+            {
+              messageRef: "opaque-provider-reference",
+              sender: { name: "Sender", address: "sender@example.test" },
+              subject: "Sent without receivedAt",
+              sentAt: { availability: "available", provenance: "provider", value: "2026-11-05T10:00:00Z" },
+              unread: false,
+              source,
+            },
+            {
+              messageRef: "opaque-header-reference",
+              sender: { name: "Sender", address: "sender@example.test" },
+              subject: "Header date",
+              sentAt: { availability: "available", provenance: "sender_supplied", value: "2026-11-05T09:00:00Z" },
+              receivedAt: "2026-11-05T10:01:00Z",
+              unread: true,
+              source,
+            },
+            {
+              messageRef: "opaque-missing-reference",
+              sender: { name: "Sender", address: "sender@example.test" },
+              subject: "No sentAt",
+              sentAt: { availability: "missing", provenance: "missing" },
+              receivedAt: "2026-11-05T10:02:00Z",
+              unread: false,
+              source,
+            },
+          ],
+        };
+      },
+      async getMessageContent(messageRef) {
+        return {
+          status: "ok",
+          sourceLabel: source.label,
+          source,
+          messageRef,
+          text: "Provider content.",
+          availability: "available",
+          truncated: false,
+        };
+      },
+      async countUnread() {
+        return {
+          status: "ok",
+          sourceLabel: source.label,
+          container: "all_mail",
+          count: 1,
+          accuracy: "estimated",
+        };
+      },
+    };
+
+    const result = await providerReader.listMessages();
+    expect(result.messages[0]?.receivedAt).toBeUndefined();
+    expect(result.messages.map(({ sentAt }) => sentAt.provenance))
+      .toEqual(["provider", "sender_supplied", "missing"]);
+    expect(Object.keys(result.messages[0]!.source).sort())
+      .toEqual(["container", "kind", "label"]);
+    expect(() => createEmailSource("provider", "https://provider.example", "all_mail"))
+      .toThrow(/safe display label/);
+    expect(await providerReader.getMessageContent(result.messages[0]!.messageRef))
+      .toMatchObject({ source: { kind: "provider", label: "Work mailbox", container: "all_mail" } });
+  });
+
   it("returns message content on demand as normalized plain text and truncates at 64 KiB UTF-8", async () => {
     const reader = createMockEmailReader({
       messages: [
@@ -265,7 +373,7 @@ describe("ReadOnlyEmailReader generic mock contract", () => {
     });
     const missingList = await missingReader.listMessages(listRequest());
     expect(missingList.messages[0]?.sentAt)
-      .toEqual({ availability: "missing", provenance: "mock" });
+      .toEqual({ availability: "missing", provenance: "missing" });
     expect(await missingReader.getMessageContent(missingList.messages[0]!.messageRef))
       .toMatchObject({ status: "ok", availability: "missing", text: "", truncated: false });
   });

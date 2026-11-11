@@ -1198,7 +1198,9 @@ fixed total-result ceiling beyond existing workflow/time/tool budgets.
 Content is fetched only by opaque reference, normalized to plain text, and
 capped at 64 KiB UTF-8 with explicit truncation; attachments and remote links
 are not returned. Unread counts are message-based and report exact/estimated
-accuracy. Unsupported containers and invalid requests fail explicitly.
+accuracy. Missing timestamps remain listable, do not match time filters, and
+sort after available timestamps with stable reference ties. Unsupported
+containers and invalid requests fail explicitly.
 
 Only `off` and `mock` are valid `EMAIL_PROVIDER` values. Legacy `graph` and
 `gmail` settings fail closed; there is no provider fallback. Microsoft Graph,

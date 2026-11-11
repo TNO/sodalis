@@ -41,8 +41,13 @@ certify this mock-only revision. Future real-account readiness is tracked by
   `receivedAt` first with a stable reference tie-break; allow ascending or
   descending sort by `sentAt` or `receivedAt`.
 - List metadata includes an opaque source-bound message reference, sender,
-  subject, optional sent timestamp with provenance/availability, received
-  timestamp, unread state, and safe synthetic source/container label.
+  subject, sent timestamp with explicit availability and provider,
+  sender-supplied, synthetic, or missing provenance, optional received
+  timestamp, unread state, and a safe source kind/label/container. Do not
+  expose provider IDs or URLs in source evidence.
+- Messages with missing timestamps remain listable. They do not satisfy a time
+  filter and sort after available timestamps in either direction, with stable
+  message-reference ties.
 - Fetch content only on demand by opaque reference. Normalize to plain text,
   cap at 64 KiB UTF-8 with explicit truncation, and return no attachments or
   remote links.
@@ -63,6 +68,8 @@ Test the public reader and harness seams for:
 
 - Different structured filters, AND semantics, UTC half-open windows,
   inbox/all-mail membership, received/sent ordering, and stable pagination.
+- Provider-style reader implementations using safe source and timestamp
+  provenance types, including sent mail without `receivedAt`.
 - Opaque source/query-bound refs and cursors, invalid filters/cursors,
   unsupported containers, missing and truncated body content, and explicit
   plain-text availability.

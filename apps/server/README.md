@@ -323,7 +323,11 @@ fetched on demand, normalized to plain text, and capped at 64 KiB UTF-8 with
 explicit truncation; attachments and remote links are not returned. Unread
 counts are message-based and report exact/estimated accuracy. Email reads are
 not persisted to memory or content-capturing audit; active content audit
-blocks reads.
+blocks reads. Metadata may omit `receivedAt`; missing timestamps do not match
+time filters and sort after available timestamps with stable reference ties.
+Source evidence is typed as synthetic/provider and contains only a safe label
+and container; sent timestamps distinguish provider, sender-supplied,
+synthetic, and missing provenance.
 
 Microsoft Graph/Gmail adapters, OAuth, account authorization, secret
 configuration, and connection UI are deferred and unsupported. See the
