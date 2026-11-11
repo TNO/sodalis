@@ -1,7 +1,8 @@
 # Pi ecosystem packages for the read-only email and calendar readers
 
-- **Status:** Historical research complete; no code implemented or installed;
-  real-provider design is deferred and not supported
+- **Status:** Historical package research complete; no third-party/provider
+  package implemented or installed; real-provider design is deferred and not
+  supported
 - **Date:** 2026-11-05
 
 ## Summary and recommendation
@@ -11,9 +12,10 @@ Sodalis embeds Pi (`@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`,
 [`apps/server/package.json`](../../apps/server/package.json)) as the
 model/tool-loop runtime, per [ADR 0007](../adr/0007-companion-harness.md).
 Tasks [0072](../../TASKS/0072-complete-read-only-email-journey.md) and
-[0074](../../TASKS/0074-complete-read-only-calendar-journey.md) are now
-mock-only; this research documents the earlier, deferred design for possible
-real-provider work. If that work is explicitly approved in the future, it
+[0074](../../TASKS/0074-complete-read-only-calendar-journey.md) are mock-only;
+0072 implements a Sodalis-owned generic email read API. This research documents
+the earlier package survey and deferred design for possible real-provider
+work. If that work is explicitly approved in the future, it
 would need (1) Microsoft Graph and Gmail/Google Calendar HTTP access, (2) an
 authorization-code OAuth + PKCE + CSRF + ID-token-validation coordinator, and
 (3) host-only secure credential storage, as specified in
@@ -141,7 +143,7 @@ preclude.
 
 | Package | What it does | Maintainer/status | Why it is unsuitable here |
 | --- | --- | --- | --- |
-| `@gongrzhe/server-gmail-autoauth-mcp` | "Gmail MCP server with auto authentication support" ([npm](https://www.npmjs.com/package/@gongrzhe/server-gmail-autoauth-mcp)); depends on `googleapis`, `google-auth-library`, `nodemailer`, `@modelcontextprotocol/sdk`. | Single maintainer (`gongrzhe`), latest `1.1.11` published 2025-08-06 — over a year stale relative to this checkout's date. | Exposes Gmail as a generic MCP tool server (its own dependency on `nodemailer` indicates send capability, not a read-only surface); an MCP client import would hand the model a self-selected, broad tool rather than Sodalis's own bounded `readRecentInbox` call, violating ADR 0007's "no automatic discovery of ... extensions, or packages" and the task's explicit exclusion of send/draft/modify. |
+| `@gongrzhe/server-gmail-autoauth-mcp` | "Gmail MCP server with auto authentication support" ([npm](https://www.npmjs.com/package/@gongrzhe/server-gmail-autoauth-mcp)); depends on `googleapis`, `google-auth-library`, `nodemailer`, `@modelcontextprotocol/sdk`. | Single maintainer (`gongrzhe`), latest `1.1.11` published 2025-08-06 — over a year stale relative to this checkout's date. | Exposes Gmail as a generic MCP tool server (its own dependency on `nodemailer` indicates send capability, not a read-only surface); an MCP client import would hand the model a self-selected, broad tool rather than Sodalis's typed, read-only email operations, violating ADR 0007's "no automatic discovery of ... extensions, or packages" and the task's explicit exclusion of send/draft/modify. |
 | `@softeria/ms-365-mcp-server` | "A Model Context Protocol (MCP) server for interacting with Microsoft 365 and Office services through the Graph API" ([npm](https://www.npmjs.com/package/@softeria/ms-365-mcp-server)); depends on `@azure/msal-node`, `@modelcontextprotocol/sdk`, `express`. | Actively published (latest `0.179.1`, 2026-11-04), single maintainer (`eirikb`). | Wraps broad Microsoft 365/Graph surface (mail, files, Teams, etc., not scoped to `Mail.Read`/`Calendars.ReadBasic`) behind a generic MCP tool interface — the model, not the host, would choose Graph endpoints, which ADR 0008 and the architecture's provider table explicitly forbid ("Graph metadata and model output cannot authorize arbitrary URLs ... or new capabilities"). |
 | `pi-mcp-adapter` | "MCP (Model Context Protocol) adapter extension for Pi coding agent" ([npm](https://www.npmjs.com/package/pi-mcp-adapter)), a *community* Pi extension (not an `@earendil-works` package) that lets Pi load arbitrary MCP servers; depends on `@napi-rs/keyring` for local secret storage. | Actively published (latest `7.0.1`, 2026-11-04), single maintainer (`nicobailon`), ~1.4M/mo catalog downloads shown on `pi.dev/packages`. | Generic MCP-loading extension, not a Graph/Gmail-specific integration; adopting it would reintroduce exactly the ambient, model-discoverable tool surface ADR 0007 rejects ("Supply the companion prompt and tools explicitly, without default shell/file tools or automatic discovery of settings, credentials, instructions, extensions, or packages"). |
 | `pi-mcp-extension` | "Full-featured, lightweight MCP extension for the Pi coding agent: ... OAuth 2.1 (PKCE + DCR)" ([npm](https://www.npmjs.com/package/pi-mcp-extension)); community extension, not `@earendil-works`. | Actively published (latest `1.13.0`, 2026-11-04), single maintainer (`irahardianto`). | Implements generic *MCP-server* OAuth (for connecting Pi to arbitrary remote MCP servers), not delegated end-user Microsoft/Google account OAuth; reusing its PKCE/DCR code would still require building Sodalis's own tenant-aware ID-token/session logic, and it still exists to let the agent attach arbitrary external tool servers. |

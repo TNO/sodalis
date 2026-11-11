@@ -106,10 +106,10 @@ findings and the first manual end-to-end check. The opt-in read-only
 implementation is present; the audit and evidence-based retrieval diagnosis
 are complete. The sensor journey has deterministic contract coverage and
 manual verification of database connectivity and value retrieval; full journey
-evidence remains pending. Email is mock-only and remains in progress; real
-email/calendar access is deferred, and calendar has no runtime. Task 0084
-records future readiness gates without authorizing provider code or account
-access.
+evidence remains pending. Email has a generic mock-only read API and remains
+in progress; real email/calendar access is deferred, and calendar has no
+runtime. Task 0084 records future readiness gates without authorizing provider
+code or account access.
 
 - [ ] [0067 Building and evaluating the companion harness](0067-companion-harness.md)
   *(needs 0031; umbrella for the current implementation and remaining acceptance)*
@@ -117,7 +117,7 @@ access.
 - [x] [0069 Diagnose and repair harness data retrieval](0069-diagnose-harness-data-retrieval.md) *(needs 0068)*
 - [x] [0070 Complete a sensor journey end to end](0070-complete-sensor-journey.md) *(needs 0069; provenance-backed offline snapshot journey and adverse contracts verified; not live/model-quality acceptance)*
 - [x] [0071 Decide future read-only email access](0071-decide-read-only-email-access.md)
-- [ ] [0072 Complete a mock-only read-only email journey](0072-complete-read-only-email-journey.md) *(needs 0071; in progress; real providers deferred)*
+- [ ] [0072 Complete a mock-only read-only email journey](0072-complete-read-only-email-journey.md) *(needs 0071; generic list/content/unread operations; in progress; real providers deferred)*
 - [x] [0073 Decide future read-only calendar access](0073-decide-read-only-calendar-access.md)
 - [ ] [0074 Complete a mock-only read-only calendar journey](0074-complete-read-only-calendar-journey.md) *(needs 0073; no calendar runtime yet; real providers deferred)*
 - [ ] [0075 Decide harness memory, recall, and context ownership](0075-decide-harness-memory-and-context.md)

@@ -134,10 +134,10 @@ must preserve [ADR 0003](../adr/0003-trusted-desktop-boundary.md).
 
 Only explicitly configured sources and capabilities execute. Model output and
 graph connection metadata grant no network or filesystem authority. Personal
-email/calendar mutations and consequential actions require consent; no new
-identity framework, device control, or personal-account connector is currently
-implemented. The approved read-only email access design below is planned, not
-runtime authority.
+email/calendar mutations and consequential actions require consent. No new
+identity framework, device control, or personal-account connector is
+implemented. Email has only the explicit synthetic mock runtime described
+below; the future real-account design grants no runtime authority.
 
 ### Module map
 
@@ -784,130 +784,112 @@ No resident ID, client ID, secret reference, redirect URI, tenant selector,
 session cookie, OAuth route, or provider credential is read or forwarded by the
 stack. Choosing `mock` does not connect an account or read real email.
 
-### Provider-neutral reader and bounded question
+### Current generic mock email API (task 0072)
 
-Approved question: **"What are my five most recent inbox emails from the last
-seven days? Summarize each."** No sender/topic search, thread expansion or
-arbitrary query language is in this slice.
+`EMAIL_PROVIDER` defaults to `off`. With `COMPANION_HARNESS=pi`, explicitly
+selecting `mock` adds all three typed read-only email tools to every workflow;
+tool availability is not selected by a fixed natural-language question or an
+email keyword classifier. The model interprets the resident's request and
+supplies typed arguments. The reader does not parse free-form questions.
+`"Summarize the last five emails I received"` is an example, not a scope cap.
 
-The host calls `ReadOnlyEmailReader.readRecentInbox` with `since`, `until`,
-fixed `limit: 5` and a cancellation signal. The host fixes `until` from its UTC
-clock at the first email read of a workflow and `since = until - 7 * 24 hours`;
-the model cannot widen this range. The current mock requires no account handle,
-session, or authorization. It returns evidence with `provider: "mock"` and a
-`synthetic` source labeled "Synthetic inbox".
+The interface operations are:
 
-The current deterministic mock applies the half-open UTC window, excludes
-non-inbox and draft fixtures, sorts by received time descending with a stable
-ID tie-break, and returns at most five. These are synthetic data only and do
-not demonstrate provider behavior.
+- `listMessages(filters, sort, pageSize, cursor)` returns message metadata.
+  Case-insensitive sender and subject substring filters, unread/read state and
+  sent/received UTC half-open windows combine with AND. Message-body search is
+  not supported. The default container
+  is `inbox`; `all_mail` includes inbox, archive and sent, and excludes drafts,
+  spam, trash and deleted. Other containers are explicitly unsupported.
+- The default order is newest `receivedAt` first, with an opaque message
+  reference tie-break. Callers may sort by `sentAt` or `receivedAt` ascending
+  or descending. Metadata includes sender, subject, optional `sentAt` with
+  availability/provenance, `receivedAt`, unread state, an opaque
+  source-bound message reference and a safe synthetic source/container label.
+- `getMessageContent(opaqueMessageRef)` fetches plain-text content on demand.
+  It is normalized and capped at 64 KiB UTF-8 with explicit truncation; no
+  attachments or remote links are returned.
+- `countUnread(container?)` counts messages in the selected container
+  (default `inbox`) and reports exact or estimated accuracy. Counts refer to
+  mail messages, never non-mail items.
 
-#### Deferred provider-adapter read design
+Pages contain at most 100 messages. Cursors are opaque and bound to the mock
+source and query. There is no fixed total-result ceiling beyond existing
+workflow, time and tool-call budgets. Results distinguish complete `ok`,
+complete empty `empty`, continuation `partial`, `unavailable`, `unsupported`,
+`invalid_request` and `cancelled`. Unsupported containers, invalid cursors or
+filters, unavailable reads and cancellation never silently become empty
+results. The deterministic mock uses one host-bound synthetic mailbox; it
+does not require an account handle, session or authorization and makes no
+provider or network calls.
 
-The following Graph/Gmail queries, paging and transport limits are future
-adapter design only; no network reader or provider transport is present:
+All evidence is labeled `mock`/`synthetic`; the source label identifies the
+requested container. Message content is untrusted data and never instructions.
+Email content is not persisted to memory or developer content audit. When
+content-capturing audit is enabled, email reads return unavailable.
 
-- A real adapter would select messages with `since <= receivedAt < until`,
-  including read and unread mail, and exclude drafts, spam/trash and non-inbox
-  folders without modifying mail. It would use Graph `receivedDateTime` or
-  Gmail `internalDate`, never the sender-controlled `Date` header.
-- A real adapter would inspect at most **100 unique candidate messages over two pages of at most
-  50**, then sort by received time descending, with provider message ID
-  ascending as a stable tie-break, deduplicate by provider ID, and take five.
-  Stop at the page cap even if duplicates reduce the unique count. Fetch
-  bodies for at most those five.
-- Coverage is complete when every page was consumed, or, for Graph only,
-  when the consumed prefix of its server-ordered results (`$orderby=
-  receivedDateTime desc`) already holds five unique eligible messages and the
-  last consumed candidate is strictly older than the fifth selected one. Later
-  pages then cannot contain a newer or tied message, so a busy Graph inbox
-  still gets a complete newest-five answer. Gmail's list order is not
-  guaranteed, so an unconsumed Gmail page token always means incomplete,
-  regardless of estimated counts; inboxes with more than 100 messages in the
-  window therefore yield `partial` (a documented Gmail limitation).
-- The deferred Graph design uses `/v1.0/me/mailFolders/inbox/messages`, bounded received-time
-  filter, `isDraft eq false`, `$orderby=receivedDateTime desc`, `$top=50`
-  and selected metadata fields; read selected message bodies separately.
-  Gmail uses `/gmail/v1/users/me/messages`, `labelIds=INBOX`,
-  `includeSpamTrash=false`, `maxResults=50` and a host-generated epoch-seconds
-  time query conservatively widened by one second at each edge, then exact
-  local filtering. Gmail listing returns IDs, not body/envelope data: fetch
-  metadata for at most 100 candidates, then full messages for the selected
-  five. Deduplicate Gmail listing IDs within and across pages before metadata
-  requests and selection, so repeats cannot displace a unique message.
-  Recheck labels/draft status in returned metadata.
-- A future adapter would follow provider continuation only on the fixed allowed mail host and same
-  account path; no arbitrary URLs/redirects. Bound the reader to **15 seconds**
-  or the remaining workflow budget, whichever is smaller, and at most four
-  concurrent HTTP requests. Cancel promptly; do not introduce retry loops.
-  Reject provider responses over **1 MiB** and retain at most **8 KiB UTF-8**
-  normalized body text per selected message with explicit truncation.
-  Prefer MIME text/plain; otherwise convert inert HTML to text without
-  executing/rendering it or fetching images, links or attachments.
+#### Future provider-adapter direction
 
-Current mock evidence includes the `mock` provider label, "Synthetic inbox"
-source label and synthetic message reference, sender, subject, UTC
-`receivedAt`, bounded body text and availability/truncation, request window,
-`checkedAt`, coverage and status. It has no account label, connection handle,
-or credentials. Future provider-specific opaque references are deferred design.
-Invalid fixture timestamps cannot become fabricated dates.
+No Graph/Gmail reader, provider transport, authentication or network code is
+present. Any separately approved future adapter would implement the same typed
+operations and preserve their filter, container, sorting, source-bound
+pagination, result-status, body-size and count-accuracy semantics. Provider
+continuation must stay bound to the configured source and fixed allowed
+provider host; no arbitrary URLs or redirects. Adapters would be bounded by
+the existing workflow/time/tool-call budgets, cancel promptly, and return no
+attachments or remotely fetched content. The provider table and authorization
+requirements above remain deferred design only; ADR 0008 and task 0084 remain
+the future-readiness gates.
 
-| Outcome | Meaning and resident answer |
+| Outcome | Meaning |
 | --- | --- |
-| `ok` | Successful complete candidate selection and selected-body reads. Up to five summaries, each grounded in returned text with sender, received date and source. Disclose body truncation; never imply omitted text was read. |
-| `empty` | Successful complete lookup with no qualifying messages. State the checked inbox/window; not an authorization or connectivity result. |
-| `unauthorized` | Reserved contract outcome for a future explicitly approved provider reader. The current mock has no account authorization or connect/reconnect flow. |
-| `unavailable` | Email is off, or a mock lookup cannot complete without usable evidence. Future provider transport failures remain deferred. |
-| `partial` | The deterministic fixture reader reports incomplete synthetic evidence. Future provider candidate/page failures remain deferred. |
+| `ok` | Successful nonempty complete page. |
+| `empty` | Successful complete lookup with no qualifying messages. |
+| `partial` | A page has a continuation cursor; more query results remain. |
+| `unavailable` | Email is off, a source cannot be read, or an audit policy blocks the read. |
+| `unsupported` | The requested container or operation is not supported. |
+| `invalid_request` | Filters, sort, cursor, or message reference is invalid. |
+| `cancelled` | The operation was cancelled by the workflow or its budget. |
 
-No cross-workflow email cache or previous-answer fallback is approved. A fresh
-read is required; message age is not lookup freshness. Reject stale evidence
-from an earlier workflow rather than presenting it as current. Evidence is not
-a transactional mailbox snapshot; deletion/movement during reads can yield a
-partial result. Authorization failure discards any earlier evidence from that
-read. Cancellation or disconnect aborts without a resident answer; partial
-answers after retrieval failure/deadline are allowed only while the workflow
-remains active.
+The list API is not a transactional mailbox snapshot. Later pages and
+on-demand content reads may observe fixture/source changes in a future
+provider implementation; each result must preserve its own coverage and
+source evidence. Cancellation or disconnect aborts without a resident answer.
 
 ### Safety, deterministic data and verification limits
 
-Each synthetic summary must retain sender, received date and synthetic source,
-not just an unsupported aggregate. No invented facts when body text is absent;
-identify a subject-only result as such. Treat fixture text as untrusted
-evidence, never authority to follow instructions or invoke tools. The current
-mock has no tokens, callback codes, raw provider payloads, or real account data.
-Do not persist fixture content in memory or developer content audits; while
-content capture is enabled, refuse reads.
-
-Explicitly exclude **send, draft, modify, delete, read/unread/label changes,
-attachments, remote content and cross-source synthesis** (including another
-mailbox/provider, calendar, Home, memory or fixture Mail). The reader is not a
-generic fetch capability. Wider questions must receive an explicit scope
-limitation, not an implicit new capability.
+The API is read-only: it does not send, draft, modify, delete, or change
+read/unread/label state. It does not expose attachments, remote content,
+credentials, raw provider payloads, or real account data. Treat message text as
+untrusted evidence and never follow its instructions or links. Preserve
+sender, timestamp, availability/provenance and synthetic source labels; do not
+invent missing values. Do not persist fixture content in memory or developer
+content audits; while content capture is enabled, refuse content reads.
 
 The current tests use deterministic fixture data only, never mailbox exports or
-sanitized real correspondence. Freeze `until` at
-`2026-11-05T12:00:00Z`, so `since` is `2026-10-29T12:00:00Z`.
-These are synthetic mock fixtures:
+sanitized real correspondence. Fixtures deliberately exercise ordering,
+timestamps, containers, read state, body availability, and pagination:
 
-| Logical ID | Received UTC | Sender / subject / body | Selection |
-| --- | --- | --- | --- |
-| M01 | Nov 05 11:00 | Ana `<ana@example.test>` / Visit / I will visit Friday at 14:00. | First |
-| M02 | Nov 04 15:00 | Bo `<bo@example.test>` / Delivery / The parcel arrives Monday. | Second |
-| M03 | Nov 03 09:00 | Cy `<cy@example.test>` / Library / Your book is ready. | Third |
-| M04 | Nov 02 10:00 | Dee `<dee@example.test>` / Lunch / Lunch is at noon. | Fourth, tie-break before M05 |
-| M05 | Nov 02 10:00 | Eli `<eli@example.test>` / Walk / Meet at the park gate. | Fifth |
-| M06 | Nov 01 14:00 | Fay `<fay@example.test>` / Receipt / Payment received. | Eligible, beyond five |
-| M07 | Oct 29 12:00 | Gus `<gus@example.test>` / Boundary / Start of window. | Inclusive lower edge, beyond five |
-| M08 | Oct 29 11:59:59 | Synthetic sender / Old / Outside window. | Excluded |
-| M09 | Nov 05 12:00 | Synthetic sender / Future edge / Outside window. | Exclusive upper edge |
-| M10–M13 | Nov 05 11:30 | Synthetic sender / Excluded / Not eligible. | Respectively sent-only, draft, spam, trash |
+| Logical ID | Container | Received UTC | Sent UTC | Sender / subject |
+| --- | --- | --- | --- | --- |
+| M01 | inbox | Nov 05 11:00 | Nov 05 10:52 | Ana / Visit |
+| M02 | inbox | Nov 04 15:00 | Nov 04 14:50 | Bo / Delivery |
+| M03 | inbox | Nov 03 09:00 | Nov 03 08:40 | Cy / Library |
+| M04 | inbox | Nov 02 10:00 | Nov 02 09:45 | Dee / Lunch |
+| M05 | inbox | Nov 02 10:00 | Nov 02 09:40 | Eli / Walk |
+| M06–M09 | inbox | Nov 01–Nov 05 | Nov 01–Nov 05 | Receipt, boundary and interval-edge examples |
+| M10 | sent | Nov 05 11:30 | Nov 05 11:00 | Synthetic sender / Sent |
+| M11 | drafts | Nov 05 11:30 | — | Synthetic sender / Draft |
+| M12 | spam | Nov 05 11:30 | — | Synthetic sender / Spam |
+| M13 | trash | Nov 05 11:30 | — | Synthetic sender / Trash |
+| M14 | archive | Nov 04 12:00 | Nov 04 11:30 | Synthetic sender / Archived |
 
-The mock behavior tests cover the fixed five messages, half-open UTC bounds,
-empty results, explicit synthetic evidence, unsupported-question limitation,
-configuration, and absence of provider network requests and authorization
-routes. Provider pages/transports, OAuth, account states and desktop
-connect/disconnect cases in the earlier design are deferred.
+The behavior tests cover structured filters, half-open UTC windows, sorting,
+stable opaque pagination, on-demand normalized/truncated content, unread
+counts, complete empty versus unavailable, invalid and unsupported requests,
+tool access for alternate questions, cancellation, synthetic evidence, no
+provider network requests and no authorization routes. Calendar behavior is
+separate under task 0074 and has no runtime in this email task.
 
 No live provider verification is authorized. The static review at
 [email-journey-security-review.md](../evaluations/email-journey-security-review.md)

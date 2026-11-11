@@ -29,11 +29,11 @@ implementation; graph endpoint metadata does not grant account access.
 
 Completed 2026-11-05 as a **design decision**: the future target considered
 Microsoft Graph (Outlook) and Gmail API behind a provider-neutral Sodalis
-interface. This did not deliver or authorize account access. The
-[architecture](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
-retains the provider table, scopes, bounded question/evidence contract,
-exclusions and synthetic fixtures as deferred design. Shared authorization
-and secret-storage trade-offs remain in
+interface. This did not deliver or authorize account access. The current
+mock-only API is refined in [0072](0072-complete-read-only-email-journey.md);
+the [architecture](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
+retains provider-specific scopes and authorization as deferred design. Shared
+authorization and secret-storage trade-offs remain in
 [ADR 0008](../docs/adr/0008-delegated-personal-account-access.md), also future
 direction only.
 

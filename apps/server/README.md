@@ -309,16 +309,21 @@ the tools report `unavailable`.
 Email is off by default (`EMAIL_PROVIDER=off`). With
 `COMPANION_HARNESS=pi`, explicitly set `EMAIL_PROVIDER=mock` to use deterministic
 synthetic fixtures; there is no account connection, authentication UI, email
-HTTP route, or provider network integration. The exact supported question is
-"What are my five most recent inbox emails from the last seven days? Summarize
-each." Wider mail requests receive a limitation-only response. Every mock
-result identifies `provider: "mock"` and its synthetic source. The separate
-`MockMailApplication` fixture app is unchanged.
+HTTP route, or provider network integration. Mock mode exposes typed
+`listMessages`, `getMessageContent`, and `countUnread` operations in every
+workflow; the model maps resident requests to structured filters and paging.
+The example request "Summarize the last five emails I received" is not a scope
+limit. Results and message sources identify the synthetic mailbox. The
+separate `MockMailApplication` fixture app is unchanged.
 
-The `ReadOnlyEmailReader` contract carries a fixed seven-day UTC window and
-limit of five, with sender/date/source, coverage, and body-availability
-evidence. Email reads are not persisted to memory or content-capturing audit;
-active content audit blocks reads.
+Lists support inbox/all-mail containers, AND-combined sender, subject,
+read-state and UTC half-open time filters, received/sent sorting, and
+source/query-bound cursors with at most 100 messages per page. Content is
+fetched on demand, normalized to plain text, and capped at 64 KiB UTF-8 with
+explicit truncation; attachments and remote links are not returned. Unread
+counts are message-based and report exact/estimated accuracy. Email reads are
+not persisted to memory or content-capturing audit; active content audit
+blocks reads.
 
 Microsoft Graph/Gmail adapters, OAuth, account authorization, secret
 configuration, and connection UI are deferred and unsupported. See the

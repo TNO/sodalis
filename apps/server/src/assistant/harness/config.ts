@@ -7,7 +7,6 @@ import { createHomeTools } from "./tools.js";
 import { FileCompanionAuditWriter } from "./audit.js";
 import { CompanionWorkflows } from "./workflow.js";
 import { createMockEmailReader } from "./emailReader.js";
-import { isApprovedEmailQuestion, isEmailRelatedQuestion } from "./tools.js";
 import {
   validateCompanionAuditSettings,
   validateCompanionSettings,
@@ -59,26 +58,17 @@ export async function createCompanionHarnessFromEnv(
   }
   return new CompanionWorkflows({
     ...(auditEnabled ? { audit: new FileCompanionAuditWriter() } : {}),
-    createSession: ({ history, question, budget }) => {
-      const emailEnabled = emailProvider === "mock" && isApprovedEmailQuestion(question);
-      const emailScopeLimited = !emailEnabled && isEmailRelatedQuestion(question);
-      const emailReader = emailEnabled ? createMockEmailReader() : undefined;
-      const tools = emailEnabled
-        ? createHomeTools({
-            emailReader: emailReader!,
-            emailAuditEnabled: auditEnabled,
-            budget,
-          }).filter((tool) => tool.name === "read_recent_inbox")
-        : emailScopeLimited
-          ? createHomeTools({ emailScopeLimited: true, emailProviderOff: emailProvider === "off", budget })
-        : createHomeTools({
-            ...(graph ? { graph } : {}),
-            ...(reader ? { reader } : {}),
-            budget,
-          });
+    createSession: ({ history, budget }) => {
+      const emailReader = emailProvider === "mock" ? createMockEmailReader() : undefined;
+      const tools = createHomeTools({
+        ...(graph ? { graph } : {}),
+        ...(reader ? { reader } : {}),
+        ...(emailReader ? { emailReader, emailAuditEnabled: auditEnabled } : {}),
+        budget,
+      });
       return createCompanionSession({
         model,
-        history: emailEnabled || emailScopeLimited ? [] : history,
+        history,
         tools,
       });
     },

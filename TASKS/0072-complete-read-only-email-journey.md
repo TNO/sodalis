@@ -8,64 +8,70 @@ Depends on: 0071
 ## Context and scope
 
 Task [0071](0071-decide-read-only-email-access.md) records future provider
-design choices. They are not delivered or supported now. This task narrows
-implementation to a provider-neutral `ReadOnlyEmailReader` contract and a
-deterministic synthetic mock. It does not implement Microsoft Graph, Gmail,
-OAuth/OIDC, account sessions, credentials, provider networking, or connection
-UI. The mutable
+design choices. They are not delivered or supported. This task implements a
+provider-neutral set of typed read operations with a deterministic synthetic
+mock. It does not implement Microsoft Graph, Gmail, OAuth/OIDC, account
+sessions, credentials, provider networking, or connection UI. The mutable
 [`MockMailApplication`](../apps/desktop/src/assistant/MockMailApplication.ts)
 fixture app is separate and must remain unchanged.
 
 The [architecture](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
-is the source of truth for the current contract and explicitly deferred design.
-The [historical security review](../docs/evaluations/email-journey-security-review.md)
-covers the removed real-provider implementation only; its historical result
-does not assess or certify this mock-only revision. Future real-account
-readiness is tracked by [0084](0084-gating-future-real-provider-access.md).
+is the source of truth for the current API and deferred design. The
+[historical security review](../docs/evaluations/email-journey-security-review.md)
+covers the earlier removed real-provider implementation; it does not assess or
+certify this mock-only revision. Future real-account readiness is tracked by
+[0084](0084-gating-future-real-provider-access.md).
 
-## Contract and acceptance criteria
+## Confirmed generic contract
 
-- Keep the provider-neutral `ReadOnlyEmailReader` interface and deterministic
-  mock. The allowed question is exactly
-  **"What are my five most recent inbox emails from the last seven days?
-  Summarize each."** Use a fixed seven-day half-open UTC window and limit five.
-- Return only deterministic fixture evidence. Every result and message must be
-  visibly labeled `mock`/`synthetic`, including its source; retain sender,
-  received date, source reference, body-availability and coverage evidence.
-  Answer text must not imply that fixture evidence came from a real mailbox.
-- `EMAIL_PROVIDER` defaults to `off` and accepts only `off|mock`; mock requires
-  explicit selection and the Pi harness. Reject legacy `graph`/`gmail` and
-  every unsupported value. Do not silently fall back to mock or a real provider.
-- Remove all generated code for Microsoft Graph/Gmail authentication or HTTP:
-  OAuth/OIDC/ID-token logic; email-only session, CSRF, credential and token
-  handling; provider readers/transports; connect/status/callback/disconnect
-  routes; provider configuration/secrets; gateway auth routing; and desktop
-  account-connected/authentication UI.
-- Requests for unsupported mail operations or broader email questions expose
-  only a limitation response and no source-reading tool. Keep the approved
-  question bounded. The mock makes no provider network requests.
-- Preserve the Aster iframe sandbox and leave its source unchanged. Do not
-  change the separate mutable fixture Mail app.
-- Leave a concise adapter seam comment, e.g.
-  `Future adapter to a real provider starts here.` Any future real-account
-  code requires explicit future approval and the readiness process in 0084;
-  this task does not authorize restoring it.
+- Implement `listMessages(filters, sort, pageSize, cursor)`,
+  `getMessageContent(opaqueMessageRef)`, and `countUnread(container?)`. The
+  model interprets natural language and supplies structured arguments; the
+  adapter never parses free-form questions.
+- When `EMAIL_PROVIDER=mock`, expose all three operations in every workflow.
+  Do not gate tool availability on an exact question or email keywords. Keep
+  `off` as the default; mock requires explicit selection and the Pi harness.
+- Bind one mailbox/source at the host. Support `inbox` (default) and
+  `all_mail`; `all_mail` includes inbox, archive, and sent, and excludes
+  drafts, spam, trash, and deleted. Other containers return unsupported rather
+  than silently switching.
+- Combine sender, subject, unread/read, and UTC half-open sent/received time
+  filters with AND; sender and subject matching is case-insensitive substring
+  matching. Do not search message bodies. Default to newest
+  `receivedAt` first with a stable reference tie-break; allow ascending or
+  descending sort by `sentAt` or `receivedAt`.
+- List metadata includes an opaque source-bound message reference, sender,
+  subject, optional sent timestamp with provenance/availability, received
+  timestamp, unread state, and safe synthetic source/container label.
+- Fetch content only on demand by opaque reference. Normalize to plain text,
+  cap at 64 KiB UTF-8 with explicit truncation, and return no attachments or
+  remote links.
+- Count unread messages by container (default inbox), with exact/estimated
+  accuracy. Never describe counts of non-mail items as exact email counts.
+- Use source/query-bound opaque cursors and at most 100 messages per page.
+  There is no fixed total-result ceiling apart from existing workflow, time,
+  and tool-call budgets. Distinguish complete empty, complete results,
+  continuation, unavailable/unsupported, invalid request, and cancellation.
+- Preserve the read-only boundary, synthetic evidence labels, cancellation,
+  workflow budgets, and content-audit protection. The mock makes no provider,
+  auth, or network calls. Do not change the fixture Mail application or
+  calendar runtime.
 
 ## Deterministic behavior tests
 
-Test public interfaces and prove:
+Test the public reader and harness seams for:
 
-- Configuration defaults to `off`, accepts explicitly selected `mock`, and
-  rejects `graph`, `gmail`, unknown values, and mock mode without the Pi
-  harness.
-- The reader returns five known synthetic fixture messages with visibly
-  synthetic source evidence, honors half-open UTC boundaries and distinguishes
-  a successful empty fixture from an unavailable lookup.
-- Mock reads make no network calls; unsupported mail questions receive only a
-  limitation and do not call the reader.
-- The email connect/status/callback/disconnect routes return not-found, and
-  desktop/gateway configuration no longer exposes email account-auth routes or
-  controls.
+- Different structured filters, AND semantics, UTC half-open windows,
+  inbox/all-mail membership, received/sent ordering, and stable pagination.
+- Opaque source/query-bound refs and cursors, invalid filters/cursors,
+  unsupported containers, missing and truncated body content, and explicit
+  plain-text availability.
+- Inbox/all-mail unread counts with exact mock accuracy; unavailable and
+  cancelled operations.
+- Every generic operation being available for alternate email questions when
+  mock mode is selected, without an exact-question or keyword classifier.
+- Default-off/explicit-mock configuration, visibly synthetic evidence, no
+  network or authentication calls, and no content-audit reads.
 
 No live provider, cloud, or account tests are in scope. Real-provider
 compatibility, security, and policy readiness remain deferred to 0084 and
@@ -73,9 +79,8 @@ require explicit future approval.
 
 ## Verification
 
-Run the relevant targeted behavior tests, then `pnpm test`, `pnpm typecheck`,
-`pnpm build`, and `git diff --check`. Do not run any live/cloud commands.
+Run targeted behavior tests, then `pnpm test`, `pnpm typecheck`, `pnpm build`,
+and `git diff --check`. Do not run live/cloud commands.
 
-This task stays **in progress** until the narrowed pull request merges. The
-historical security report remains linked and unchanged in its findings; its
-scope notice explains that it is not a review of this revision.
+This task stays **in progress** until the pull request merges. The historical
+security report remains linked and unchanged in its findings and scope.

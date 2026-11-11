@@ -296,12 +296,12 @@ describe("companion harness configuration", () => {
 
   it.each([
     [start.messages[0]!.content, ["find_entities", "inspect_neighborhood", "read_external_data"]],
-    ["Read all my mail", ["email_scope_limit"]],
-    ["Summarize my latest mail", ["email_scope_limit"]],
-    ["Do I have any new mail?", ["email_scope_limit"]],
+    ["Read all my mail", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Summarize my latest mail", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Do I have any new mail?", ["find_entities", "inspect_neighborhood", "read_external_data"]],
     ["Please mail the package to my home", ["find_entities", "inspect_neighborhood", "read_external_data"]],
     ["Read a book about mail delivery", ["find_entities", "inspect_neighborhood", "read_external_data"]],
-  ])("sends the configured key literally and exposes only the permitted tools for %s", async (question, expectedTools) => {
+  ])("sends the configured key literally and preserves default tools for %s", async (question, expectedTools) => {
     const { createServer } = await import("node:http");
     const requests: { authorization?: string; body: string }[] = [];
     const server = createServer((request, response) => {

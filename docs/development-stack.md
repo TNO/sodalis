@@ -1180,11 +1180,25 @@ Email is disabled by default (`EMAIL_PROVIDER=off`). To exercise the
 deterministic workflow, set `EMAIL_PROVIDER=mock` with
 `COMPANION_HARNESS=pi`. This explicit selection uses synthetic fixtures only;
 there is no real inbox, account connection, authentication UI, email HTTP
-route, or provider network call. The assistant supports only **"What are my
-five most recent inbox emails from the last seven days? Summarize each."**
-Wider mail requests receive a limitation-only response. Every result labels
-its provider as `mock` and source as synthetic. The separate
-`MockMailApplication` fixture app is unchanged.
+route, or provider network call. Mock mode exposes generic typed operations
+for listing message metadata, fetching content on demand, and counting unread
+messages in every workflow. The model translates the resident's request into
+structured filters; adapters do not parse free-form questions. For example,
+**"Summarize the last five emails I received"** is supported by composing
+filters and pages, but is not a scope limit. Every result labels its provider
+as `mock` and source as synthetic. The separate `MockMailApplication` fixture
+app is unchanged.
+
+Lists combine sender, subject, unread/read state and UTC half-open sent/received
+windows with AND; they default to inbox and newest received first.
+`all_mail` includes inbox, archive, and sent, excluding drafts, spam, trash,
+and deleted. Sort by sent or received time in either direction. Pages contain
+at most 100 messages and use opaque source/query-bound cursors; there is no
+fixed total-result ceiling beyond existing workflow/time/tool budgets.
+Content is fetched only by opaque reference, normalized to plain text, and
+capped at 64 KiB UTF-8 with explicit truncation; attachments and remote links
+are not returned. Unread counts are message-based and report exact/estimated
+accuracy. Unsupported containers and invalid requests fail explicitly.
 
 Only `off` and `mock` are valid `EMAIL_PROVIDER` values. Legacy `graph` and
 `gmail` settings fail closed; there is no provider fallback. Microsoft Graph,
