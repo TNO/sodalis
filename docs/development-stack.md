@@ -1087,33 +1087,26 @@ does not provide turn mode's desktop actions or optional long-term memory.
 
 #### Shared graph network
 
-The AI container now also runs on a second Docker network, the **graph
-network**, which the externally managed Neo4j container is expected to join.
-In `compose.yaml` it is the network key `graph`; its Docker name is the stack's
-container prefix: `sodalis` for a root checkout and `sodalis-<worktree>` for a
-worktree (matching container names such as `sodalis-<worktree>-ai`). Only the
+The AI container also runs on a second, externally managed Docker network, the
+**graph network**, which the externally managed Neo4j container must join.
+In `compose.yaml` it is the network key `graph`; its Docker name is selected by
+`EXTERNAL_NETWORK_NAME` (default `sodalis` when unset; `.env.example` selects
+`sodalis-network`). It is independent of the worktree's container prefix. Only the
 `ai` service joins it; gateway, speech, and the other services stay on the
 project's default network. On that network Neo4j must be reachable under the
 host name `neo4j`, which is what `HOME_GRAPH_URL=bolt://neo4j:7687` in
 `.env.example` assumes.
 
-The Sodalis stack owns the network: `pnpm stack:up` creates it. The
-`home_simulator` Neo4j test container declares it as an external network named
-by `SODALIS_NETWORK` (default `sodalis`); set `SODALIS_NETWORK=sodalis-<worktree>`
-in its `containers/neo4j-test/.env` for a worktree. Hence the first start order
-matters:
-
-1. Start the Sodalis stack first. A Neo4j container started before the network
-   exists fails with `network … declared as external, but could not be found`.
-   Conversely, Compose refuses to start the stack if another tool already
-   created a network with that name without Compose labels.
-2. After that, either side can be restarted independently. `pnpm stack:down`
-   leaves the network in place while Neo4j is still attached to it (Compose
-   reports `Resource is still in use`), and the next `pnpm stack:up` reuses it.
-3. When both are down, the network is gone; start Sodalis first again.
+Create the network before starting either stack, for example
+`docker network create sodalis-network` when using `.env.example`. The
+`home_simulator` Neo4j test container declares its external network through
+`SODALIS_NETWORK`; set that to the same value as Sodalis's
+`EXTERNAL_NETWORK_NAME` in its `containers/neo4j-test/.env`.
+Either stack can then be started or restarted independently. Sodalis Compose
+neither creates nor removes this external network, including on `stack:down`.
 
 Check membership with
-`docker network inspect <prefix> --format '{{range .Containers}}{{.Name}} {{end}}'`;
+`docker network inspect <network-name> --format '{{range .Containers}}{{.Name}} {{end}}'`;
 it should list both the AI container and Neo4j.
 
 #### Setup
@@ -1145,7 +1138,7 @@ it should list both the AI container and Neo4j.
    data is invisible, and a file replaced by rename stays stale until restart.
    The file is never copied into an image.
    Omit the file and endpoint settings if only graph structure is needed.
-2. Launch the normal stack, which creates the graph network, and open its
+2. Ensure the external graph network exists, launch the normal stack, and open its
    gateway:
 
    ```sh
