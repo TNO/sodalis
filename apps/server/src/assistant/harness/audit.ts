@@ -19,6 +19,7 @@ export interface CompanionAuditSink {
 const SECRET_KEY = /(?:password|passwd|secret|token|api[-_]?key|authorization|credential)/i;
 const NON_TEXT_KEY = /(?:audio|recording|artifact|buffer|bytes|binary)/i;
 const inlineSecret = /(["']?)([A-Za-z0-9_-]*(?:authorization|x-api-key|api[-_]?key|password|passwd|secret|token|credential)[A-Za-z0-9_-]*)\1(\s*[:=]\s*)(\[[^\]]*\]|"[^"]*"|'[^']*'|[^\s,;}\]]+)/gi;
+const MODEL_USAGE_FIELDS = new Set(["input", "output", "cacheRead", "cacheWrite", "totalTokens"]);
 
 function redactString(value: string): string {
   return value
@@ -30,16 +31,40 @@ function redactString(value: string): string {
     });
 }
 
-function redact(value: unknown, key = ""): unknown {
+function redact(
+  value: unknown,
+  key = "",
+  isModelUsageField = false,
+  isModelUsageContainer = false,
+): unknown {
+  if (
+    isModelUsageField &&
+    MODEL_USAGE_FIELDS.has(key) &&
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+  ) {
+    return value;
+  }
   if (SECRET_KEY.test(key)) return "[REDACTED]";
   if (NON_TEXT_KEY.test(key)) return undefined;
   if (typeof value === "string") return redactString(value);
   if (value instanceof Uint8Array) return "[binary omitted]";
   if (Array.isArray(value)) return value.map((entry) => redact(entry));
   if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const isAssistantMessage = key === "" && record.event === "assistant.message";
     return Object.fromEntries(
       Object.entries(value)
-        .map(([childKey, child]) => [childKey, redact(child, childKey)] as const)
+        .map(([childKey, child]) => [
+          childKey,
+          redact(
+            child,
+            childKey,
+            isModelUsageContainer && MODEL_USAGE_FIELDS.has(childKey),
+            isAssistantMessage && childKey === "usage",
+          ),
+        ] as const)
         .filter(([, child]) => child !== undefined),
     );
   }
@@ -52,6 +77,11 @@ function transcriptLine(event: CompanionAuditEvent): string {
     .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
     .join(" ");
   return `${timestamp} ${kind} workflow=${workflowId} session=${sessionId} correlation=${correlationId}${context ? ` ${context}` : ""}`;
+}
+
+/** Applies the storage/report sanitizer to one audit record. */
+export function sanitizeCompanionAuditRecord(value: unknown): unknown {
+  return redact(value);
 }
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../");
@@ -69,7 +99,7 @@ export class FileCompanionAuditWriter implements CompanionAuditSink {
   }
 
   write(event: CompanionAuditEvent): Promise<void> {
-    const safeEvent = redact(event) as CompanionAuditEvent;
+    const safeEvent = sanitizeCompanionAuditRecord(event) as CompanionAuditEvent;
     const jsonLine = `${JSON.stringify(safeEvent)}\n`;
     const humanLine = `${transcriptLine(safeEvent)}\n`;
     const operation = this.pending.then(async () => {
