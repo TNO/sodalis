@@ -16,6 +16,6 @@
     "@sodalis/desktop-host": "workspace:*",
     "@sodalis/speech": "workspace:*",
     "mithril": "^2.3.8",
-    "mithril-materialized": "^4.0.0"
+    "mithril-materialized": "^5.0.3"
   }
 }
