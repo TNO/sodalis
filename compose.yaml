@@ -198,7 +198,6 @@ volumes:
   memory_data:
 
 networks:
-  # The graph network: shared with the externally managed home_simulator Neo4j
-  # container, which joins it as an external network named after the prefix.
   graph:
-    name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}
+    name: ${EXTERNAL_NETWORK_NAME:-sodalis}
+    external: true
