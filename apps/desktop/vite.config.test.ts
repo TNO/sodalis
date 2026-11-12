@@ -39,6 +39,7 @@ describe("Vite API proxies", () => {
       "/api/assistant": { target: "http://127.0.0.1:3002" },
       "/api/home": { target: "http://127.0.0.1:3003" },
     });
+    expect(config.server?.proxy).not.toHaveProperty("/api/email");
   });
 
   it("uses the Compose gateway except for an explicitly overridden service", async () => {
@@ -53,5 +54,6 @@ describe("Vite API proxies", () => {
       "/api/assistant": { target: "http://127.0.0.1:4176" },
       "/api/home": { target: "http://127.0.0.1:4176" },
     });
+    expect(config.server?.proxy).not.toHaveProperty("/api/email");
   });
 });

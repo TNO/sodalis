@@ -49,6 +49,21 @@ describe("development stack selection", () => {
     expect(() => resolveStack({ ...base, COMPANION_AUDIT: "maybe" })).toThrow(/COMPANION_AUDIT/);
   });
 
+  it("wires only the off/mock email selection and rejects old provider values", () => {
+    const mock = resolveStack({
+      ...base,
+      COMPANION_HARNESS: "pi",
+      EMAIL_PROVIDER: "mock",
+    });
+    expect(mock.environment).toMatchObject({
+      EMAIL_PROVIDER: "mock",
+    });
+    expect(mock.environment).not.toHaveProperty("EMAIL_OAUTH_CLIENT_ID");
+    expect(mock.environment).not.toHaveProperty("EMAIL_OAUTH_CLIENT_SECRET_REF");
+    expect(() => resolveStack({ ...base, EMAIL_PROVIDER: "graph" })).toThrow(/EMAIL_PROVIDER/);
+    expect(() => resolveStack({ ...base, EMAIL_PROVIDER: "gmail" })).toThrow(/EMAIL_PROVIDER/);
+  });
+
   it.each([
     { COMPANION_HARNESS: "typo" },
     { COMPANION_HARNESS: "off", HOME_GRAPH_PASSWORD: "unused" },

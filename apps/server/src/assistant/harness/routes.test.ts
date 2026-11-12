@@ -14,6 +14,7 @@ import { createAssistantApp } from "../app.js";
 import { literalConfigValue } from "./companionModel.js";
 import { createCompanionSession } from "./companionSession.js";
 import { createCompanionHarnessFromEnv } from "./config.js";
+import { createMockEmailReader } from "./emailReader.js";
 import type { HomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
 import type { CompanionAuditEvent } from "./audit.js";
@@ -101,6 +102,24 @@ describe("companion workflow routes", () => {
     expect((await post(app, "/api/assistant/workflows", start)).status).toBe(404);
   });
 
+  it("does not register email account authorization routes in mock mode", async () => {
+    const workflows = (await createCompanionHarnessFromEnv({
+      COMPANION_HARNESS: "pi",
+      EMAIL_PROVIDER: "mock",
+      LLM_PROVIDER: "mock",
+    }))!;
+    const app = createAssistantApp({ workflows });
+
+    for (const [path, method] of [
+      ["/api/email/connection", "GET"],
+      ["/api/email/connect", "POST"],
+      ["/api/email/callback", "GET"],
+      ["/api/email/connection", "DELETE"],
+    ] as const) {
+      expect((await app.request(path, { method })).status).toBe(404);
+    }
+  });
+
   it("streams a lifecycle with the mock model and no graph", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const companion = (await createCompanionHarnessFromEnv({ COMPANION_HARNESS: "pi", LLM_PROVIDER: "mock" }))!;
@@ -113,6 +132,49 @@ describe("companion workflow routes", () => {
       { type: "started", workflowId: "workflow-1", sequence: 0 },
       { type: "answer", workflowId: "workflow-1", sequence: 1, inputId: "input-1", text: "Dit is een testantwoord." },
     ]);
+  });
+
+  it("keeps email reads available and audited when both features are enabled", async () => {
+    const auditEvents: CompanionAuditEvent[] = [];
+    const emailReader = createMockEmailReader();
+    const countUnread = vi.spyOn(emailReader, "countUnread");
+    const faux = fauxProvider();
+    const modelRuntime = await ModelRuntime.create({
+      credentials: new InMemoryCredentialStore(),
+      modelsPath: null,
+      refreshOnCreate: false,
+      allowModelNetwork: false,
+    });
+    modelRuntime.registerNativeProvider(faux.provider);
+    faux.setResponses([
+      fauxAssistantMessage(fauxToolCall("count_unread", {})),
+      fauxAssistantMessage(fauxText("There are 7 unread messages.")),
+    ]);
+    const workflows = new CompanionWorkflows({
+      audit: { write: (event: CompanionAuditEvent) => { auditEvents.push(event); } },
+      createSession: ({ history, budget }) =>
+        createCompanionSession({
+          model: { modelRuntime, model: faux.getModel(), thinkingLevel: "off" },
+          history,
+          tools: createHomeTools({ emailReader, budget }),
+        }),
+    });
+    const app = createAssistantApp({ workflows });
+
+    const response = await post(app, "/api/assistant/workflows", {
+      ...start,
+      messages: [{ role: "user", content: "How many unread emails do I have?" }],
+    });
+
+    expect(events(await response.text()).at(-1)).toMatchObject({
+      type: "answer",
+      text: "There are 7 unread messages.",
+    });
+    expect(countUnread).toHaveBeenCalledOnce();
+    expect(auditEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: "tool.dispatched", toolName: "count_unread" }),
+      expect.objectContaining({ event: "tool.result", toolName: "count_unread" }),
+    ]));
   });
 
   it("validates workflow, steering and cancel requests", async () => {
@@ -276,7 +338,14 @@ describe("companion harness configuration", () => {
     expect(literalConfigValue("!rm -rf /")).toBe("$!rm -rf /");
   });
 
-  it("sends the configured key literally to an OpenAI-compatible server", async () => {
+  it.each([
+    [start.messages[0]!.content, ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Read all my mail", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Summarize my latest mail", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Do I have any new mail?", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Please mail the package to my home", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+    ["Read a book about mail delivery", ["find_entities", "inspect_neighborhood", "read_external_data"]],
+  ])("sends the configured key literally and preserves default tools for %s", async (question, expectedTools) => {
     const { createServer } = await import("node:http");
     const requests: { authorization?: string; body: string }[] = [];
     const server = createServer((request, response) => {
@@ -301,14 +370,17 @@ describe("companion harness configuration", () => {
         LLM_API_KEY: "!echo key$HOME",
       }))!;
       vi.spyOn(console, "warn").mockImplementation(() => {});
-      const response = await post(createAssistantApp({ workflows: companion }), "/api/assistant/workflows", start);
+      const response = await post(createAssistantApp({ workflows: companion }), "/api/assistant/workflows", {
+        ...start,
+        messages: [{ role: "user", content: question }],
+      });
       expect(events(await response.text()).at(-1)).toMatchObject({ type: "answer", text: "Hallo." });
       expect(requests[0]!.authorization).toBe("Bearer !echo key$HOME");
       const body = JSON.parse(requests[0]!.body) as { model: string; messages: { role: string; content: unknown }[]; tools?: { function: { name: string } }[] };
       expect(body.model).toBe("local-model");
       expect(body.messages[0]).toMatchObject({ role: "system" });
       expect(String(body.messages[0]!.content)).toContain("You are Sodalis, a companion");
-      expect(body.tools?.map((tool) => tool.function.name)).toEqual(["find_entities", "inspect_neighborhood", "read_external_data"]);
+      expect(body.tools?.map((tool) => tool.function.name)).toEqual(expectedTools);
     } finally {
       server.close();
     }

@@ -94,7 +94,10 @@ describe.skipIf(!available)("companion Compose configuration (no daemon or model
     }
   });
 
-  it("shares only the AI service on a graph network named after the worktree prefix", () => {
+  it.each([
+    { externalNetworkName: undefined, expectedName: "sodalis" },
+    { externalNetworkName: "shared-feature-graph", expectedName: "shared-feature-graph" },
+  ])("shares only the AI service on the external graph network $expectedName", ({ externalNetworkName, expectedName }) => {
     const directory = mkdtempSync(join(tmpdir(), "sodalis-compose-"));
     try {
       const envFile = join(directory, "empty.env");
@@ -108,13 +111,13 @@ describe.skipIf(!available)("companion Compose configuration (no daemon or model
         env: {
           PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot,
           ...resolveStack(base).environment, SODALIS_SERVICE_PREFIX: "sodalis-feature",
+          ...(externalNetworkName ? { EXTERNAL_NETWORK_NAME: externalNetworkName } : {}),
         },
       });
       expect(result.status, result.stderr).toBe(0);
       const config = JSON.parse(result.stdout) as ComposeConfig;
       expect(Object.keys(config.services.ai?.networks ?? {}).sort()).toEqual(["default", "graph"]);
-      expect(config.networks?.graph).toMatchObject({ name: "sodalis-feature" });
-      expect(config.networks?.graph?.external).toBeFalsy();
+      expect(config.networks?.graph).toMatchObject({ name: expectedName, external: true });
       expect(config.services.speech?.networks).not.toHaveProperty("graph");
       expect(config.services.gateway?.networks).not.toHaveProperty("graph");
     } finally {

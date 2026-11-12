@@ -1087,33 +1087,26 @@ does not provide turn mode's desktop actions or optional long-term memory.
 
 #### Shared graph network
 
-The AI container now also runs on a second Docker network, the **graph
-network**, which the externally managed Neo4j container is expected to join.
-In `compose.yaml` it is the network key `graph`; its Docker name is the stack's
-container prefix: `sodalis` for a root checkout and `sodalis-<worktree>` for a
-worktree (matching container names such as `sodalis-<worktree>-ai`). Only the
+The AI container also runs on a second, externally managed Docker network, the
+**graph network**, which the externally managed Neo4j container must join.
+In `compose.yaml` it is the network key `graph`; its Docker name is selected by
+`EXTERNAL_NETWORK_NAME` (default `sodalis` when unset; `.env.example` selects
+`sodalis-network`). It is independent of the worktree's container prefix. Only the
 `ai` service joins it; gateway, speech, and the other services stay on the
 project's default network. On that network Neo4j must be reachable under the
 host name `neo4j`, which is what `HOME_GRAPH_URL=bolt://neo4j:7687` in
 `.env.example` assumes.
 
-The Sodalis stack owns the network: `pnpm stack:up` creates it. The
-`home_simulator` Neo4j test container declares it as an external network named
-by `SODALIS_NETWORK` (default `sodalis`); set `SODALIS_NETWORK=sodalis-<worktree>`
-in its `containers/neo4j-test/.env` for a worktree. Hence the first start order
-matters:
-
-1. Start the Sodalis stack first. A Neo4j container started before the network
-   exists fails with `network … declared as external, but could not be found`.
-   Conversely, Compose refuses to start the stack if another tool already
-   created a network with that name without Compose labels.
-2. After that, either side can be restarted independently. `pnpm stack:down`
-   leaves the network in place while Neo4j is still attached to it (Compose
-   reports `Resource is still in use`), and the next `pnpm stack:up` reuses it.
-3. When both are down, the network is gone; start Sodalis first again.
+Create the network before starting either stack, for example
+`docker network create sodalis-network` when using `.env.example`. The
+`home_simulator` Neo4j test container declares its external network through
+`SODALIS_NETWORK`; set that to the same value as Sodalis's
+`EXTERNAL_NETWORK_NAME` in its `containers/neo4j-test/.env`.
+Either stack can then be started or restarted independently. Sodalis Compose
+neither creates nor removes this external network, including on `stack:down`.
 
 Check membership with
-`docker network inspect <prefix> --format '{{range .Containers}}{{.Name}} {{end}}'`;
+`docker network inspect <network-name> --format '{{range .Containers}}{{.Name}} {{end}}'`;
 it should list both the AI container and Neo4j.
 
 #### Setup
@@ -1145,7 +1138,7 @@ it should list both the AI container and Neo4j.
    data is invisible, and a file replaced by rename stays stale until restart.
    The file is never copied into an image.
    Omit the file and endpoint settings if only graph structure is needed.
-2. Launch the normal stack, which creates the graph network, and open its
+2. Ensure the external graph network exists, launch the normal stack, and open its
    gateway:
 
    ```sh
@@ -1174,9 +1167,57 @@ the server's mode at runtime. No special frontend build is required. Reload
 open desktop tabs after changing the mode. If discovery fails, the desktop
 displays an error rather than falling back to another mode; reload to retry.
 
+#### Read-only email (task 0072)
+
+Email is disabled by default (`EMAIL_PROVIDER=off`). To exercise the
+deterministic workflow, set `EMAIL_PROVIDER=mock` with
+`COMPANION_HARNESS=pi`. This explicit selection uses synthetic fixtures only;
+there is no real inbox, account connection, authentication UI, email HTTP
+route, or provider network call. Mock mode exposes generic typed operations
+for listing message metadata, fetching content on demand, and counting unread
+messages in every workflow. The model translates the resident's request into
+structured filters; adapters do not parse free-form questions. For example,
+**"Summarize the last five emails I received"** is supported by composing
+filters and pages, but is not a scope limit. Every result labels its provider
+as `mock` and source as synthetic. The separate `MockMailApplication` fixture
+app is unchanged.
+
+Lists combine sender, subject, unread/read state and UTC half-open sent/received
+windows with AND; they default to inbox and newest received first.
+`all_mail` includes inbox, archive, and sent, excluding drafts, spam, trash,
+and deleted. Sort by sent or received time in either direction. Pages contain
+at most 100 messages and use opaque source/query-bound cursors; there is no
+fixed total-result ceiling beyond existing workflow/time/tool budgets.
+Content is fetched only by opaque reference, normalized to plain text, and
+capped at 64 KiB UTF-8 with explicit truncation; attachments and remote links
+are not returned. Unread counts are message-based and report exact/estimated
+accuracy. Missing timestamps remain listable, do not match time filters, and
+sort after available timestamps with stable reference ties. Unsupported
+containers and invalid requests fail explicitly.
+
+`EMAIL_PROVIDER=mock` works with `COMPANION_AUDIT=true`; audit does not disable
+email tools. The development audit records email workflow and tool activity in
+the local private logs for debugging, which may contain synthetic email content.
+
+Only `off` and `mock` are valid `EMAIL_PROVIDER` values. Legacy `graph` and
+`gmail` settings fail closed; there is no provider fallback. Microsoft Graph,
+Gmail, OAuth, credential storage, connection UX, and live verification are
+deferred until further notice. See the
+[architecture](architecture/companion-harness.md#read-only-email-access-decision-0071)
+and [task 0084](../TASKS/0084-gating-future-real-provider-access.md) for the
+deferred design and future readiness gates. Task 0084 does not authorize
+reintroducing provider code or connecting accounts.
+
+The static
+[security review](evaluations/email-journey-security-review.md) is historical:
+it reviews the removed real-provider implementation and does not assess or
+certify this mock-only revision. No live or cloud tests are part of normal
+stack commands.
+
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `COMPANION_HARNESS` | no | The example selects `pi`; `off` retains turn mode. Unset still means `off` for compatibility. Other values fail. |
+| `EMAIL_PROVIDER` | no | Defaults to `off`; accepts only explicit `mock` or `off`. Real providers and account access are deferred. |
 | `HOME_GRAPH_URL` | for graph tools | `bolt://` or `neo4j://` URL, without credentials. Without it every tool reports `unavailable`. |
 | `HOME_GRAPH_PASSWORD` | with the URL | The test container's `NEO4J_PASSWORD`. |
 | `HOME_GRAPH_USER` | no | Default `neo4j`. |

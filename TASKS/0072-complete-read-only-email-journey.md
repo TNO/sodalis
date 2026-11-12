@@ -1,107 +1,93 @@
-# 0072 Complete a read-only email journey
+# 0072 Complete a mock-only read-only email journey
 
-Status: open
+Status: in progress
 Priority: medium
 Subsystem: assistant
 Depends on: 0071
 
-## Context
+## Context and scope
 
-Ready for implementation following completed
-[0071](0071-decide-read-only-email-access.md). The
-[read-only email contract](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
-is the source of truth. Implement both Microsoft Graph (Outlook) and Gmail API,
-not a provider-specific shortcut or an extension of the fixture Mail app.
-This ticket covers a local, single-resident foreground journey, not a
-production multi-user identity system or a claim of live provider acceptance.
+Task [0071](0071-decide-read-only-email-access.md) records future provider
+design choices. They are not delivered or supported. This task implements a
+provider-neutral set of typed read operations with a deterministic synthetic
+mock. It does not implement Microsoft Graph, Gmail, OAuth/OIDC, account
+sessions, credentials, provider networking, or connection UI. The mutable
+[`MockMailApplication`](../apps/desktop/src/assistant/MockMailApplication.ts)
+fixture app is separate and must remain unchanged.
 
-## Contract and setup
+The [architecture](../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
+is the source of truth for the current API and deferred design. The
+[historical security review](../docs/evaluations/email-journey-security-review.md)
+covers the earlier removed real-provider implementation; it does not assess or
+certify this mock-only revision. Future real-account readiness is tracked by
+[0084](0084-gating-future-real-provider-access.md).
 
-- Put a Sodalis-owned `ReadOnlyEmailReader` interface and its `graph`, `gmail`
-  and deterministic `mock` adapters in the AI server, keeping provider SDKs,
-  OAuth, query generation and parsing out of the model and desktop.
-- The host supplies the session-bound connection, fixed seven-day UTC window
-  and limit of five. Neither the model nor graph metadata can choose arbitrary
-  accounts, scopes, queries, URLs or folders. Use an explicit read-only harness
-  tool; do not broaden `read_external_data` to arbitrary account endpoints.
-- Add the planned configuration documented in the architecture to validation,
-  `.env.example`, stack wiring and the server guide. Default to `off`; reject
-  unknown or incomplete provider settings. Mock setup needs no credentials.
-- Add same-origin connect, callback, status and disconnect operations for the
-  foreground desktop session. Connect is an explicit user action, not a tool
-  the model can invoke. Implement or reuse the shared
-  [delegated account authorization](../docs/architecture/companion-harness.md#delegated-account-authorization)
-  protocol ([ADR 0008](../docs/adr/0008-delegated-personal-account-access.md)).
-  The server has no host session today. If [0074](0074-complete-read-only-calendar-journey.md)
-  has not landed first, this task introduces the host-session cookie, CSRF
-  protection, OAuth coordinator, tenant-aware ID-token validation and the
-  host-only secure credential store, and documents the selected store.
-- Use email-only client registrations and exactly the scopes in the
-  architecture's provider table (Graph adds `profile` for the account label;
-  Gmail reads it from its profile endpoint). Never reuse calendar grants or
-  silently combine scopes. Configure the client secret only as a secure-store
-  reference.
-- Keep account tokens in memory only. Reconnect after expiry, disconnect or
-  restart. Disconnect cancels reads, discards evidence, deletes local tokens,
-  then revokes the Google token; Graph disconnect is local only, and the UI
-  points residents to their Microsoft account settings to remove consent.
-  Document that Google verification/security assessment and organizational
-  policies can gate real deployments; do not silently widen access.
+## Confirmed generic contract
 
-## Acceptance Criteria
+- Implement `listMessages(filters, sort, pageSize, cursor)`,
+  `getMessageContent(opaqueMessageRef)`, and `countUnread(container?)`. The
+  model interprets natural language and supplies structured arguments; the
+  adapter never parses free-form questions.
+- When `EMAIL_PROVIDER=mock`, expose all three operations in every workflow.
+  Do not gate tool availability on an exact question or email keywords. Keep
+  `off` as the default; mock requires explicit selection and the Pi harness.
+- Bind one mailbox/source at the host. Support `inbox` (default) and
+  `all_mail`; `all_mail` includes inbox, archive, and sent, and excludes
+  drafts, spam, trash, and deleted. Other containers return unsupported rather
+  than silently switching.
+- Combine sender, subject, unread/read, and UTC half-open sent/received time
+  filters with AND; sender and subject matching is case-insensitive substring
+  matching. Do not search message bodies. Default to newest
+  `receivedAt` first with a stable reference tie-break; allow ascending or
+  descending sort by `sentAt` or `receivedAt`.
+- List metadata includes an opaque source-bound message reference, sender,
+  subject, sent timestamp with explicit availability and provider,
+  sender-supplied, synthetic, or missing provenance, optional received
+  timestamp, unread state, and a safe source kind/label/container. Do not
+  expose provider IDs or URLs in source evidence.
+- Messages with missing timestamps remain listable. They do not satisfy a time
+  filter and sort after available timestamps in either direction, with stable
+  message-reference ties.
+- Fetch content only on demand by opaque reference. Normalize to plain text,
+  cap at 64 KiB UTF-8 with explicit truncation, and return no attachments or
+  remote links.
+- Count unread messages by container (default inbox), with exact/estimated
+  accuracy. Never describe counts of non-mail items as exact email counts.
+- Use source/query-bound opaque cursors and at most 100 messages per page.
+  There is no fixed total-result ceiling apart from existing workflow, time,
+  and tool-call budgets. Distinguish complete empty, complete results,
+  continuation, unavailable/unsupported, invalid request, and cancellation.
+- Preserve the read-only boundary, synthetic evidence labels, cancellation,
+  workflow budgets, and content-audit protection. The mock makes no provider,
+  auth, or network calls. Do not change the fixture Mail application or
+  calendar runtime.
 
-- Answer **"What are my five most recent inbox emails from the last seven
-  days? Summarize each."** through the desktop workflow for either selected
-  provider. Use the architecture's half-open UTC window, inbox-only filtering,
-  received-time ordering, stable ID tie-break, candidate/page/body bounds and
-  explicit coverage flag. Never silently search a different account/source.
-- Every summary retains the normalized sender (or explicitly unknown),
-  received date, provider/account label and opaque message source reference.
-  Claims use only returned text; missing or truncated bodies are disclosed.
-  No invented sender, date, source, full-body coverage or successful lookup.
-- Return and render distinct `ok`, `empty`, `unauthorized`, `unavailable` and
-  `partial` outcomes. Empty requires a completed successful lookup; page caps,
-  interrupted reads and partial failures never become empty or complete.
-  Fetch afresh per workflow; never use a previous answer as current evidence.
-- Keep tokens, callback codes, client secrets and raw provider payloads out of
-  desktop/tool responses, model context and logs. Only minimized normalized
-  evidence enters the workflow. Treat email text as untrusted data, never
-  instructions, tools, URLs to follow or consent to another capability.
-- The consent screen explains inbox/body access and processing by the selected
-  model. Do not persist email to memory or developer audit logs. If a
-  content-capturing audit is active, refuse email reads rather than leaking it.
-- Do not send, draft, modify, mark read/unread, relabel, delete, retrieve
-  attachments or remote content, or synthesize with calendar, Home, memory,
-  another mailbox/provider or fixture Mail content. Requests outside the
-  approved question receive an explicit limitation, not a wider lookup.
-- Update architecture and server/desktop setup documentation to distinguish
-  implemented, deterministically verified and live-unverified behavior.
+## Deterministic behavior tests
 
-## Deterministic acceptance cases
+Test the public reader and harness seams for:
 
-Exercise public interfaces, not SDK internals. Use the architecture's fixed
-clock and synthetic fixture table as an independent expected result.
+- Different structured filters, AND semantics, UTC half-open windows,
+  inbox/all-mail membership, received/sent ordering, and stable pagination.
+- Provider-style reader implementations using safe source and timestamp
+  provenance types, including sent mail without `receivedAt`.
+- Opaque source/query-bound refs and cursors, invalid filters/cursors,
+  unsupported containers, missing and truncated body content, and explicit
+  plain-text availability.
+- Inbox/all-mail unread counts with exact mock accuracy; unavailable and
+  cancelled operations.
+- Every generic operation being available for alternate email questions when
+  mock mode is selected, without an exact-question or keyword classifier.
+- Default-off/explicit-mock configuration, visibly synthetic evidence, no
+  network or authentication calls, and no content-audit reads.
 
-| Seam | Required behavior cases |
-| --- | --- |
-| Configuration and connection operations | `off` default; mock without secrets; invalid settings or missing secure-store entry fail closed; explicit connect; CSRF, state/nonce/callback mismatch and denied/reduced-scope consent rejected; ID-token audience/issuer checks, including Microsoft `tid` versus issuer and each tenant selector; valid subject binding and account label from `preferred_username` or Gmail profile; copied references denied across sessions/residents; email/calendar grants and token use are not interchangeable; disconnect revokes upstream for Google only and never disconnects calendar; expiry, disconnect and restart require reconnect; no token/secret leakage. |
-| `ReadOnlyEmailReader`, shared contract suite for graph/gmail/mock | Equivalent normalized fixtures select exactly M01–M05; inclusive lower/exclusive upper UTC edges; inbox-only, drafts/spam/trash excluded; received time rather than header date; deterministic ties; multiple pages, duplicates and unordered payloads; Graph ordered-prefix coverage completes without a further page only when the last consumed candidate is strictly older than the fifth, and a tie at the page boundary requires the next page; Gmail beyond the candidate cap is partial; missing sender/subject/body disclosed; no extra body/attachment fetches. |
-| Provider HTTP adapters using synthetic transport responses | Correct own-mailbox endpoints/scopes and local exact-time filtering; Gmail ID listing followed by metadata then selected-body reads; Graph filter/order/projection; 401/403 map to unauthorized; 429/5xx/network timeout map to unavailable or partial; deleted messages, page caps, oversized payloads, cancellation and deadline preserve truthful coverage; no write requests, refresh loop, external URL fetch or provider fallback. |
-| Harness tool and settled-answer delivery, scripted model | Sender/date/source on each of five summaries; genuinely empty success; missing/expired grant; unavailable source; partial evidence cannot claim complete newest-five coverage; stale prior-workflow evidence is not reused; malicious email cannot invoke tools or expand scope; cross-source and mutation requests remain excluded; active content audit blocks reads. |
-| Desktop workflow/connection client | Provider/account connection state and connect/disconnect behavior; actionable unauthorized/empty/unavailable/partial presentation; authorization failure discards earlier evidence; no assistant final answer after cancellation/disconnect. |
+No live provider, cloud, or account tests are in scope. Real-provider
+compatibility, security, and policy readiness remain deferred to 0084 and
+require explicit future approval.
 
-## Verification constraints
+## Verification
 
-- Run `pnpm test`, `pnpm typecheck` and `pnpm build` for implementation.
-  Deterministic tests use injected clocks, provider transports and scripted
-  models; no network, cloud credentials, real inboxes or mailbox recordings.
-- Live checks are separate, opt-in and self-skipping without credentials;
-  never run them in CI or add provider secrets to GitHub Actions.
-- Before **each** live external check obtain explicit user consent for the
-  selected account/provider, data and run. Before any cloud-model or stack
-  command, also inspect provider selection in `.env` and any `--env` overlay,
-  and obtain consent covering that processing. A saved OAuth grant is not
-  permission for an agent to run a live check.
-- Without that consent, finish deterministic verification and record real
-  OAuth/provider compatibility, model quality, latency and Google deployment
-  approval as unverified. Do not present mocks as proof of live acceptance.
+Run targeted behavior tests, then `pnpm test`, `pnpm typecheck`, `pnpm build`,
+and `git diff --check`. Do not run live/cloud commands.
+
+This task stays **in progress** until the pull request merges. The historical
+security report remains linked and unchanged in its findings and scope.

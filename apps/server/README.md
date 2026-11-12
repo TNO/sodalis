@@ -335,6 +335,41 @@ calendar, weather, agenda) report `unavailable`. Results distinguish
 `current`, `stale` and `last_change` observations. Without `HOME_GRAPH_URL`
 the tools report `unavailable`.
 
+### Read-only email (task 0072, mock-only)
+
+Email is off by default (`EMAIL_PROVIDER=off`). With
+`COMPANION_HARNESS=pi`, explicitly set `EMAIL_PROVIDER=mock` to use deterministic
+synthetic fixtures; there is no account connection, authentication UI, email
+HTTP route, or provider network integration. Mock mode exposes typed
+`listMessages`, `getMessageContent`, and `countUnread` operations in every
+workflow; the model maps resident requests to structured filters and paging.
+The example request "Summarize the last five emails I received" is not a scope
+limit. Results and message sources identify the synthetic mailbox. The
+separate `MockMailApplication` fixture app is unchanged.
+
+Lists support inbox/all-mail containers, AND-combined sender, subject,
+read-state and UTC half-open time filters, received/sent sorting, and
+source/query-bound cursors with at most 100 messages per page. Content is
+fetched on demand, normalized to plain text, and capped at 64 KiB UTF-8 with
+explicit truncation; attachments and remote links are not returned. Unread
+counts are message-based and report exact/estimated accuracy. Email reads are
+not persisted to long-term memory. When the development audit is enabled,
+email workflows and tool activity are included in its local logs for debugging;
+those logs may contain email content and should be treated as sensitive.
+Metadata may omit `receivedAt`; missing timestamps do not match time filters
+and sort after available timestamps with stable reference ties.
+Source evidence is typed as synthetic/provider and contains only a safe label
+and container; sent timestamps distinguish provider, sender-supplied,
+synthetic, and missing provenance.
+
+Microsoft Graph/Gmail adapters, OAuth, account authorization, secret
+configuration, and connection UI are deferred and unsupported. See the
+[architecture](../../docs/architecture/companion-harness.md#read-only-email-access-decision-0071)
+for the retained future design. The
+[historical security review](../../docs/evaluations/email-journey-security-review.md)
+covers the removed real-provider implementation and does not review or certify
+this mock-only revision.
+
 ```sh
 COMPANION_HARNESS=pi LLM_PROVIDER=mock \
 HOME_GRAPH_URL=bolt://127.0.0.1:7687 HOME_GRAPH_PASSWORD=... \

@@ -89,7 +89,12 @@ interface Harness {
   readonly events: WorkflowEvent[];
   readonly auditEvents: CompanionAuditEvent[];
   readonly sessions: { dispose: ReturnType<typeof vi.fn> }[];
-  start(input?: { question?: string; workflowId?: string; sessionId?: string; signal?: AbortSignal }): ReturnType<CompanionWorkflows["start"]>;
+  start(input?: {
+    question?: string;
+    workflowId?: string;
+    sessionId?: string;
+    signal?: AbortSignal;
+  }): ReturnType<CompanionWorkflows["start"]>;
 }
 
 const open: CompanionWorkflows[] = [];

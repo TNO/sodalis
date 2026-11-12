@@ -39,3 +39,5 @@ a single place to find conclusions.
 | [Companion harness graph retrieval](companion-harness.md) | 0067, 0070 | Provenance-backed offline sensor journey verified; live-model quality/latency unmeasured |
 | [MetaHuman and Fab licensing](metahuman-fab-licensing.md) | 0054 | Research note; distribution questions open |
 | [Personal-assistant memory and embodiment for older adults](personal-assistant-memory-and-embodiment.md) | 0039, 0054 | Research complete; implementation and user validation remain |
+| [Pi ecosystem packages for the read-only email and calendar readers](pi-packages-for-account-readers.md) | 0072, 0074 | Research complete; no third-party/provider packages implemented |
+| [Security review: read-only email journey](email-journey-security-review.md) | 0072 | Complete; static review, no vulnerabilities found |

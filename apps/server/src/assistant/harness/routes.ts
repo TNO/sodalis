@@ -37,7 +37,10 @@ function isId(value: unknown): value is string {
   return typeof value === "string" && ID_PATTERN.test(value);
 }
 
-export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows): void {
+export function registerWorkflowRoutes(
+  app: Hono,
+  workflows: CompanionWorkflows,
+): void {
   app.post("/api/assistant/workflows", async (context) => {
     const payload = await readJsonObject(context);
     if (payload instanceof Response) return payload;
@@ -52,6 +55,7 @@ export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows)
     const requestSignal = context.req.raw.signal;
     const onRequestAbort = () => disconnect.abort();
     requestSignal.addEventListener("abort", onRequestAbort, { once: true });
+    const workflowSignal = AbortSignal.any([disconnect.signal, requestSignal]);
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     let closed = false;
     const body = new ReadableStream<Uint8Array>({
@@ -73,8 +77,13 @@ export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows)
       }
     };
     const result = workflows.start(
-      { sessionId, workflowId, inputId, messages },
-      { signal: disconnect.signal, onEvent: send },
+      {
+        sessionId,
+        workflowId,
+        inputId,
+        messages,
+      },
+      { signal: workflowSignal, onEvent: send },
     );
     if (result.status !== "started") {
       requestSignal.removeEventListener("abort", onRequestAbort);
@@ -82,7 +91,7 @@ export function registerWorkflowRoutes(app: Hono, workflows: CompanionWorkflows)
         ? errorResponse(context, "A workflow is already running for this conversation.", 409)
         : errorResponse(context, "Assistant is at capacity.", 503);
     }
-    if (requestSignal.aborted) disconnect.abort();
+    if (workflowSignal.aborted) disconnect.abort();
     return new Response(body, {
       headers: {
         "content-type": "text/event-stream; charset=utf-8",

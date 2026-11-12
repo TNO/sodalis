@@ -6,15 +6,18 @@ import { Neo4jHomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
 import { FileCompanionAuditWriter } from "./audit.js";
 import { CompanionWorkflows } from "./workflow.js";
+import { createMockEmailReader } from "./emailReader.js";
 import {
   validateCompanionAuditSettings,
   validateCompanionSettings,
   validateReadingsFile,
+  validateEmailSettings,
   type CompanionAuditSettings,
   type CompanionDataSettings,
+  type EmailSettings,
 } from "./settings.js";
 
-export interface CompanionHarnessSettings extends LlmProviderSettings, CompanionDataSettings, CompanionAuditSettings {}
+export interface CompanionHarnessSettings extends LlmProviderSettings, CompanionDataSettings, CompanionAuditSettings, EmailSettings {}
 
 const DEFAULT_SCOPE = "cphs:simulation:couple-apartment";
 const DEFAULT_SQLITE_ENDPOINT = "local://simulation/timeseries.sqlite";
@@ -26,6 +29,7 @@ const DEFAULT_SQLITE_ENDPOINT = "local://simulation/timeseries.sqlite";
 export async function createCompanionHarnessFromEnv(
   settings: CompanionHarnessSettings,
 ): Promise<CompanionWorkflows | undefined> {
+  const emailProvider = validateEmailSettings(settings);
   const auditEnabled = validateCompanionAuditSettings(settings);
   if (validateCompanionSettings(settings) === "off") return undefined;
   const file = settings.HOME_DATA_SQLITE_FILE?.trim();
@@ -54,16 +58,19 @@ export async function createCompanionHarnessFromEnv(
   }
   return new CompanionWorkflows({
     ...(auditEnabled ? { audit: new FileCompanionAuditWriter() } : {}),
-    createSession: ({ history, budget, observeModelRequest }) =>
-      createCompanionSession({
+    createSession: ({ history, budget, observeModelRequest }) => {
+      const emailReader = emailProvider === "mock" ? createMockEmailReader() : undefined;
+      return createCompanionSession({
         model,
         history,
         tools: createHomeTools({
           ...(graph ? { graph } : {}),
           ...(reader ? { reader } : {}),
+          ...(emailReader ? { emailReader } : {}),
           budget,
         }),
         ...(observeModelRequest ? { observeModelRequest } : {}),
-      }),
+      });
+    },
   });
 }

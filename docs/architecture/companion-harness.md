@@ -2,10 +2,11 @@
 
 Status: first implementation present; manually verified end to end for
 household/resident questions; synthetic sensor contracts and provenance-backed
-offline sensor journey verified. Live-model sensor quality remains unmeasured.
-The development-only developer audit is implemented; read-only email/calendar
-adapters and one-path convergence are still planned.
-Updated: 2026-11-05.
+offline sensor journey verified. A deterministic mock-only email reader is
+present; calendar runtime and all real email/calendar account access are
+deferred until further notice and are not supported. The development-only
+developer audit is implemented.
+Updated: 2026-11-10.
 
 The opt-in Pi workflow investigates household questions through successive
 read-only tool calls. It is a companion, not a coding agent. The architectural
@@ -133,10 +134,10 @@ must preserve [ADR 0003](../adr/0003-trusted-desktop-boundary.md).
 
 Only explicitly configured sources and capabilities execute. Model output and
 graph connection metadata grant no network or filesystem authority. Personal
-email/calendar mutations and consequential actions require consent; no new
-identity framework, device control, or personal-account connector is currently
-implemented. The approved read-only email access design below is planned, not
-runtime authority.
+email/calendar mutations and consequential actions require consent. No new
+identity framework, device control, or personal-account connector is
+implemented. Email has only the explicit synthetic mock runtime described
+below; the future real-account design grants no runtime authority.
 
 ### Module map
 
@@ -205,32 +206,35 @@ investigation. Stable metadata and changing source contents need separate
 freshness policies before any future caching. A future agenda request must
 fetch current contents, not reuse a previous answer.
 
-### Approved read-only calendar contract (planned)
+### Read-only calendar design (deferred; no runtime)
 
-[Task 0073](../../TASKS/0073-decide-read-only-calendar-access.md) selects one
-provider-neutral calendar interface with **both Microsoft Graph and Google
-Calendar adapters in the initial implementation**. Neither adapter nor account
-authorization is implemented today; [task 0074](../../TASKS/0074-complete-read-only-calendar-journey.md)
-implements and verifies this contract. This specializes ADR 0007's existing
-host-controlled read capability, without changing its architectural decision.
+[Task 0073](../../TASKS/0073-decide-read-only-calendar-access.md) records a
+provider-neutral calendar contract and possible Microsoft Graph/Google Calendar
+design. No calendar runtime, mock reader, account authorization, or provider
+adapter is delivered. [Task 0074](../../TASKS/0074-complete-read-only-calendar-journey.md)
+is open with a mock-only scope; it must not add real-provider support. Every
+provider-specific requirement below is deferred design, not present capability.
+This specializes ADR 0007's existing host-controlled read capability without
+changing its architectural decision.
 
-The seam is a server-owned `readCalendar` operation behind the harness's
-explicit read tools, not arbitrary HTTP access or an imported desktop calendar.
-Both adapters satisfy the same interface and acceptance cases. Provider OAuth,
-pagination, recurrence expansion, and timezone conversion stay inside the
-calendar module. No generic connector registry or new identity framework is
-required.
+The deferred seam would be a server-owned `readCalendar` operation behind
+explicit harness read tools, not arbitrary HTTP access or an imported desktop
+calendar. Future adapters would satisfy one interface. Provider OAuth,
+pagination, recurrence expansion, and timezone conversion would stay inside
+the calendar module. No generic connector registry or new identity framework
+is proposed.
 
-#### Question, interval, and source
+#### Deferred question, interval, and source design
 
-The first journey is: **"What appointments are in my selected calendar
-tomorrow?"** It reads exactly one explicitly selected, authorized source:
-the signed-in account's default Microsoft calendar or Google `primary`
-calendar. A host-owned opaque source reference binds resident, provider,
-account subject, and calendar; the model cannot supply account IDs, calendar
-IDs, endpoints, scopes, or credentials. Graph references can help discover that
-source but never establish account ownership or consent. No configured source
-means unavailable; multiple eligible sources require clarification, not a
+The proposed real-provider journey is: **"What appointments are in my selected
+calendar tomorrow?"** A future implementation would read exactly one
+explicitly selected, authorized source: the signed-in account's default
+Microsoft calendar or Google `primary` calendar. A host-owned opaque source
+reference would bind resident, provider, account subject, and calendar; the
+model would not supply account IDs, calendar IDs, endpoints, scopes, or
+credentials. Graph references could help discover that source but would not
+establish account ownership or consent. No configured source would mean
+unavailable; multiple eligible sources would require clarification, not a
 silent default or a combined answer.
 
 - Resolve "tomorrow" against a captured request clock in the resident's
@@ -256,9 +260,9 @@ silent default or a combined answer.
   justified only by a complete, fresh, authorized empty result for that source
   and interval; it is not a claim about all of the resident's calendars.
 
-#### Shared interface and normalized outcomes
+#### Deferred shared interface and normalized outcomes
 
-The planned request carries `sourceRef`, UTC `start`/`end`, IANA `timeZone`,
+The future planned request carries `sourceRef`, UTC `start`/`end`, IANA `timeZone`,
 and the captured clock; trusted caller authorization and cancellation are
 host-supplied, never model-provided. Validate resident/source binding and the
 interval before any network request, including reused within-workflow reads.
@@ -269,9 +273,9 @@ the provider answered). Successful evidence additionally records `fetchedAt`.
 Events expose only an opaque occurrence reference, optional title, and timed
 start/end or all-day date span/calendar zone. Do not return event bodies,
 attendees, attachments, meeting links, tokens, raw responses, or connection
-details. Treat titles as untrusted data, never tool instructions. Both adapters
-normalize into these outcomes; do not equate transport success with usable
-evidence:
+details. Treat titles as untrusted data, never tool instructions. Future
+adapters would normalize into these outcomes; transport success alone would
+not establish usable evidence:
 
 | Outcome | Meaning and resident behavior |
 | --- | --- |
@@ -282,31 +286,27 @@ evidence:
 | `stale` | Evidence is explicitly known to be out of date; label it with its original fetch time and do not claim current appointments or current emptiness. No persistent calendar cache is introduced in 0074, so a failed fresh fetch is normally unavailable, not stale. An old event modification timestamp alone does not mean stale evidence. |
 | `invalid_request` / `ambiguous` | Invalid/over-wide interval or unresolved source/timezone; reject or ask for clarification without contacting a provider. |
 
-These are calendar outcomes, not claims that the current external-data schema
-already supports them. Task 0074 must preserve their meaning through tool
-evidence and resident delivery, including a distinct empty versus failed read.
-Bound each read to 100 expanded occurrences and five provider pages, within
-the existing workflow tool timeout/cancellation budget. Fetch all pages before
-claiming completeness; exceeding either cap is unavailable with an incomplete
-reason, not empty or a silently truncated list. Do not follow provider-supplied
-pagination URLs outside the configured provider origin and selected account/
-calendar. Do not retry indefinitely; rate limiting remains an explicit failure.
-Cancellation stops fetching and prevents a late result becoming an answer.
-No cross-workflow result reuse or offline fallback is approved.
+These outcomes and limits are deferred real-provider design, not present
+calendar capability or acceptance criteria for mock-only task 0074. A future
+provider reader would bound reads to 100 expanded occurrences and five pages,
+fetch all pages before claiming completeness, reject untrusted continuation
+URLs, avoid unbounded retry, and prevent cancellation races. No cross-workflow
+result reuse or offline fallback is approved.
 
-#### Delegated authorization and provider setup
+#### Deferred delegated-authorization and provider setup design
 
-Account access requires an explicit resident-initiated connection and provider
-consent. A host-owned grant binds the authenticated resident to the provider's
+If separately approved in the future, account access would require an explicit
+resident-initiated connection and provider consent. A host-owned grant would
+bind the authenticated resident to the provider's
 verified stable account subject, exact selected calendar, granted scopes, and
 expiry. Local source selection is not a substitute for provider consent, and
 provider consent is not permission for another resident. Disconnect immediately
 disables reads and removes locally held tokens; attempt provider revocation
 where supported, without making local removal depend on network success.
 
-Connection, callback validation, session binding, and disconnect follow the
+Connection, callback validation, session binding, and disconnect would follow the
 shared [delegated account authorization](#delegated-account-authorization)
-protocol, using calendar-only client registrations. The host handles exchange
+protocol, using calendar-only client registrations. The host would handle exchange
 and refresh; the assistant and Aster never receive codes, tokens, client
 credentials, or authorization headers.
 
@@ -315,50 +315,42 @@ credentials, or authorization headers.
 | Microsoft Graph | Register a Microsoft identity application for the intended tenant/account types and a server redirect URI; configure client ID, allowed tenant/issuer and client credential where the registration requires it. Request **delegated `Calendars.ReadBasic`**, not application permissions, `Calendars.ReadWrite`, or shared-calendar access. Add `openid` for verified account binding and `offline_access` only for refreshable consent. Use the signed-in user's default calendar through `GET /v1.0/me/calendarView`, explicit UTC `startDateTime`/`endDateTime`, and a minimal field selection (ID, subject, start, end, original timezone fields, all-day/cancelled flags). Request UTC for timed values rather than trusting its default zone; preserve original timezone information to recover all-day dates, mapping supported Windows zones to IANA. An unresolvable custom zone is unavailable, not a guessed date. Tenant policies may require administrator approval; report this as setup/authorization work, not permission to broaden scopes. |
 | Google Calendar | Create a Google Cloud project, enable Calendar API, configure the OAuth consent screen (test users while in testing), and register a web OAuth client with exact server redirect URI. Request **`https://www.googleapis.com/auth/calendar.events.readonly`** plus `openid` for verified subject binding. Use `access_type=offline` only when refresh is needed; do not force consent on every read. Read only `GET /calendar/v3/calendars/primary/events` with `timeMin`/`timeMax`, `singleEvents=true`, `showDeleted=false`, and minimal response fields including pagination and calendar timezone. The grant can cover more calendars than this journey; host policy still restricts it to `primary`. No broad `calendar` write scope, service account, or domain-wide delegation. Public distribution may require OAuth verification; testing grants may expire and must not silently become empty results. |
 
-Provider documentation for implementation:
+Deferred provider-design references:
 [Graph calendarView](https://learn.microsoft.com/en-us/graph/api/calendar-list-calendarview?view=graph-rest-1.0),
 [Microsoft delegated scopes](https://learn.microsoft.com/en-us/graph/permissions-reference#calendarsreadbasic),
 [Google events.list](https://developers.google.com/workspace/calendar/api/v3/reference/events/list),
 and [Google server-side OAuth](https://developers.google.com/identity/protocols/oauth2/web-server).
-Task 0074 must check the actual registered-client requirements and consented
-scopes; these links and endpoint metadata do not authorize any live request.
+Task 0074 must not implement this provider setup. Any later, separately
+approved implementation task must check registered-client requirements and
+consented scopes; these links and endpoint metadata do not authorize live use.
 
-Keep client secrets and refresh/access tokens in host-only secure credential
-storage (OS credential store or encrypted server store with its key separately
-managed), never plaintext credential files in the repository. Ignored local
-configuration may reference secret storage and contain non-secret client IDs,
-issuer, redirect, timezone, and source aliases; commit only placeholders.
-Document the concrete store and provisioning steps before enabling either
-adapter; if secure storage is unavailable, fail closed. Never place secrets in
-browser storage, URLs beyond the required OAuth callback, prompts, tool evidence,
-developer audit, errors, fixtures, GitHub Actions, or distributed artifacts.
-Redact callback query strings and token-exchange responses from request logs.
-Refresh only for the bound account and approved scopes; if refresh fails,
-require reconnection, with no silent permission expansion. No automatic
-long-term-memory ingestion of calendar evidence is authorized.
+If real-provider access is explicitly approved in the future, keep client
+secrets and refresh/access tokens in host-only secure credential storage (OS
+credential store or encrypted server store with its key separately managed),
+never plaintext credential files in the repository. Ignored local configuration
+may reference secret storage and contain non-secret client IDs, issuer,
+redirect, timezone, and source aliases; commit only placeholders. Document and
+approve a concrete store before enabling an adapter; fail closed if unavailable.
+Never place secrets in browser storage, prompts, tool evidence, developer audit,
+errors, fixtures, GitHub Actions, or distributed artifacts. Redact callback
+query strings and token-exchange responses from request logs. Refresh only for
+the bound account and approved scopes; if refresh fails, require reconnection,
+with no silent permission expansion. No automatic long-term-memory ingestion
+of calendar evidence is authorized.
 
 #### Deterministic verification and exclusions
 
-Use a shared synthetic fixture calendar and fixed clock, exercised through the
-public calendar interface for both adapters and through the harness's evidence/
-answer path. Provider-shaped synthetic HTTP responses sit at the injected
-transport seam; use no real accounts, secrets, copied personal events, network,
-or real-model assertions. The same expected normalized events must result from
-Graph and Google payloads. Include timed/all-day/recurring/exception/cancelled
-events, empty days, overlap boundaries, timezone offsets and DST, pagination,
-and failures; [0074](../../TASKS/0074-complete-read-only-calendar-journey.md)
-specifies acceptance fixtures. Only future implementation adds behavior tests;
-0073 changes documentation alone.
+If the mock-only calendar runtime in 0074 is later implemented, use a shared
+synthetic fixture calendar and fixed clock through its public reader and
+answer seams. Do not add provider transports. The Graph/Google parity cases
+described above remain deferred design and require a separate explicit future
+approval and readiness review.
 
-Live verification is separate, opt-in, never CI, and self-skips without explicit
-enablement or credentials. Use only a consenting user's dedicated synthetic
-test calendar/account. Obtain explicit consent **for each run and each adapter**
-before OAuth or calendar requests; account consent does not authorize an agent's
-future live checks. Inspect `.env` and any `--env` overlay's selected providers
-first; no incidental LLM, speech, or other cloud calls are authorized. Record
-only sanitized setup, adapter, interval/zone, result class, and verification
-limits, never tokens or personal appointments. This decision performs no live
-verification.
+No live calendar verification is authorized by this design or 0074. If separate
+future approval is granted, live verification must be opt-in, never CI, and
+require explicit consent for every run/provider after inspecting `.env` and
+selected overlays. No incidental LLM, speech, or other cloud calls are
+authorized.
 
 Creating, editing, deleting, inviting, responding to events, subscription/watch
 registration, background polling, shared/delegated calendars, calendar discovery,
@@ -724,27 +716,30 @@ ADRs; consolidated evaluation findings belong in
 
 ## Delegated account authorization
 
-**Planned; not implemented.** The read-only email (0072) and calendar (0074)
-journeys share one host-owned OAuth connection protocol. The trade-offs are
-recorded in [ADR 0008](../adr/0008-delegated-personal-account-access.md).
-Whichever journey lands first implements the coordinator, host session and
-secure credential store; the other reuses them.
+**Deferred design only; no real-account authorization is implemented or
+supported.** Email uses `off` or explicitly selected `mock` mode, with no
+account connection or authorization UI. Calendar has no runtime. This section
+preserves possible future design for the separate capabilities; it does not
+authorize implementation or provider use. The trade-offs are recorded in
+[ADR 0008](../adr/0008-delegated-personal-account-access.md), which remains
+future direction only. Any reconsideration requires explicit approval and the
+gates in [task 0084](../../TASKS/0084-gating-future-real-provider-access.md).
 
-The coordinator handles connect, callback, account verification,
-resident/session binding and disconnect. It does not own a universal token
-store or combine grants. Each capability (email, calendar) uses **its own
-provider client registration** per provider and a separate grant bound to the
-authenticated resident, verified provider subject, exact selected source, its
-own approved scopes and expiry. It requests only that capability's scopes; never
-union, upgrade or reuse consent or tokens across capabilities. Local source
-selection is not provider consent, and provider consent is not permission for
-another resident.
+If approved in the future, a host-owned coordinator could handle connect,
+callback, account verification, resident/session binding and disconnect. It
+would not own a universal token store or combine grants. Each capability
+(email, calendar) would use **its own provider client registration** per
+provider and a separate grant bound to the authenticated resident, verified
+provider subject, exact selected source, its own approved scopes and expiry.
+It would request only that capability's scopes; never union, upgrade or reuse
+consent or tokens across capabilities. Local source selection is not provider
+consent, and provider consent is not permission for another resident.
 
-- **Flow.** Authorization-code OAuth with PKCE S256, unpredictable single-use
+- **Future flow.** Authorization-code OAuth with PKCE S256, unpredictable single-use
   `state` and OIDC `nonce`. Register exact redirect URIs: HTTPS, except
   registered loopback HTTP for local development. Reject redirect, state,
   nonce or account mismatches and callback replay.
-- **ID token validation.** Verify signature against the provider's published
+- **Future ID token validation.** Verify signature against the provider's published
   keys, audience equal to the capability's client ID, nonce, expiry, and
   issuer before binding `iss` + `sub`. Google's issuer is
   `https://accounts.google.com` (or `accounts.google.com`). Microsoft v2.0
@@ -753,13 +748,13 @@ another resident.
   explicit tenant UUID must match exactly; `consumers` requires
   `9188040d-6c67-4c5b-b112-36a304b66dad`; `organizations` accepts any other
   tenant; `common` accepts any tenant. Never accept an issuer template literally.
-- **Session binding.** Connections start from an explicit same-origin host UI
-  action, never a model tool. Today's server has no host session: introduce an
-  HttpOnly, SameSite=Lax host-session cookie (Secure outside loopback) and
-  CSRF-protect connect/disconnect. Bind each grant to that session, the
+- **Future session binding.** Connections would start from an explicit same-origin host UI
+  action, never a model tool. The email host uses an HttpOnly, SameSite=Lax
+  session cookie (Secure outside loopback) and CSRF-protects connect/disconnect.
+  Bind each grant to that session, the
   configured resident and the verified subject; another session or resident
   cannot use it, even with a copied reference.
-- **Disconnect.** Immediately disable reads for that capability, cancel its
+- **Future disconnect.** Immediately disable reads for that capability, cancel its
   in-flight work, discard its evidence and delete its local tokens; then
   attempt provider revocation where supported, without making local removal
   depend on network success. Google tokens are revoked through its OAuth
@@ -768,9 +763,9 @@ another resident.
   per-client delegated-token revocation for this flow, so Graph disconnect is
   local only, and residents remove app consent in their Microsoft account
   settings. Never silently reconnect or widen consent.
-- **Secrets and tokens.** Client secrets for every capability use the
+- **Future secrets and tokens.** Client secrets for every capability would use the
   host-only secure credential store described for calendar in
-  [delegated authorization and provider setup](#delegated-authorization-and-provider-setup);
+  [delegated authorization and provider setup](#deferred-delegated-authorization-and-provider-setup-design);
   configuration holds only references and non-secret values. If the store is
   unavailable, real adapters fail closed. Token persistence is a capability
   policy: email tokens stay session-memory-only with no refresh; calendar
@@ -785,204 +780,169 @@ were consulted 2026-11-05.
 
 ## Read-only email access decision (0071)
 
-**Approved 2026-11-05; not implemented or live-verified.** Following the user's
-decision, Sodalis will support **Microsoft Graph (Outlook) and Gmail API** behind
-one provider-neutral `ReadOnlyEmailReader` interface in the AI server.
-[0072](../../TASKS/0072-complete-read-only-email-journey.md) implements both
-adapters and the foreground desktop journey. This specializes ADR 0007's
-configured readers; it does not introduce a plugin system or change Aster.
-[ADR 0008](../adr/0008-delegated-personal-account-access.md) records the
-shared-authorization, token-policy and model-processing trade-offs.
-The fixture Mail app, graph ownership/reference metadata and model output
-never establish personal-account authorization.
+**Decision recorded 2026-11-05; current delivery is mock-only.** The current
+provider-neutral reader contract and deterministic mock are the only email
+runtime. `EMAIL_PROVIDER` accepts only `off`
+(default) or explicit `mock`; the mock returns synthetic fixture data. Real
+Microsoft Graph and Gmail access, OAuth and connection UI are removed and
+deferred until further notice. [Task 0072](../../TASKS/0072-complete-read-only-email-journey.md)
+remains in progress until its narrowed PR merges. The provider-specific details
+below preserve future design only; they are not current configuration,
+capability, or rollout approval. This does not change Aster or its fixture Mail
+app. [ADR 0008](../adr/0008-delegated-personal-account-access.md) retains
+future authorization design.
 
-### Provider and access
+### Deferred provider and access design
 
-Use the shared [delegated account authorization](#delegated-account-authorization)
-protocol with email-only client registrations and a separate least-privilege
-email grant and source binding. Token exchange stays server-side; never expose
-tokens to Pi, desktop apps or Aster.
+If explicitly approved later, an email adapter would use the shared
+[delegated account authorization](#delegated-account-authorization) design,
+with an email-only client registration and a separate least-privilege grant
+and source binding. This is not implemented now.
 
 | Adapter | Mail permission and account scope | Setup |
 | --- | --- | --- |
 | `graph` | Delegated `https://graph.microsoft.com/Mail.Read`, plus `openid` for account binding and `profile` for the `preferred_username` account label. Own signed-in Outlook.com or Microsoft 365 inbox only. `Mail.ReadBasic` cannot supply message bodies; no `Mail.ReadWrite`, `Mail.Send`, `.Shared`, application permissions, `offline_access` or `User.Read` needed. | Email-only Entra Web app registration allowing the intended personal/work accounts, registered callback and server client secret. Use the global Microsoft endpoints, tenant `common`, `consumers`, `organizations` or an explicit tenant UUID, with issuer validation as in the shared protocol. Organizational consent policy can still require administrator approval. |
 | `gmail` | `https://www.googleapis.com/auth/gmail.readonly`, plus `openid` for account binding. The account label is `emailAddress` from `GET /gmail/v1/users/me/profile`, which this scope permits. Own signed-in Gmail/Workspace inbox only. Metadata-only scope cannot supply bodies; no `gmail.modify`, compose/send, `mail.google.com`, service accounts or domain-wide delegation. | Email-only Web OAuth client in a Google Cloud project with Gmail API enabled, consent screen, registered callback, client secret and designated test users while in testing. Workspace policy may block access. `gmail.readonly` is restricted: production distribution requires applicable Google verification and, for server storage/transmission of restricted data, security assessment. |
 
-Provider grants cover more than this journey's inbox/time range: enforce those
-narrower limits in host code, not by claiming OAuth is folder-scoped.
-Connecting explains mailbox/body access and that minimized evidence is processed
-by the configured model (including any selected cloud model). It does not grant
-permission for live development checks, background sync or memory ingestion.
-Google's user-data/limited-use requirements also apply to downstream model
-processing; production rollout must establish compliance, not assume a scope
-grant authorizes arbitrary model-provider use.
+These provider grants, registrations, OAuth settings, and downstream model
+processing requirements are deferred design. None is configured or supported
+by the current mock-only implementation.
 
-The initial implementation is local, single-resident and foreground only.
-Connect/status/disconnect belong to the same-origin host UI, not model tools.
-The shared host session, configured resident, and verified provider subject
-bind the email grant; never trust a resident ID or mailbox address supplied by
-the model. Another host session cannot reuse the handle. Only one email account
-from the configured provider is active per session; replacing it requires
-explicit disconnect/connect. No shared or unattended deployment identity
-framework is part of 0072.
+### Current mock-only configuration
 
-Keep tokens only in server memory for the connected session, no longer than
-their validity. Do not request `offline_access` or Google offline access
-(`access_type=online`); discard unexpected refresh tokens. Expiry, revocation,
-restart or disconnect requires reconnect, with no silent refresh/fallback.
-Disconnect follows the shared protocol: it cancels in-flight reads, discards
-their evidence and local tokens, then revokes the Google token where
-supported; Graph disconnect is local only. The calendar grant is unaffected.
-
-### Planned configuration
-
-These are decisions for 0072, **not settings supported by today's server**.
+The AI server and stack launcher accept only these email settings:
 
 | Setting | Contract |
 | --- | --- |
-| `EMAIL_PROVIDER` | `off` by default; `mock`, `graph` or `gmail` selects exactly one adapter. Invalid values fail startup; no credential probing or automatic provider fallback. |
-| `EMAIL_RESIDENT_ID` | Required for non-off modes; the one trusted resident scope configured by the local operator, bound to the host session rather than inferred from graph metadata. |
-| `EMAIL_OAUTH_CLIENT_ID` | Required only for real adapters; the selected provider's email-only Web client ID. |
-| `EMAIL_OAUTH_CLIENT_SECRET_REF` | Required only for real adapters; a reference to the client secret in the host-only secure credential store, never the secret value. A missing store or entry fails closed. |
-| `EMAIL_OAUTH_REDIRECT_URI` | Required for real adapters; exact registered same-origin callback. Permit HTTP only on loopback for local development; any later non-local deployment needs HTTPS and trusted resident identity. |
-| `EMAIL_GRAPH_TENANT` | Required only for Graph; one of the tenant selectors above. No configurable arbitrary authority or API base URL. |
+| `EMAIL_PROVIDER` | Defaults to `off`; accepts only `off` or explicit `mock`. Invalid values, including legacy `graph` and `gmail`, fail startup. There is no fallback. `mock` requires `COMPANION_HARNESS=pi` and uses only deterministic synthetic fixtures. |
 
-Use ignored local environment configuration for non-secret values and
-secret references, with explicit stack wiring; never browser build variables,
-graph properties, plaintext secrets, committed tokens or CI secrets. Keep
-provider endpoints fixed to official OAuth and mail hosts.
-Mock mode uses synthetic data and needs no account or secrets. Missing
-configuration fails closed, not into fixture or live discovery.
+No resident ID, client ID, secret reference, redirect URI, tenant selector,
+session cookie, OAuth route, or provider credential is read or forwarded by the
+stack. Choosing `mock` does not connect an account or read real email.
 
-### Provider-neutral reader and bounded question
+### Current generic mock email API (task 0072)
 
-Approved question: **"What are my five most recent inbox emails from the last
-seven days? Summarize each."** No sender/topic search, thread expansion or
-arbitrary query language is in this slice.
+`EMAIL_PROVIDER` defaults to `off`. With `COMPANION_HARNESS=pi`, explicitly
+selecting `mock` adds all three typed read-only email tools to every workflow;
+tool availability is not selected by a fixed natural-language question or an
+email keyword classifier. The model interprets the resident's request and
+supplies typed arguments. The reader does not parse free-form questions.
+`"Summarize the last five emails I received"` is an example, not a scope cap.
 
-The host calls `ReadOnlyEmailReader.readRecentInbox` with an opaque,
-session-authorized connection handle, `since`, `until`, fixed `limit: 5` and
-cancellation signal. The host fixes `until` from its UTC clock at the first
-email read of a workflow and `since = until - 7 * 24 hours`; the model cannot
-widen this range or select another account. The interface hides OAuth,
-provider queries, paging, MIME and normalization.
+The interface operations are:
 
-- Select individual inbox messages with `since <= receivedAt < until`,
-  including read and unread mail. Exclude drafts, spam/trash and non-inbox
-  folders; do not mark mail read. Use Graph `receivedDateTime` and Gmail
-  `internalDate`, never the sender-controlled `Date` header for selection.
-- Inspect at most **100 unique candidate messages over two pages of at most
-  50**, then sort by received time descending, with provider message ID
-  ascending as a stable tie-break, deduplicate by provider ID, and take five.
-  Stop at the page cap even if duplicates reduce the unique count. Fetch
-  bodies for at most those five.
-- Coverage is complete when every page was consumed, or, for Graph only,
-  when the consumed prefix of its server-ordered results (`$orderby=
-  receivedDateTime desc`) already holds five unique eligible messages and the
-  last consumed candidate is strictly older than the fifth selected one. Later
-  pages then cannot contain a newer or tied message, so a busy Graph inbox
-  still gets a complete newest-five answer. Gmail's list order is not
-  guaranteed, so an unconsumed Gmail page token always means incomplete,
-  regardless of estimated counts; inboxes with more than 100 messages in the
-  window therefore yield `partial` (a documented Gmail limitation).
-- Graph uses `/v1.0/me/mailFolders/inbox/messages`, bounded received-time
-  filter, `isDraft eq false`, `$orderby=receivedDateTime desc`, `$top=50`
-  and selected metadata fields; read selected message bodies separately.
-  Gmail uses `/gmail/v1/users/me/messages`, `labelIds=INBOX`,
-  `includeSpamTrash=false`, `maxResults=50` and a host-generated epoch-seconds
-  time query conservatively widened by one second at each edge, then exact
-  local filtering. Gmail listing returns IDs, not body/envelope data: fetch
-  metadata for at most 100 candidates, then full messages for the selected
-  five. Recheck labels/draft status in returned metadata.
-- Follow provider continuation only on the fixed allowed mail host and same
-  account path; no arbitrary URLs/redirects. Bound the reader to **15 seconds**
-  or the remaining workflow budget, whichever is smaller, and at most four
-  concurrent HTTP requests. Cancel promptly; do not introduce retry loops.
-  Reject provider responses over **1 MiB** and retain at most **8 KiB UTF-8**
-  normalized body text per selected message with explicit truncation.
-  Prefer MIME text/plain; otherwise convert inert HTML to text without
-  executing/rendering it or fetching images, links or attachments.
+- `listMessages(filters, sort, pageSize, cursor)` returns message metadata.
+  Case-insensitive sender and subject substring filters, unread/read state and
+  sent/received UTC half-open windows combine with AND. Message-body search is
+  not supported. The default container
+  is `inbox`; `all_mail` includes inbox, archive and sent, and excludes drafts,
+  spam, trash and deleted. Other containers are explicitly unsupported.
+- The default order is newest `receivedAt` first, with an opaque message
+  reference tie-break. Callers may sort by `sentAt` or `receivedAt` ascending
+  or descending. A missing timestamp does not satisfy its time filter and
+  sorts after available timestamps in either direction, with stable message
+  reference ties. Metadata includes sender, subject, `sentAt` availability and
+  provenance (`provider`, `sender_supplied`, `synthetic`, or `missing`),
+  optional `receivedAt`, unread state, an opaque source-bound message
+  reference, and a source kind (`synthetic` or `provider`) with only a safe
+  display label and supported container. No provider IDs or URLs are exposed.
+- `getMessageContent(opaqueMessageRef)` fetches plain-text content on demand.
+  It is normalized and capped at 64 KiB UTF-8 with explicit truncation; no
+  attachments or remote links are returned.
+- `countUnread(container?)` counts messages in the selected container
+  (default `inbox`) and reports exact or estimated accuracy. Counts refer to
+  mail messages, never non-mail items.
 
-Return normalized evidence: opaque message reference, provider and safe account
-label, sender display name/address (explicitly unknown if absent), subject
-(explicitly absent if missing), UTC `receivedAt`, bounded body text and body
-availability/truncation, plus request window, `checkedAt`, coverage and result
-status. A source reference identifies provider + connection + message ID
-without exposing tokens or connection configuration; no clickable web link is
-required. Invalid timestamps cannot become fabricated dates.
+Pages contain at most 100 messages. Cursors are opaque and bound to the mock
+source and query. There is no fixed total-result ceiling beyond existing
+workflow, time and tool-call budgets. Results distinguish complete `ok`,
+complete empty `empty`, continuation `partial`, `unavailable`, `unsupported`,
+`invalid_request` and `cancelled`. Unsupported containers, invalid cursors or
+filters, unavailable reads and cancellation never silently become empty
+results. The deterministic mock uses one host-bound synthetic mailbox; it
+does not require an account handle, session or authorization and makes no
+provider or network calls.
 
-| Outcome | Meaning and resident answer |
+All evidence is labeled `mock`/`synthetic`; the source label identifies the
+requested container. Message content is untrusted data and never instructions.
+Email content is not persisted to long-term memory. When the development audit
+is enabled, email workflows and tool activity are included in its local logs
+for debugging; those logs may contain email content and must be treated as
+sensitive.
+
+#### Future provider-adapter direction
+
+No Graph/Gmail reader, provider transport, authentication or network code is
+present. Any separately approved future adapter would implement the same typed
+operations and preserve their filter, container, sorting, source-bound
+pagination, result-status, body-size and count-accuracy semantics. Provider
+continuation must stay bound to the configured source and fixed allowed
+provider host; no arbitrary URLs or redirects. Adapters would be bounded by
+the existing workflow/time/tool-call budgets, cancel promptly, and return no
+attachments or remotely fetched content. The provider table and authorization
+requirements above remain deferred design only; ADR 0008 and task 0084 remain
+the future-readiness gates.
+
+| Outcome | Meaning |
 | --- | --- |
-| `ok` | Successful complete candidate selection and selected-body reads. Up to five summaries, each grounded in returned text with sender, received date and source. Disclose body truncation; never imply omitted text was read. |
-| `empty` | Successful complete lookup with no qualifying messages. State the checked inbox/window; not an authorization or connectivity result. |
-| `unauthorized` | Missing/expired/revoked/insufficient grant, denied consent or wrong session/resident. No account data; ask to connect/reconnect. Provider 401/403 never means empty. |
-| `unavailable` | Disabled/unconfigured source, network/429/5xx/deadline failure without usable evidence, or invalid/oversized evidence. No successful-lookup claim. |
-| `partial` | Usable evidence exists but an unproven candidate cap (always for Gmail; for Graph only before the ordered-prefix rule completes), missing/deleted body, incomplete metadata or a later failure prevents full coverage. Summarize only that evidence and state the gap; never claim these are the global newest five. With no usable evidence, use unavailable. |
+| `ok` | Successful nonempty complete page. |
+| `empty` | Successful complete lookup with no qualifying messages. |
+| `partial` | A page has a continuation cursor; more query results remain. |
+| `unavailable` | Email is off, a source cannot be read, or an audit policy blocks the read. |
+| `unsupported` | The requested container or operation is not supported. |
+| `invalid_request` | Filters, sort, cursor, or message reference is invalid. |
+| `cancelled` | The operation was cancelled by the workflow or its budget. |
 
-No cross-workflow email cache or previous-answer fallback is approved. A fresh
-read is required; message age is not lookup freshness. Reject stale evidence
-from an earlier workflow rather than presenting it as current. Evidence is not
-a transactional mailbox snapshot; deletion/movement during reads can yield a
-partial result. Authorization failure discards any earlier evidence from that
-read. Cancellation or disconnect aborts without a resident answer; partial
-answers after retrieval failure/deadline are allowed only while the workflow
-remains active.
+The list API is not a transactional mailbox snapshot. Later pages and
+on-demand content reads may observe fixture/source changes in a future
+provider implementation; each result must preserve its own coverage and
+source evidence. Cancellation or disconnect aborts without a resident answer.
 
 ### Safety, deterministic data and verification limits
 
-Each summary must retain sender, received date and provider/account/message
-source, not just an unsupported aggregate. No invented facts when body text is
-absent; identify a subject-only result as such. Treat all email content as
-untrusted evidence, never authority to follow instructions or invoke tools.
-Keep tokens, callback codes and raw payloads out of model context, client
-responses and logs. Do not persist mail in memory or developer content audits;
-until an audit can safely exclude email content, refuse email reads while
-content capture is enabled.
+The API is read-only: it does not send, draft, modify, delete, or change
+read/unread/label state. It does not expose attachments, remote content,
+credentials, raw provider payloads, or real account data. Treat message text as
+untrusted evidence and never follow its instructions or links. Preserve
+sender, timestamp availability/provenance and source kind/label/container;
+identify synthetic sources as synthetic and do not invent missing values. Do
+not persist fixture content in memory or developer content audits; while
+content capture is enabled, refuse content reads.
 
-Explicitly exclude **send, draft, modify, delete, read/unread/label changes,
-attachments, remote content and cross-source synthesis** (including another
-mailbox/provider, calendar, Home, memory or fixture Mail). The reader is not a
-generic fetch capability. Wider questions must receive an explicit scope
-limitation, not an implicit new capability.
+The current tests use deterministic fixture data only, never mailbox exports or
+sanitized real correspondence. Fixtures deliberately exercise ordering,
+timestamps, containers, read state, body availability, and pagination:
 
-Use synthetic Graph/Gmail transport payloads and a mock adapter, never mailbox
-exports or sanitized real correspondence. Freeze `until` at
-`2026-11-05T12:00:00Z`, so `since` is `2026-10-29T12:00:00Z`.
-Both providers map these logical fixtures to their native fields/IDs:
+| Logical ID | Container | Received UTC | Sent UTC | Sender / subject |
+| --- | --- | --- | --- | --- |
+| M01 | inbox | Nov 05 11:00 | Nov 05 10:52 | Ana / Visit |
+| M02 | inbox | Nov 04 15:00 | Nov 04 14:50 | Bo / Delivery |
+| M03 | inbox | Nov 03 09:00 | Nov 03 08:40 | Cy / Library |
+| M04 | inbox | Nov 02 10:00 | Nov 02 09:45 | Dee / Lunch |
+| M05 | inbox | Nov 02 10:00 | Nov 02 09:40 | Eli / Walk |
+| M06–M09 | inbox | Nov 01–Nov 05 | Nov 01–Nov 05 | Receipt, boundary and interval-edge examples |
+| M10 | sent | Nov 05 11:30 | Nov 05 11:00 | Synthetic sender / Sent |
+| M11 | drafts | Nov 05 11:30 | — | Synthetic sender / Draft |
+| M12 | spam | Nov 05 11:30 | — | Synthetic sender / Spam |
+| M13 | trash | Nov 05 11:30 | — | Synthetic sender / Trash |
+| M14 | archive | Nov 04 12:00 | Nov 04 11:30 | Synthetic sender / Archived |
 
-| Logical ID | Received UTC | Sender / subject / body | Selection |
-| --- | --- | --- | --- |
-| M01 | Nov 05 11:00 | Ana `<ana@example.test>` / Visit / I will visit Friday at 14:00. | First |
-| M02 | Nov 04 15:00 | Bo `<bo@example.test>` / Delivery / The parcel arrives Monday. | Second |
-| M03 | Nov 03 09:00 | Cy `<cy@example.test>` / Library / Your book is ready. | Third |
-| M04 | Nov 02 10:00 | Dee `<dee@example.test>` / Lunch / Lunch is at noon. | Fourth, tie-break before M05 |
-| M05 | Nov 02 10:00 | Eli `<eli@example.test>` / Walk / Meet at the park gate. | Fifth |
-| M06 | Nov 01 14:00 | Fay `<fay@example.test>` / Receipt / Payment received. | Eligible, beyond five |
-| M07 | Oct 29 12:00 | Gus `<gus@example.test>` / Boundary / Start of window. | Inclusive lower edge, beyond five |
-| M08 | Oct 29 11:59:59 | Synthetic sender / Old / Outside window. | Excluded |
-| M09 | Nov 05 12:00 | Synthetic sender / Future edge / Outside window. | Exclusive upper edge |
-| M10–M13 | Nov 05 11:30 | Synthetic sender / Excluded / Not eligible. | Respectively sent-only, draft, spam, trash |
+The behavior tests cover structured filters, half-open UTC windows, sorting,
+stable opaque pagination, on-demand normalized/truncated content, unread
+counts, complete empty versus unavailable, invalid and unsupported requests,
+tool access for alternate questions, cancellation, synthetic evidence, no
+provider network requests and no authorization routes. Calendar behavior is
+separate under task 0074 and has no runtime in this email task.
 
-Use native IDs whose lexical suffixes preserve M04-before-M05. Additional
-fixture variants cover empty/unauthorized/unavailable/partial, missing fields,
-malicious content, duplicate/reordered pages, candidate cap, response/body
-limits, expiry, cancellation and stale prior evidence. Script the model; assert
-the expected five and their independent literal evidence, not model wording.
-Run shared reader behavior cases for both real adapters using fake transports
-and for mock, plus host authorization, workflow and desktop behavior cases as
-specified in [0072](../../TASKS/0072-complete-read-only-email-journey.md).
+No live provider verification is authorized. The static review at
+[email-journey-security-review.md](../evaluations/email-journey-security-review.md)
+is historical and does not assess or certify this mock-only revision. Any
+future live check requires explicit approval, per-run consent, and completion
+of [task 0084](../../TASKS/0084-gating-future-real-provider-access.md).
+Deterministic mock tests do not establish provider acceptance, deployment
+approval, cloud-model handling, model quality, or latency.
 
-0071 is documentation-only; no code tests or live account checks were needed or
-performed. 0072 must run `pnpm test`, `pnpm typecheck` and `pnpm build` offline.
-Live checks never run in CI and self-skip without credentials. Each live run
-requires explicit user consent for account/provider/data and any cloud-model
-processing, after checking `.env` and any `--env` overlay's provider selection.
-OAuth consent does not replace that run-specific consent. Deterministic
-verification cannot establish real OAuth acceptance, provider deployment
-approval, model quality or latency; record those separately as unverified
-until consented checks actually establish them.
-
-Official references consulted 2026-11-05:
+Official provider references consulted 2026-11-05 for deferred design only:
 [Graph messages](https://learn.microsoft.com/en-us/graph/api/user-list-messages?view=graph-rest-1.0),
 [Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference#mailread),
 [Microsoft authorization code flow](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow),

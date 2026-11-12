@@ -1,140 +1,70 @@
-# 0074 Complete a read-only calendar journey
+# 0074 Complete a mock-only read-only calendar journey
 
 Status: open
 Priority: medium
 Subsystem: assistant
 Depends on: 0073
 
-## Context
+## Context and scope
 
-Implement the provider-neutral read-only calendar interface selected in
-[0073](0073-decide-read-only-calendar-access.md), with **both Microsoft Graph
-and Google Calendar adapters initially**. The
-[architecture contract](../docs/architecture/companion-harness.md#approved-read-only-calendar-contract-planned)
-is the source of truth for authorization, normalized outcomes, interval/source
-semantics, and exclusions. This ticket is ready for implementation from that
-decision; neither adapter is implemented by the decision itself.
+Task [0073](0073-decide-read-only-calendar-access.md) preserves calendar
+provider choices as future design. This open implementation task is narrowed to
+a provider-neutral `readCalendar` contract and deterministic synthetic
+calendar fixture only. It must not add Microsoft Graph or Google Calendar
+readers, OAuth/OIDC, account sessions, credential handling, provider network
+calls, or account connection UI. **No calendar runtime is implemented by the
+current 0072 email revision.**
 
-## Setup
+Keep calendar separate from the mock-only email contract in
+[0072](0072-complete-read-only-email-journey.md); do not combine capabilities
+or reuse email fixture data. The [architecture](../docs/architecture/companion-harness.md#read-only-calendar-design-deferred-no-runtime)
+retains provider-specific scopes, endpoints, and authorization only as deferred
+design. Future real-account readiness is tracked by
+[0084](0084-gating-future-real-provider-access.md), which does not authorize
+real-provider code or access.
 
-- Document server-owned source configuration binding a resident to one verified
-  provider subject and default Microsoft calendar or Google `primary`, plus a
-  safe display label and explicit resident IANA timezone. Graph references are
-  discovery only. No configured source is unavailable; ambiguous selection asks
-  for clarification. Do not expose provider URLs or account selectors as model
-  inputs.
-- Implement and document both adapters using the authoritative provider table in
-  [Delegated authorization and provider setup](../docs/architecture/companion-harness.md#delegated-authorization-and-provider-setup)
-  for required registration/configuration, OAuth grants, approved read endpoints
-  and request fields, and provider-specific restrictions. Verify the actual
-  registered-client requirements and consented scopes. Handle and document
-  tenant/admin policy denial without broader scopes, testing-mode grant expiry,
-  and any production verification requirement.
-- Implement host-owned code/PKCE exchange, state/nonce and verified account
-  binding. Document exact callback routes, validated configuration names, and
-  how to connect, reconnect, and disconnect. Reject callback replay, wrong
-  issuer/audience/resident/account, insufficient scope, and unconfigured
-  redirects. Disconnect removes local authority immediately, deletes tokens,
-  and attempts upstream revocation where supported.
-- Follow the shared
-  [delegated account authorization](../docs/architecture/companion-harness.md#delegated-account-authorization)
-  protocol ([ADR 0008](../docs/adr/0008-delegated-personal-account-access.md)),
-  using calendar-only client registrations. Whichever of this task and
-  [0072](0072-complete-read-only-email-journey.md) lands first implements the
-  shared connection protocol and secure credential store; the other reuses them.
-- Select and document a concrete OS credential store or encrypted server store
-  with a separately managed key. Provision secrets outside version control,
-  browser storage, fixtures, and CI; fail closed if secure storage is missing.
-  Keep configuration examples non-secret. Redact callbacks, tokens, and raw
-  provider payloads from logs/audit/errors and model evidence.
+## Mock contract
 
-## Acceptance Criteria
+- Implement the provider-neutral calendar interface only against a fixed,
+  deterministic synthetic fixture. Label the result and every appointment
+  clearly as synthetic/mock; never describe it as a connected or selected
+  account/calendar.
+- Support only **"What appointments are in my selected calendar tomorrow?"**
+  over the fixture, using an injected clock and explicit IANA timezone. If
+  fixture selection or timezone is ambiguous/invalid, ask or reject without
+  reading.
+- Resolve local-day intervals to half-open UTC ranges, including 23-hour and
+  25-hour DST days. Preserve timed versus all-day events; enforce overlap
+  semantics, deterministic ordering, and bounded output.
+- Keep evidence minimal: synthetic source label/reference, optional title,
+  timed start/end or all-day date span, resident timezone, query interval and
+  checked time. Treat titles as untrusted text; do not expose bodies, attendees,
+  links, attachments, or credentials.
+- Keep unsupported appointment/calendar requests limitation-only. Do not write,
+  invite, respond, subscribe/watch, poll, discover other calendars, or
+  synthesize with email, Home, memory, or other sources.
+- Do not add provider configuration, auth UI, HTTP routes, HTTP transports,
+  secrets, or live checks. Graph/Google parity and OAuth requirements remain
+  deferred architecture design, not acceptance for this mock-only task.
 
-- Provide "What appointments are in my selected calendar tomorrow?" for each
-  adapter through one shared `readCalendar` interface and the harness's
-  evidence/settled-answer path. Report period, resident timezone/offset,
-  provider/calendar label, and check time. Preserve minimal occurrence evidence
-  and the distinction between timed and all-day events.
-- Enforce resident/grant/source binding before every read, including reused
-  results. No read without explicit account authorization and no silent switch
-  to another account, calendar, provider, or timezone. Do not expose titles as
-  instructions, or bodies, attendees, attachments, meeting links, or credentials
-  as model context.
-- Enforce half-open overlap semantics, maximum 48 elapsed hours, complete
-  recurrence/exception handling and pagination, deterministic ordering, and
-  cancellation. Cap reads at 100 expanded occurrences/five pages within existing
-  workflow limits; incomplete evidence must not become a complete appointment
-  list or "no appointments."
-- Preserve `ok`, `empty`, `unauthorized`, `unavailable`, `stale`,
-  `invalid_request`, and `ambiguous` calendar meanings through tool and answer
-  delivery. Provider 401/403 or failed permitted refresh means unauthorized;
-  network/timeout/429/5xx, malformed payloads and incomplete reads mean
-  unavailable. At most one refresh, no unbounded retry. An old modification time
-  alone is not stale; introduce no persistent cache/offline fallback.
-- Add the deterministic behavior tests below at the public calendar and
-  harness evidence/answer seams. Run `pnpm test`, `pnpm typecheck`, and
-  `pnpm build` for implementation changes.
-- Do not create, edit, delete, invite, respond, subscribe/watch, poll in the
-  background, discover/shared-read other calendars, or synthesize across
-  calendars, email, Home, memory, or other sources.
-- Update architecture documentation with implemented behavior and verification
-  limits; update the server setup guide and placeholder configuration only when
-  actual configuration and routes exist.
+## Deterministic behavior tests
 
-## Deterministic acceptance cases
+Use the public reader and harness answer seams with literal expected fixtures:
 
-Run the same literal expected normalized outcomes against both adapters using
-synthetic provider-shaped payloads and an injected clock/transport. No real
-provider credentials, live network, or live LLM is required.
+- At `2026-03-28T11:00:00Z`, "tomorrow" in `Europe/Amsterdam` resolves to
+  `[2026-03-28T23:00:00Z, 2026-03-29T22:00:00Z)` (23 hours). An event at
+  `2026-03-29T08:00:00Z`–`08:30:00Z` renders at 10:00–10:30 CEST.
+- Cover the 25-hour autumn day
+  `[2026-10-24T22:00:00Z, 2026-10-25T23:00:00Z)`, distinct instants in the
+  repeated local hour, ongoing events, half-open overlap edges, all-day
+  exclusive-end dates, and a fixture calendar zone differing from the resident's.
+- Verify complete synthetic empty versus unavailable, invalid timezone/range,
+  deterministic order, source/time attribution, no credentials/raw payloads,
+  and that unsupported questions cannot read the fixture.
+- Prove the mock makes no provider/network calls and never calls auth/account
+  APIs.
 
-- At clock `2026-03-28T11:00:00Z`, "tomorrow" in `Europe/Amsterdam` resolves to
-  `[2026-03-28T23:00:00Z, 2026-03-29T22:00:00Z)` (23 hours). An appointment
-  `2026-03-29T08:00:00Z`–`08:30:00Z` displays as 10:00–10:30 CEST, with the
-  selected source and interval. Add the 25-hour autumn day
-  `[2026-10-24T22:00:00Z, 2026-10-25T23:00:00Z)` and distinct instants for the
-  repeated local hour; missing/invalid zone asks or rejects without fetching.
-- Include an ongoing appointment; exclude one ending exactly at query start
-  or starting exactly at query end. Preserve an all-day span
-  `2026-03-29`–`2026-03-30` (exclusive) and its calendar zone, with no invented
-  clock time. Cover a calendar zone differing from the resident's.
-- Expand recurring events, moved exceptions, cancellations, untitled events,
-  and duplicates across pages into the same sorted occurrence set for Graph
-  and Google. A populated second page prevents a false empty first-page result;
-  failed later pages, page loops, off-origin pagination and caps are unavailable.
-- A complete authorized zero-event response alone yields `empty`; missing
-  configuration, missing consent, expired/revoked tokens, 401/403, failed
-  refresh, timeout, 429/5xx, invalid payloads, and incomplete reads never do.
-  Check stale evidence cannot be presented as current or used for current
-  emptiness; no stale fallback is fetched from previous workflows.
-- Reject wrong resident/account/source, missing/overbroad grants, malicious
-  endpoint/calendar inputs, invalid/reversed/over-wide intervals, and OAuth
-  state/nonce/issuer/audience mismatch/replay before calendar access. Clarify
-  multiple sources without reading both. Verify refresh preserves the grant
-  binding and disconnect prevents further reads.
-- Capture outbound methods and paths to prove only approved reads/token
-  lifecycle calls occur; event mutation and arbitrary URL attempts fail.
-  Adversarial event titles cannot invoke tools or synthesize other sources.
-  Verify secrets/raw payloads never enter evidence, resident answers, or audit.
-- Exercise the harness with deterministic model responses to verify source/
-  timezone attribution, truthful empty/failure answers, and cancellation or
-  steering preventing outdated results from becoming a settled resident answer.
-
-## Live verification constraints
-
-Live checks are opt-in, separate from deterministic tests, never run in CI,
-and self-skip without explicit enablement or credentials. Before **each run**,
-inspect `.env` and any selected `--env` overlay, state the chosen calendar
-adapter/account alias and every cloud provider the command could contact, and
-obtain explicit user consent for that run/adapter. OAuth account consent is
-not blanket consent for agent-driven verification. Do not run broad stack
-commands that incidentally contact unapproved LLM/speech providers.
-
-Use dedicated consenting test accounts with manually preseeded synthetic
-appointments; the read-only adapter must not create fixtures. For each adapter,
-check a known timed/all-day/recurring appointment, a known empty period,
-timezone/source attribution, and disconnect/reconnect or revoked-grant behavior.
-Keep writes used to prepare the calendar outside this journey. Record sanitized
-adapter/configuration requirements, interval/zone, observed result classes, and
-any unverified cases, without secrets or personal content. Lack of credentials,
-tenant approval, or consent is a documented live-verification limit, not a
-passing live check and not a reason to broaden permissions.
+No live provider, cloud, account, or real-model tests. When this mock-only
+runtime is implemented, run `pnpm test`, `pnpm typecheck`, `pnpm build`, and
+`git diff --check`. Any future real-account proposal requires explicit
+approval and readiness work tracked separately by 0084.

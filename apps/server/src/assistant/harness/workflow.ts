@@ -66,6 +66,7 @@ export interface CompanionWorkflowsOptions {
   /** Creates the session for one workflow, with tools bound to `budget`. */
   readonly createSession: (input: {
     readonly history: readonly ConversationMessage[];
+    readonly question: string;
     readonly budget: ToolBudget;
     readonly observeModelRequest?: (observation: CompanionModelRequestObservation) => void;
   }) => Promise<AgentSession>;
@@ -270,6 +271,7 @@ class WorkflowRun {
     try {
       session = await createSession({
         history: this.input.messages.slice(0, -1),
+        question: this.input.messages.at(-1)!.content,
         budget: { onUnproductive: () => this.stopAtLimit("limit") },
         ...(this.audit ? { observeModelRequest: (observation) => this.recordModelRequest(observation) } : {}),
       });
@@ -547,7 +549,9 @@ class WorkflowRun {
     if (session) {
       void session
         .abort()
-        .catch((error: unknown) => console.error(`Aborting workflow "${this.workflowId}" failed:`, error))
+        .catch((error: unknown) => {
+          console.error(`Aborting workflow "${this.workflowId}" failed:`, error);
+        })
         .finally(() => session.dispose());
     }
     this.onFinished();

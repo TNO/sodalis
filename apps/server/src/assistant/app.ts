@@ -258,7 +258,9 @@ export function createAssistantApp(options: AssistantAppOptions = {}) {
       : errorResponse(context, "LLM is not configured.", 503),
   );
 
-  if (options.workflows) registerWorkflowRoutes(app, options.workflows);
+  if (options.workflows) {
+    registerWorkflowRoutes(app, options.workflows);
+  }
 
   if (options.memory) {
     registerMemoryRoutes(app, {

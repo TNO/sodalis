@@ -17,6 +17,31 @@ export interface CompanionAuditSettings {
   readonly NODE_ENV?: string;
 }
 
+export interface EmailSettings {
+  readonly COMPANION_HARNESS?: string;
+  readonly EMAIL_PROVIDER?: string;
+}
+
+export type EmailProviderSetting = "off" | "mock";
+
+function emailProvider(value: string | undefined): EmailProviderSetting {
+  const provider = value === undefined ? "off" : value.trim();
+  if (provider !== "off" && provider !== "mock") {
+    throw new Error("EMAIL_PROVIDER must be off or mock.");
+  }
+  return provider;
+}
+
+/** Validate the only delivered email modes before constructing a reader. */
+export function validateEmailSettings(settings: EmailSettings): EmailProviderSetting {
+  const provider = emailProvider(settings.EMAIL_PROVIDER);
+  if (provider === "off") return provider;
+  if (settings.COMPANION_HARNESS?.trim() !== "pi") {
+    throw new Error("EMAIL_PROVIDER requires COMPANION_HARNESS=pi.");
+  }
+  return provider;
+}
+
 export function validateCompanionAuditSettings(settings: CompanionAuditSettings): boolean {
   const value = settings.COMPANION_AUDIT?.trim() || "false";
   if (value !== "true" && value !== "false") {
