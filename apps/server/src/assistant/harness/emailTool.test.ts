@@ -86,22 +86,6 @@ describe("generic email harness tools", () => {
     ]);
   });
 
-  it("does not read email while content-capturing audits are active", async () => {
-    const reader = {
-      listMessages: vi.fn(),
-      getMessageContent: vi.fn(),
-      countUnread: vi.fn(),
-    };
-    const tools = createHomeTools({
-      emailReader: reader,
-      emailAuditEnabled: true,
-      budget: { onUnproductive: vi.fn() },
-    });
-    expect(await callTool(tools, "count_unread", {}))
-      .toMatchObject({ status: "unavailable", reason: "content_audit_enabled" });
-    expect(reader.countUnread).not.toHaveBeenCalled();
-  });
-
   it("keeps mock operations synthetic and makes no network requests", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

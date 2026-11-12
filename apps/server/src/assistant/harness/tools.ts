@@ -193,7 +193,6 @@ export interface HomeToolsOptions {
   readonly graph?: HomeGraph;
   readonly reader?: ExternalDataReader;
   readonly emailReader?: ReadOnlyEmailReader;
-  readonly emailAuditEnabled?: boolean;
   readonly budget: ToolBudget;
   readonly now?: () => number;
 }
@@ -331,7 +330,6 @@ export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
       executionMode: "sequential",
       async execute(_id, params: Static<typeof emailListParameters>, signal) {
         return run("list_messages", params, signal, TOOL_LIMITS.emailReadTimeoutMs, (input, callSignal) => {
-          if (options.emailAuditEnabled) return Promise.resolve({ status: "unavailable", reason: "content_audit_enabled" });
           const request = emailListRequest(input, callSignal);
           return request
             ? options.emailReader!.listMessages(request)
@@ -350,7 +348,6 @@ export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
       executionMode: "sequential",
       async execute(_id, params: Static<typeof emailContentParameters>, signal) {
         return run("get_message_content", params, signal, TOOL_LIMITS.emailReadTimeoutMs, (input, callSignal) => {
-          if (options.emailAuditEnabled) return Promise.resolve({ status: "unavailable", reason: "content_audit_enabled" });
           return options.emailReader!.getMessageContent(input.messageRef, callSignal);
         });
       },
@@ -365,7 +362,6 @@ export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
       executionMode: "sequential",
       async execute(_id, params: Static<typeof emailUnreadParameters>, signal) {
         return run("count_unread", params, signal, TOOL_LIMITS.emailReadTimeoutMs, (input, callSignal) => {
-          if (options.emailAuditEnabled) return Promise.resolve({ status: "unavailable", reason: "content_audit_enabled" });
           if (input.container !== undefined && !isEmailContainer(input.container)) {
             return Promise.resolve({ status: "unsupported", reason: "unsupported_container" });
           }
@@ -376,9 +372,4 @@ export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
     tools.push(listMessages, getMessageContent, countUnread);
   }
   return tools;
-}
-
-export function isEmailRelatedQuestion(question: string): boolean {
-  return /\b(?:e-?mails?|inbox|mailbox|gmail|outlook|mailtjes|mailtje|berichten)\b/i.test(question) ||
-    /\b(?:read|check|summari[sz]e|show|list|fetch|search|have)\s+(?:(?:my|our|the|all|some|any|latest|recent|new|unread|last)\s+)*mail\b/i.test(question);
 }

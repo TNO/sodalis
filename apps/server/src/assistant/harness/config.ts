@@ -58,18 +58,18 @@ export async function createCompanionHarnessFromEnv(
   }
   return new CompanionWorkflows({
     ...(auditEnabled ? { audit: new FileCompanionAuditWriter() } : {}),
-    createSession: ({ history, budget }) => {
+    createSession: ({ history, budget, observeModelRequest }) => {
       const emailReader = emailProvider === "mock" ? createMockEmailReader() : undefined;
-      const tools = createHomeTools({
-        ...(graph ? { graph } : {}),
-        ...(reader ? { reader } : {}),
-        ...(emailReader ? { emailReader, emailAuditEnabled: auditEnabled } : {}),
-        budget,
-      });
       return createCompanionSession({
         model,
         history,
-        tools,
+        tools: createHomeTools({
+          ...(graph ? { graph } : {}),
+          ...(reader ? { reader } : {}),
+          ...(emailReader ? { emailReader } : {}),
+          budget,
+        }),
+        ...(observeModelRequest ? { observeModelRequest } : {}),
       });
     },
   });

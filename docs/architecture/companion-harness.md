@@ -549,16 +549,52 @@ The default is off; startup rejects enabling it when `NODE_ENV` is
 The records include resident text messages, model/turn metadata and timing,
 tool selection, dispatch and result (including names, arguments, validation
 decisions and durations), accepted steering, correlation IDs, and the terminal
-outcome. Only text content and explicit provider/model/usage metadata are
-recorded; hidden chain-of-thought is never included. Speech input reaches this
-workflow as a text transcript only; audio bytes, recordings and artifacts are
-not captured. Credential-like keys and values are redacted before either file
-is written.
+outcome. For each model request, the public Pi SDK `context_with_system` seam
+captures its effective system prompt, ordered model-visible messages, active
+tool definitions, model identity, and reasoning settings. The
+`before_provider_request` seam additionally records the SDK-converted request
+payload. This is not a capture of exact provider-wire bytes. Both records link
+to the workflow, model turn, and request; tool selection, host dispatch,
+execution decisions, and results link by tool-call ID. This makes available
+context and host actions observable, but does not establish why a model
+selected a tool or prove its internal reasoning.
+
+The installed Pi SDK (1.5.0) does not expose a supported reasoning summary
+distinct from opaque thinking or private reasoning. Requests therefore carry
+an explicit unavailable status and reason. Thinking blocks, reasoning blocks,
+and signatures are excluded. Speech input reaches this workflow as a text
+transcript only; audio bytes, recordings and artifacts are not captured.
+Credential-like keys and values are redacted before either file is written.
+Only non-negative safe-integer input, output, cache-read, cache-write, and
+total counts in known assistant-message usage telemetry are exempted from
+token-key redaction. Non-numeric values, credential-shaped strings, nested
+secret containers, and other token-like keys remain redacted. Usage is marked
+provider-reported only when Pi reports a non-zero count; absent or zero-only
+usage (including synthetic history) is unavailable, not a zero workflow
+total. Historical redacted counts cannot be reconstructed.
+
+Generate a standalone report from a selected local JSONL file without starting
+the stack or making a model or network request:
+
+```sh
+pnpm audit:report logs/<audit-file>.jsonl [logs/<report-file>.html]
+```
+
+The default report name matches the input file. Both paths must be direct
+children of the git-ignored `logs/` directory; symlinks and other locations are
+rejected. The report is written with mode `0600`, embeds no scripts or external
+assets, escapes all event values, and groups interleaved workflows into
+chronological timelines with expandable requests and tool calls. Legacy logs
+remain readable with explicit unavailable-context/usage notices; a truncated
+final line is labeled partial, while other malformed lines fail with a
+line-numbered error. Reports are sanitized again when read. Synthetic report
+examples are local-only and contain no household data.
 
 This sensitive developer diagnostic remains out of resident UI, public SSE,
 external uploads, and durable assistant memory. Developers manually delete
-logs; no automatic expiry/deletion, capacity manager, warning UI, or retention
-service is planned. Ordinary write errors use standard server error logging.
+logs and generated reports; no automatic expiry/deletion, capacity manager,
+warning UI, or retention service is planned. Ordinary write errors use standard
+server error logging.
 This intentionally supersedes the earlier planned constraint against
 persistence beyond a developer session, narrowly for local development audit.
 It does not change memory consent, retention, or deletion. The diagnostic has
@@ -829,8 +865,10 @@ provider or network calls.
 
 All evidence is labeled `mock`/`synthetic`; the source label identifies the
 requested container. Message content is untrusted data and never instructions.
-Email content is not persisted to memory or developer content audit. When
-content-capturing audit is enabled, email reads return unavailable.
+Email content is not persisted to long-term memory. When the development audit
+is enabled, email workflows and tool activity are included in its local logs
+for debugging; those logs may contain email content and must be treated as
+sensitive.
 
 #### Future provider-adapter direction
 
@@ -945,6 +983,9 @@ skips without its local Neo4j settings.
 | --- | --- |
 | Tool-result-driven continuation, settled-answer gate, steering, cancellation, limits | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
 | Audit correlation/lifecycle, text-only transcript, redaction, hidden-reasoning exclusion, write-error reporting | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
+| Effective SDK request context, provider-converted payload, usage provenance, multi-turn steering/tool history, and audit-on/off inference parity | [workflow.test.ts](../../apps/server/src/assistant/harness/workflow.test.ts) |
+| Legacy/interleaved/incomplete JSONL, partial/malformed records and inert HTML rendering | [auditReport.test.ts](../../apps/server/src/assistant/harness/auditReport.test.ts) |
+| Path-restricted report command, legacy sanitization and private output permissions | [companion-audit-report.test.ts](../../scripts/companion-audit-report.test.ts) |
 | HTTP lifecycle, audit isolation from SSE and memory, configuration, literal provider values | [routes.test.ts](../../apps/server/src/assistant/harness/routes.test.ts) |
 | Repository-root audit bind mount persistence | [companion-compose.test.ts](../../scripts/companion-compose.test.ts) |
 | Private audit files readable by the host after a root container exits (local Docker image required; skipped in CI) | [audit-permissions.test.ts](../../scripts/audit-permissions.test.ts) |

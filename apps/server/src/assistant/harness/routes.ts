@@ -1,7 +1,6 @@
 import type { Context, Hono } from "hono";
 import { BodyLimitError, ID_PATTERN, isRecord, MAX_MESSAGE_LENGTH, readBoundedBody, readMessages } from "../requestBody.js";
 import type { CompanionWorkflows, WorkflowEvent } from "./workflow.js";
-import { isEmailRelatedQuestion } from "./tools.js";
 
 /**
  * The Pi workflow transport: an SSE lifecycle stream per workflow, plus
@@ -83,7 +82,6 @@ export function registerWorkflowRoutes(
         workflowId,
         inputId,
         messages,
-        ...(isEmailRelatedQuestion(messages.at(-1)!.content) ? { sensitive: true } : {}),
       },
       { signal: workflowSignal, onEvent: send },
     );

@@ -15,7 +15,7 @@ import { readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { FileCompanionAuditWriter } from "./audit.js";
-import type { CompanionModel } from "./companionModel.js";
+import { createCompanionModel, type CompanionModel } from "./companionModel.js";
 import { createCompanionSession } from "./companionSession.js";
 import { SqliteReadingsReader, type ExternalDataReader } from "./externalData.js";
 import type { HomeGraph } from "./homeGraph.js";
@@ -94,7 +94,6 @@ interface Harness {
     workflowId?: string;
     sessionId?: string;
     signal?: AbortSignal;
-    sensitive?: boolean;
   }): ReturnType<CompanionWorkflows["start"]>;
 }
 
@@ -129,7 +128,7 @@ async function harness(options: {
   const workflows = new CompanionWorkflows({
     ...(options.limits ? { limits: options.limits } : {}),
     audit,
-    async createSession({ history, budget }) {
+    async createSession({ history, budget, observeModelRequest }) {
       const session = await createCompanionSession({
         model,
         history,
@@ -137,6 +136,7 @@ async function harness(options: {
           graph, reader: options.reader ?? reader, budget,
           ...(options.now ? { now: options.now } : {}),
         }),
+        ...(observeModelRequest ? { observeModelRequest } : {}),
       });
       const dispose = vi.fn(session.dispose.bind(session));
       session.dispose = dispose;
@@ -157,7 +157,6 @@ async function harness(options: {
           sessionId: input.sessionId ?? "session-1",
           workflowId: input.workflowId ?? "workflow-1",
           inputId: "input-1",
-          ...(input.sensitive ? { sensitive: true } : {}),
           messages: [
             { role: "user", content: "Hoe warm was het gisteren?" },
             { role: "assistant", content: "Gisteren was het 18 graden." },
@@ -503,7 +502,9 @@ function assertJourneyAudit(
     const selected = lifecycle.find((event) => event.event === "tool.selected")!;
     expect(selected.toolCallId).toEqual(expect.any(String));
     expect(selected.toolCallId).not.toBe("");
-    expect(lifecycle.map((event) => event.event)).toEqual(["tool.selected", "tool.dispatched", "tool.result"]);
+    expect(lifecycle.map((event) => event.event)).toEqual([
+      "tool.selected", "tool.dispatched", "host.tool.decision", "tool.result",
+    ]);
     expect(lifecycle.every((event) =>
       event.correlationId === selected.toolCallId && event.toolCallId === selected.toolCallId)).toBe(true);
     expect(lifecycle.at(-1)).toMatchObject({ validationDecision: outcome, isError: false });
@@ -519,6 +520,89 @@ async function started(result: ReturnType<CompanionWorkflows["start"]>) {
 }
 
 describe("companion workflow", () => {
+  it("observes the SDK-converted local provider request without changing model inputs or answers", async () => {
+    let model!: CompanionModel;
+    const bodies: Record<string, unknown>[] = [];
+    const fetchCalls: string[] = [];
+    vi.stubGlobal("fetch", (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const url = request.url;
+      fetchCalls.push(url);
+      if (!url.startsWith("http://127.0.0.1:18765/")) throw new Error(`Unexpected non-local request: ${url}`);
+      bodies.push(JSON.parse(await request.clone().text()) as Record<string, unknown>);
+      const frames = [
+        { choices: [{ index: 0, delta: { content: "Local answer." }, finish_reason: null }] },
+        {
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          usage: {
+            prompt_tokens: 120,
+            completion_tokens: 30,
+            total_tokens: 150,
+            prompt_tokens_details: { cached_tokens: 8, cache_write_tokens: 2 },
+          },
+        },
+      ];
+      const stream = `${frames.map((frame) => `data: ${JSON.stringify(frame)}`).join("\n\n")}\n\ndata: [DONE]\n\n`;
+      return new Response(stream, { headers: { "content-type": "text/event-stream" } });
+    }) as typeof fetch);
+
+    try {
+      model = await createCompanionModel({
+        LLM_PROVIDER: "openai-compatible",
+        LLM_BASE_URL: "http://127.0.0.1:18765/v1",
+        LLM_MODEL: "offline-fixture",
+      });
+      const auditEvents: CompanionAuditEvent[] = [];
+      const createWorkflows = (audit?: CompanionAuditSink) => new CompanionWorkflows({
+        ...(audit ? { audit } : {}),
+        async createSession({ history, budget, observeModelRequest }) {
+          return createCompanionSession({
+            model,
+            history,
+            tools: createHomeTools({ graph: fakeGraph(), reader, budget }),
+            ...(observeModelRequest ? { observeModelRequest } : {}),
+          });
+        },
+      });
+      const start = (workflows: CompanionWorkflows, workflowId: string) => workflows.start({
+        sessionId: `session-${workflowId}`,
+        workflowId,
+        inputId: "input-local",
+        messages: [{ role: "user", content: "What is the bedroom temperature?" }],
+      }, { onEvent: () => {} });
+      const audited = createWorkflows({ write: (event) => { auditEvents.push(event); } });
+      const ordinary = createWorkflows();
+
+      const auditedResult = await started(start(audited, "workflow-a"));
+      expect(auditedResult).toMatchObject({ type: "answer", text: "Local answer." });
+      expect(await started(start(ordinary, "workflow-b"))).toMatchObject({ type: "answer", text: "Local answer." });
+      expect(bodies).toHaveLength(2);
+      expect(fetchCalls).toEqual([
+        "http://127.0.0.1:18765/v1/chat/completions",
+        "http://127.0.0.1:18765/v1/chat/completions",
+      ]);
+      expect(bodies[0]!.messages).toEqual(bodies[1]!.messages);
+      expect(bodies[0]!.tools).toEqual(bodies[1]!.tools);
+      expect(auditEvents.find((event) => event.event === "assistant.message")).toMatchObject({
+        usageSource: "provider_reported",
+        usage: { input: 110, output: 30, cacheRead: 8, cacheWrite: 2, totalTokens: 150 },
+      });
+
+      const providerContext = auditEvents.find((event) => event.event === "model.request.provider_context")!;
+      expect(providerContext).toMatchObject({
+        captureBoundary: "Pi SDK before_provider_request payload; SDK-converted, not provider-wire capture",
+        offeredTools: expect.arrayContaining([
+          expect.objectContaining({ name: "find_entities", description: expect.any(String), parameters: expect.any(Object) }),
+        ]),
+      });
+      expect(JSON.stringify(providerContext.messages)).toContain("You are Sodalis");
+      expect(JSON.stringify(providerContext.messages)).toContain("What is the bedroom temperature?");
+      expect(providerContext.modelRequestId).toBeDefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("continues from tool results and publishes only the settled final answer", async () => {
     const seen: string[][] = [];
     const h = await harness({
@@ -595,14 +679,74 @@ describe("companion workflow", () => {
     expect(h.auditEvents.at(-1)).toMatchObject({ event: "workflow.terminal", outcome: "answer" });
   });
 
-  it("does not capture sensitive account workflow content in the developer audit", async () => {
-    const h = await harness({
-      responses: [fauxAssistantMessage(fauxText("The private account response."))],
+  it("captures each effective request with accepted steering and earlier tool results", async () => {
+    const lookup = deferred();
+    const lookupStarted = deferred();
+    const graph = fakeGraph({
+      findEntities: vi.fn(async () => {
+        lookupStarted.resolve();
+        await lookup.promise;
+        return { status: "not_found" as const };
+      }),
     });
+    const h = await harness({
+      graph,
+      responses: [
+        fauxAssistantMessage([
+          fauxThinking("private thinking must not enter the audit"),
+          fauxToolCall("find_entities", { query: "bedroom" }),
+        ]),
+        (context) => {
+          expect(userTexts(context).at(-1)).toBe("And the kitchen?");
+          return fauxAssistantMessage(fauxText("I could not find the bedroom or kitchen."));
+        },
+      ],
+    });
+    const result = h.start();
+    await lookupStarted.promise;
+    expect(h.workflows.steer("workflow-1", "input-2", "And the kitchen?")).toBe("accepted");
+    lookup.resolve();
+    await started(result);
 
-    await started(h.start({ question: "What are my five most recent inbox emails from the last seven days? Summarize each.", sensitive: true }));
-
-    expect(h.auditEvents).toEqual([]);
+    const requests = h.auditEvents.filter((event) => event.event === "model.request.context");
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).toMatchObject({
+      captureBoundary: "Pi SDK context_with_system",
+      model: { provider: expect.any(String), id: expect.any(String), api: expect.any(String) },
+      reasoningSummary: { status: "unavailable", source: "Pi SDK", reason: expect.any(String) },
+      effectiveSystemPrompt: expect.stringContaining("You are Sodalis"),
+    });
+    expect(requests[0]!.offeredTools).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "find_entities", description: expect.any(String), parameters: expect.any(Object) }),
+      expect.objectContaining({ name: "inspect_neighborhood", description: expect.any(String), parameters: expect.any(Object) }),
+      expect.objectContaining({ name: "read_external_data", description: expect.any(String), parameters: expect.any(Object) }),
+    ]));
+    expect(requests[1]!.omittedPrivateContent).toBeGreaterThan(0);
+    expect(JSON.stringify(requests)).not.toContain("private thinking must not enter the audit");
+    expect(requests[0]!.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "system" }),
+      expect.objectContaining({ role: "user" }),
+    ]));
+    expect(JSON.stringify(requests[0]!.messages)).toContain("What is the bedroom temperature?");
+    const secondMessages = requests[1]!.messages as Array<{ role: string; content?: unknown }>;
+    expect(secondMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: "user" }),
+      expect.objectContaining({ role: "toolResult" }),
+    ]));
+    expect(JSON.stringify(secondMessages)).toContain("And the kitchen?");
+    expect(h.auditEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: "workflow.input.accepted", inputId: "input-2" }),
+      expect.objectContaining({
+        event: "tool.result",
+        toolName: "find_entities",
+        modelRequestId: requests[0]!.modelRequestId,
+      }),
+      expect.objectContaining({
+        event: "assistant.message",
+        modelRequestId: requests[1]!.modelRequestId,
+      }),
+      expect.objectContaining({ event: "workflow.terminal", outcome: "answer", residentAnswer: "I could not find the bedroom or kitchen." }),
+    ]));
   });
 
   it("writes text-only speech transcripts, redacts credentials, and excludes hidden reasoning and artifacts", async () => {
@@ -659,6 +803,59 @@ describe("companion workflow", () => {
     }
   });
 
+  it("preserves known numeric usage while redacting credentials inside usage telemetry", async () => {
+    const directory = resolve(import.meta.dirname, "../../../../../logs", `audit-usage-${randomUUID()}`);
+    const writer = new FileCompanionAuditWriter(directory);
+    try {
+      await writer.write({
+        event: "assistant.message",
+        workflowId: "workflow-usage",
+        sessionId: "session-usage",
+        correlationId: "request-1",
+        timestamp: new Date().toISOString(),
+        usage: {
+          input: 123,
+          output: 45,
+          cacheRead: 12,
+          cacheWrite: 3,
+          totalTokens: 171,
+          inputDetails: "access_token=inline-usage-secret",
+          apiToken: "Bearer usage-secret",
+          credentials: { api_key: "nested-usage-secret" },
+          arbitraryTokenCount: 88,
+        },
+        requestTokenCount: 99,
+      });
+      await writer.flush();
+      const [jsonl, transcript] = await Promise.all([
+        readFile(writer.paths.jsonl, "utf8"),
+        readFile(writer.paths.transcript, "utf8"),
+      ]);
+      const record = JSON.parse(jsonl) as {
+        usage: Record<string, unknown>;
+        requestTokenCount: unknown;
+      };
+      expect(record.usage).toMatchObject({
+        input: 123,
+        output: 45,
+        cacheRead: 12,
+        cacheWrite: 3,
+        totalTokens: 171,
+        inputDetails: "access_token=[REDACTED]",
+        apiToken: "[REDACTED]",
+        credentials: "[REDACTED]",
+        arbitraryTokenCount: "[REDACTED]",
+      });
+      expect(record.requestTokenCount).toBe("[REDACTED]");
+      expect(transcript).toContain('"totalTokens":171');
+      expect(jsonl + transcript).not.toContain("usage-secret");
+      expect(jsonl + transcript).not.toContain("inline-usage-secret");
+      expect(jsonl + transcript).not.toContain("nested-usage-secret");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("reports ordinary audit write failures without changing workflow delivery", async () => {
     const directory = resolve(import.meta.dirname, "../../../../../logs", `audit-failure-${randomUUID()}`);
     await writeFile(directory, "not a directory");
@@ -685,6 +882,12 @@ describe("companion workflow", () => {
   it("answers ordinary conversation without tools", async () => {
     const h = await harness({ responses: [fauxAssistantMessage(fauxText("Goedemorgen!"))] });
     expect(await started(h.start({ question: "Goedemorgen" }))).toMatchObject({ type: "answer", text: "Goedemorgen!" });
+    expect(h.auditEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: "model.request.context" }),
+      expect.objectContaining({ event: "workflow.terminal", outcome: "answer", residentAnswer: "Goedemorgen!" }),
+    ]));
+    expect(h.auditEvents.some((event) => event.event === "tool.selected")).toBe(false);
+    expect(JSON.stringify(h.events)).not.toContain("model.request.context");
   });
 
   it("processes steering accepted before settlement before publishing an answer", async () => {

@@ -1,7 +1,7 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import {
+  DefaultResourceLoader,
   createAgentSession,
-  createExtensionRuntime,
   SessionManager,
   SettingsManager,
   type AgentSession,
@@ -19,21 +19,47 @@ import { COMPANION_SYSTEM_PROMPT } from "./prompt.js";
  */
 const NEUTRAL_CWD = "/";
 
-/** No discovery: only the explicit companion prompt, and no extensions, skills, templates or context files. */
-function explicitResources(): ResourceLoader {
-  return {
-    getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
-    getPrompts: () => ({ prompts: [], diagnostics: [] }),
-    getThemes: () => ({ themes: [], diagnostics: [] }),
-    getAgentsFiles: () => ({ agentsFiles: [] }),
-    getSystemPrompt: () => COMPANION_SYSTEM_PROMPT,
-    getSystemPromptSource: () => undefined,
-    getAppendSystemPrompt: () => [],
-    getAppendSystemPromptSources: () => [],
-    extendResources: () => {},
-    reload: async () => {},
-  };
+export type CompanionModelRequestObservation =
+  | {
+      readonly boundary: "context_with_system";
+      readonly messages: readonly unknown[];
+      readonly effectiveSystemPrompt?: string;
+    }
+  | { readonly boundary: "before_provider_request"; readonly payload: unknown };
+
+/** No discovery: only the explicit companion prompt, and no user extensions, skills, templates or context files. */
+async function explicitResources(
+  observeModelRequest?: (observation: CompanionModelRequestObservation) => void,
+  settingsManager = SettingsManager.inMemory(),
+): Promise<ResourceLoader> {
+  const loader = new DefaultResourceLoader({
+    cwd: NEUTRAL_CWD,
+    agentDir: "/nonexistent/sodalis-pi-agent",
+    settingsManager,
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
+    systemPrompt: COMPANION_SYSTEM_PROMPT,
+    extensionFactories: observeModelRequest
+      ? [{
+          name: "sodalis-audit",
+          hidden: true,
+          factory: (pi) => {
+            pi.on("context_with_system", (event) => {
+              observeModelRequest({ boundary: "context_with_system", messages: event.messages });
+            });
+            pi.on("before_provider_request", (event) => {
+              observeModelRequest({ boundary: "before_provider_request", payload: event.payload });
+              return event.payload;
+            });
+          },
+        }]
+      : [],
+  });
+  await loader.reload();
+  return loader;
 }
 
 function assistantHistoryMessage(model: CompanionModel["model"], text: string, timestamp: number): AssistantMessage {
@@ -61,11 +87,26 @@ export interface CompanionSessionOptions {
   /** Earlier resident conversation, oldest first; not the question being asked. */
   readonly history: readonly ConversationMessage[];
   readonly tools: readonly ToolDefinition[];
+  readonly observeModelRequest?: (observation: CompanionModelRequestObservation) => void;
 }
 
 /** One temporary in-memory Pi session for a single foreground workflow. */
 export async function createCompanionSession(options: CompanionSessionOptions): Promise<AgentSession> {
   const sessionManager = SessionManager.inMemory(NEUTRAL_CWD);
+  const settingsManager = SettingsManager.inMemory({
+    compaction: { enabled: false },
+    retry: { enabled: false },
+  });
+  let sessionReference: AgentSession | undefined;
+  const observeModelRequest = options.observeModelRequest
+    ? (observation: CompanionModelRequestObservation) => options.observeModelRequest!({
+        ...observation,
+        ...(observation.boundary === "context_with_system" && sessionReference
+          ? { effectiveSystemPrompt: sessionReference.systemPrompt }
+          : {}),
+      })
+    : undefined;
+  const resourceLoader = await explicitResources(observeModelRequest, settingsManager);
   const start = Date.now() - options.history.length;
   options.history.forEach((message, index) => {
     sessionManager.appendMessage(
@@ -81,14 +122,12 @@ export async function createCompanionSession(options: CompanionSessionOptions): 
     modelRuntime: options.model.modelRuntime,
     model: options.model.model,
     thinkingLevel: options.model.thinkingLevel,
-    resourceLoader: explicitResources(),
+    resourceLoader,
     customTools: [...options.tools],
     tools: options.tools.map((tool) => tool.name),
     sessionManager,
-    settingsManager: SettingsManager.inMemory({
-      compaction: { enabled: false },
-      retry: { enabled: false },
-    }),
+    settingsManager,
   });
+  sessionReference = session;
   return session;
 }

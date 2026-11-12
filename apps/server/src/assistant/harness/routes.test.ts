@@ -14,6 +14,7 @@ import { createAssistantApp } from "../app.js";
 import { literalConfigValue } from "./companionModel.js";
 import { createCompanionSession } from "./companionSession.js";
 import { createCompanionHarnessFromEnv } from "./config.js";
+import { createMockEmailReader } from "./emailReader.js";
 import type { HomeGraph } from "./homeGraph.js";
 import { createHomeTools } from "./tools.js";
 import type { CompanionAuditEvent } from "./audit.js";
@@ -131,6 +132,49 @@ describe("companion workflow routes", () => {
       { type: "started", workflowId: "workflow-1", sequence: 0 },
       { type: "answer", workflowId: "workflow-1", sequence: 1, inputId: "input-1", text: "Dit is een testantwoord." },
     ]);
+  });
+
+  it("keeps email reads available and audited when both features are enabled", async () => {
+    const auditEvents: CompanionAuditEvent[] = [];
+    const emailReader = createMockEmailReader();
+    const countUnread = vi.spyOn(emailReader, "countUnread");
+    const faux = fauxProvider();
+    const modelRuntime = await ModelRuntime.create({
+      credentials: new InMemoryCredentialStore(),
+      modelsPath: null,
+      refreshOnCreate: false,
+      allowModelNetwork: false,
+    });
+    modelRuntime.registerNativeProvider(faux.provider);
+    faux.setResponses([
+      fauxAssistantMessage(fauxToolCall("count_unread", {})),
+      fauxAssistantMessage(fauxText("There are 7 unread messages.")),
+    ]);
+    const workflows = new CompanionWorkflows({
+      audit: { write: (event: CompanionAuditEvent) => { auditEvents.push(event); } },
+      createSession: ({ history, budget }) =>
+        createCompanionSession({
+          model: { modelRuntime, model: faux.getModel(), thinkingLevel: "off" },
+          history,
+          tools: createHomeTools({ emailReader, budget }),
+        }),
+    });
+    const app = createAssistantApp({ workflows });
+
+    const response = await post(app, "/api/assistant/workflows", {
+      ...start,
+      messages: [{ role: "user", content: "How many unread emails do I have?" }],
+    });
+
+    expect(events(await response.text()).at(-1)).toMatchObject({
+      type: "answer",
+      text: "There are 7 unread messages.",
+    });
+    expect(countUnread).toHaveBeenCalledOnce();
+    expect(auditEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: "tool.dispatched", toolName: "count_unread" }),
+      expect.objectContaining({ event: "tool.result", toolName: "count_unread" }),
+    ]));
   });
 
   it("validates workflow, steering and cancel requests", async () => {

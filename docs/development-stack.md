@@ -1202,6 +1202,10 @@ accuracy. Missing timestamps remain listable, do not match time filters, and
 sort after available timestamps with stable reference ties. Unsupported
 containers and invalid requests fail explicitly.
 
+`EMAIL_PROVIDER=mock` works with `COMPANION_AUDIT=true`; audit does not disable
+email tools. The development audit records email workflow and tool activity in
+the local private logs for debugging, which may contain synthetic email content.
+
 Only `off` and `mock` are valid `EMAIL_PROVIDER` values. Legacy `graph` and
 `gmail` settings fail closed; there is no provider fallback. Microsoft Graph,
 Gmail, OAuth, credential storage, connection UX, and live verification are

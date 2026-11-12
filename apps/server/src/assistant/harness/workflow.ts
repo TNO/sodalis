@@ -1,6 +1,7 @@
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ConversationMessage } from "@sodalis/assistant";
 import type { ToolBudget } from "./tools.js";
+import type { CompanionModelRequestObservation } from "./companionSession.js";
 import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
 
 /**
@@ -48,8 +49,6 @@ const RESIDENT_MESSAGES: Record<WorkflowFailureCode, string> = {
 export interface WorkflowStartInput {
   readonly sessionId: string;
   readonly workflowId: string;
-  /** Avoids content-capturing audit and error detail for email-related workflows. */
-  readonly sensitive?: boolean;
   /** Identifies the resident input that is the last message. */
   readonly inputId: string;
   /** Bounded resident conversation, oldest first; the last message is the question. */
@@ -69,6 +68,7 @@ export interface CompanionWorkflowsOptions {
     readonly history: readonly ConversationMessage[];
     readonly question: string;
     readonly budget: ToolBudget;
+    readonly observeModelRequest?: (observation: CompanionModelRequestObservation) => void;
   }) => Promise<AgentSession>;
   readonly limits?: Partial<WorkflowLimits>;
   readonly maxConcurrentWorkflows?: number;
@@ -111,6 +111,101 @@ function recordOf(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+const PRIVATE_MODEL_CONTENT = new Set(["thinking", "reasoning", "redactedThinking", "signature"]);
+
+function projectModelMessages(input: unknown): { messages: Record<string, unknown>[]; omittedPrivateContent: number } {
+  if (!Array.isArray(input)) return { messages: [], omittedPrivateContent: 0 };
+  let omittedPrivateContent = 0;
+  const messages = input.flatMap((entry): Record<string, unknown>[] => {
+    const message = recordOf(entry);
+    if (typeof message.role !== "string") return [];
+    const projected: Record<string, unknown> = { role: message.role };
+    for (const key of ["name", "toolCallId", "toolName", "isError"] as const) {
+      if (message[key] !== undefined) projected[key] = message[key];
+    }
+    if (typeof message.content === "string") {
+      projected.content = message.content;
+    } else if (Array.isArray(message.content)) {
+      projected.content = message.content.flatMap((part): Record<string, unknown>[] => {
+        const content = recordOf(part);
+        if (typeof content.type !== "string") return [];
+        if (PRIVATE_MODEL_CONTENT.has(content.type)) {
+          omittedPrivateContent += 1;
+          return [];
+        }
+        if (content.type === "text" && typeof content.text === "string") {
+          return [{ type: "text", text: content.text }];
+        }
+        if (content.type === "toolCall") {
+          return [{
+            type: "toolCall",
+            ...(content.id === undefined ? {} : { id: content.id }),
+            ...(content.name === undefined ? {} : { name: content.name }),
+            ...(content.arguments === undefined ? {} : { arguments: content.arguments }),
+          }];
+        }
+        if (content.type === "toolResult") {
+          const result = Array.isArray(content.content)
+            ? content.content.flatMap((resultPart): Record<string, unknown>[] => {
+                const textPart = recordOf(resultPart);
+                return textPart.type === "text" && typeof textPart.text === "string"
+                  ? [{ type: "text", text: textPart.text }]
+                  : [];
+              })
+            : [];
+          return [{
+            type: "toolResult",
+            ...(content.toolCallId === undefined ? {} : { toolCallId: content.toolCallId }),
+            content: result,
+            ...(content.isError === undefined ? {} : { isError: content.isError }),
+          }];
+        }
+        omittedPrivateContent += 1;
+        return [];
+      });
+    } else if (message.content !== undefined) {
+      omittedPrivateContent += 1;
+    }
+    return [projected];
+  });
+  return { messages, omittedPrivateContent };
+}
+
+function projectProviderTools(input: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((entry): Record<string, unknown>[] => {
+    const tool = recordOf(entry);
+    const fn = recordOf(tool.function);
+    const name = typeof fn.name === "string" ? fn.name : typeof tool.name === "string" ? tool.name : undefined;
+    if (!name) return [];
+    return [{
+      name,
+      ...(typeof fn.description === "string" ? { description: fn.description } : {}),
+      ...(fn.parameters === undefined ? {} : { parameters: fn.parameters }),
+    }];
+  });
+}
+
+function providerUsage(value: unknown): Record<string, unknown> {
+  const usage = recordOf(value);
+  const fields = ["input", "output", "cacheRead", "cacheWrite", "totalTokens"] as const;
+  const counts = Object.fromEntries(
+    fields.flatMap((field) => {
+      const count = usage[field];
+      return typeof count === "number" && Number.isSafeInteger(count) && count >= 0
+        ? [[field, count]]
+        : [];
+    }),
+  );
+  if (!Object.values(counts).some((count) => typeof count === "number" && count > 0)) {
+    return {
+      usageSource: "unavailable",
+      usageUnavailableReason: "Pi usage was absent or zero-only, so provider counts cannot be distinguished from synthetic history.",
+    };
+  }
+  return { usageSource: "provider_reported", usage: counts };
+}
+
 class WorkflowRun {
   readonly sessionId: string;
   readonly workflowId: string;
@@ -130,6 +225,9 @@ class WorkflowRun {
   private modelErrorMessage: string | undefined;
   private limitCode: "limit" | "timeout" | undefined;
   private modelTurns = 0;
+  private modelRequestSequence = 0;
+  private modelTurn = 0;
+  private currentModelRequestId: string | undefined;
   private toolCalls = 0;
   private steeringInputs = 0;
   private readonly timer: ReturnType<typeof setTimeout>;
@@ -175,10 +273,10 @@ class WorkflowRun {
         history: this.input.messages.slice(0, -1),
         question: this.input.messages.at(-1)!.content,
         budget: { onUnproductive: () => this.stopAtLimit("limit") },
+        ...(this.audit ? { observeModelRequest: (observation) => this.recordModelRequest(observation) } : {}),
       });
     } catch (error) {
-      if (this.input.sensitive) console.error(`Companion workflow "${this.workflowId}" could not start.`);
-      else console.error(`Companion workflow "${this.workflowId}" could not start:`, error);
+      console.error(`Companion workflow "${this.workflowId}" could not start:`, error);
       this.finishFailed("internal");
       return;
     }
@@ -245,19 +343,24 @@ class WorkflowRun {
         } else if (message.role === "assistant") {
           this.recordAudit("assistant.message", {
             text: auditText(message.content),
+            source: "model",
             provider: message.provider,
             model: message.model,
             api: message.api,
             stopReason: message.stopReason,
             ...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
-            usage: message.usage,
-          });
+            modelTurn: this.modelTurn,
+            modelRequestId: this.currentModelRequestId,
+            ...providerUsage(message.usage),
+          }, this.currentModelRequestId ?? this.workflowId);
           for (const part of message.content) {
             if (part.type !== "toolCall") continue;
             this.recordAudit("tool.selected", {
               toolCallId: part.id,
               toolName: part.name,
               arguments: part.arguments,
+              modelTurn: this.modelTurn,
+              modelRequestId: this.currentModelRequestId,
             }, part.id);
           }
           this.modelTurns += 1;
@@ -295,20 +398,34 @@ class WorkflowRun {
       this.recordAudit("model.run.settled", { aborted: raw.aborted });
     } else if (event.type === "turn_start") {
       this.turnStartedAt.push(Date.now());
-      this.recordAudit("model.turn.started", { turn: this.modelTurns + 1 });
+      this.modelTurn += 1;
+      this.currentModelRequestId = undefined;
+      this.recordAudit("model.turn.started", { turn: this.modelTurn });
     } else if (event.type === "turn_end") {
       const startedAt = this.turnStartedAt.shift();
       this.recordAudit("model.turn.completed", {
-        turn: this.modelTurns + 1,
+        turn: this.modelTurn,
         durationMs: startedAt === undefined ? undefined : Date.now() - startedAt,
         stopReason: recordOf(raw.message).stopReason,
-      });
+        modelRequestId: this.currentModelRequestId,
+      }, this.currentModelRequestId ?? this.workflowId);
     } else if (event.type === "tool_execution_start") {
       const toolCallId = String(raw.toolCallId ?? "");
       this.recordAudit("tool.dispatched", {
         toolCallId,
         toolName: raw.toolName,
         arguments: raw.args,
+        modelTurn: this.modelTurn,
+        modelRequestId: this.currentModelRequestId,
+      }, toolCallId || this.workflowId);
+      this.recordAudit("host.tool.decision", {
+        toolCallId,
+        toolName: raw.toolName,
+        decision: "execute",
+        reason: "registered host-owned tool",
+        source: "host",
+        modelTurn: this.modelTurn,
+        modelRequestId: this.currentModelRequestId,
       }, toolCallId || this.workflowId);
     } else if (event.type === "tool_execution_end") {
       const toolCallId = String(raw.toolCallId ?? "");
@@ -320,6 +437,8 @@ class WorkflowRun {
         isError: raw.isError,
         durationMs: raw.durationMs,
         validationDecision: this.toolDecision(result),
+        modelTurn: this.modelTurn,
+        modelRequestId: this.currentModelRequestId,
       }, toolCallId || this.workflowId);
     }
   }
@@ -364,8 +483,7 @@ class WorkflowRun {
       });
     } else {
       if (this.modelError) {
-        if (this.input.sensitive) console.error(`Companion workflow "${this.workflowId}": the model request failed.`);
-        else console.error(`Companion workflow "${this.workflowId}": the model request failed: ${this.modelErrorMessage}`);
+        console.error(`Companion workflow "${this.workflowId}": the model request failed: ${this.modelErrorMessage}`);
         this.finishFailed("model_error");
       } else {
         console.error(`Companion workflow "${this.workflowId}": the model returned no answer text.`);
@@ -377,8 +495,7 @@ class WorkflowRun {
   private submit(text: string): void {
     this.session!.prompt(text, { expandPromptTemplates: false }).catch((error: unknown) => {
       if (this.state !== "running") return;
-      if (this.input.sensitive) console.error(`Companion workflow "${this.workflowId}" failed.`);
-      else console.error(`Companion workflow "${this.workflowId}" failed:`, error);
+      console.error(`Companion workflow "${this.workflowId}" failed:`, error);
       this.finishFailed(this.limitCode ?? "model_error");
     });
   }
@@ -386,6 +503,13 @@ class WorkflowRun {
   private stopAtLimit(code: "limit" | "timeout"): void {
     if (this.state !== "running" || this.limitCode) return;
     this.limitCode = code;
+    this.recordAudit("host.workflow.decision", {
+      decision: "stop",
+      reason: code,
+      source: "host",
+      modelTurn: this.modelTurn,
+      modelRequestId: this.currentModelRequestId,
+    }, this.currentModelRequestId ?? this.workflowId);
     if (!this.session) return;
     const session = this.session;
     void session.abort().finally(() => {
@@ -409,6 +533,8 @@ class WorkflowRun {
     this.recordAudit("workflow.terminal", {
       outcome: event.type,
       terminalCode: event.type === "failed" ? event.code : undefined,
+      ...(event.type === "answer" ? { residentAnswer: event.text, residentAnswerSource: "host-delivered model response" } : {}),
+      ...(event.type === "failed" ? { residentMessage: event.residentMessage } : {}),
       durationMs: Date.now() - this.startedAt,
     });
     this.emit(event);
@@ -424,8 +550,7 @@ class WorkflowRun {
       void session
         .abort()
         .catch((error: unknown) => {
-          if (this.input.sensitive) console.error(`Aborting workflow "${this.workflowId}" failed.`);
-          else console.error(`Aborting workflow "${this.workflowId}" failed:`, error);
+          console.error(`Aborting workflow "${this.workflowId}" failed:`, error);
         })
         .finally(() => session.dispose());
     }
@@ -463,6 +588,64 @@ class WorkflowRun {
       console.error("Developer audit write failed:", error);
     }
   }
+
+  private recordModelRequest(observation: CompanionModelRequestObservation): void {
+    if (!this.running) return;
+    if (observation.boundary === "context_with_system") {
+      const requestNumber = ++this.modelRequestSequence;
+      const requestId = `${this.workflowId}:request:${requestNumber}`;
+      this.currentModelRequestId = requestId;
+      const context = projectModelMessages(observation.messages);
+      this.recordAudit("model.request.context", {
+        captureBoundary: "Pi SDK context_with_system",
+        modelTurn: this.modelTurn || requestNumber,
+        modelRequestId: requestId,
+        model: {
+          provider: this.session?.agent.state.model.provider,
+          id: this.session?.agent.state.model.id,
+          api: this.session?.agent.state.model.api,
+          reasoning: this.session?.agent.state.model.reasoning,
+        },
+        reasoningSettings: {
+          thinkingLevel: this.session?.agent.state.thinkingLevel,
+        },
+        reasoningSummary: {
+          status: "unavailable",
+          source: "Pi SDK",
+          reason: "Pi SDK 1.5.0 exposes no supported summary distinct from opaque thinking or private reasoning.",
+        },
+        effectiveSystemPrompt: observation.effectiveSystemPrompt ?? "[unavailable from SDK session]",
+        messages: context.messages,
+        omittedPrivateContent: context.omittedPrivateContent,
+        offeredTools: this.session?.getAllTools()
+          .filter((tool) => this.session?.getActiveToolNames().includes(tool.name))
+          .map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+          })) ?? [],
+        providerPayloadCapture: "pending or unavailable; see provider request context when emitted",
+      }, requestId);
+      return;
+    }
+
+    const requestId = this.currentModelRequestId ?? `${this.workflowId}:request:unmatched`;
+    const payload = recordOf(observation.payload);
+    const messages = projectModelMessages(payload.messages);
+    this.recordAudit("model.request.provider_context", {
+      modelTurn: this.modelTurn,
+      modelRequestId: requestId,
+      captureBoundary: "Pi SDK before_provider_request payload; SDK-converted, not provider-wire capture",
+      model: typeof payload.model === "string" ? payload.model : undefined,
+      messages: messages.messages,
+      omittedPrivateContent: messages.omittedPrivateContent,
+      offeredTools: projectProviderTools(payload.tools),
+      reasoningSettings: {
+        ...(typeof payload.reasoning_effort === "string" ? { reasoningEffort: payload.reasoning_effort } : {}),
+        ...(typeof payload.thinking === "string" ? { thinking: payload.thinking } : {}),
+      },
+    }, requestId);
+  }
 }
 
 export class CompanionWorkflows {
@@ -484,7 +667,7 @@ export class CompanionWorkflows {
     const run = new WorkflowRun(input, this.limits, options.onEvent, () => {
       if (this.runs.get(input.workflowId) === run) this.runs.delete(input.workflowId);
       options.signal?.removeEventListener("abort", onAbort);
-    }, input.sensitive ? undefined : this.options.audit);
+    }, this.options.audit);
     const onAbort = () => run.disconnect();
     this.runs.set(input.workflowId, run);
     options.signal?.addEventListener("abort", onAbort, { once: true });
