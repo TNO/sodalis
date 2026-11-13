@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101a27">
+    <title>Hey Sodalis — sherpa-onnx KWS prototype</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main class="page">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">THROWAWAY PROTOTYPE · LOCAL BROWSER ONLY</p>
+          <h1>Hey Sodalis</h1>
+          <p class="lede">Open-vocabulary wake-word detection with sherpa-onnx WebAssembly.</p>
+        </div>
+        <button id="micToggle" class="mic-toggle" type="button" aria-pressed="false" disabled>
+          <span id="micToggleIcon" aria-hidden="true">●</span>
+          <span id="micToggleText">Loading detector…</span>
+        </button>
+      </header>
+
+      <section id="statePanel" class="state-panel is-off" aria-labelledby="stateTitle" aria-live="assertive" aria-atomic="true">
+        <div class="state-orb" aria-hidden="true"><span></span></div>
+        <div class="state-copy">
+          <p id="stateEyebrow" class="state-eyebrow">MICROPHONE OFF</p>
+          <h2 id="stateTitle">Muted</h2>
+          <p id="stateDetail">The detector is not listening. Turn it on when you are ready.</p>
+        </div>
+        <div class="state-meta">
+          <span class="meta-label">Detector chunk</span>
+          <strong>16 frames · 320 ms</strong>
+          <span class="meta-label">Inference</span>
+          <strong>On-device WASM</strong>
+        </div>
+      </section>
+
+      <div class="privacy-strip" role="note">
+        <strong>Privacy:</strong> mic samples are processed locally by the WASM detector only. The page makes no audio network requests, records no audio, and writes no audio to disk. The browser’s mic indicator remains visible; use <em>Mute microphone</em> at any time. After a match, this prototype shows the listening state but does not transcribe or retain follow-up speech.
+      </div>
+
+      <div id="pageError" class="error-banner" role="alert" hidden></div>
+
+      <div class="columns">
+        <section class="panel tuning-panel" aria-labelledby="tuningTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">TUNE THE TRIGGER</p>
+              <h2 id="tuningTitle">Keyword and sensitivity</h2>
+            </div>
+            <span class="tag">English + Chinese model</span>
+          </div>
+          <p class="panel-intro">Edit tokenized keyword lines, then apply. One line per keyword; use <code>:score</code> or <code>#threshold</code> only if experimenting with per-keyword values.</p>
+
+          <label class="field-label" for="keywords">Keywords file text</label>
+          <textarea id="keywords" rows="3" spellcheck="false" aria-describedby="keywordHelp">HH EY1 S OW0 D AA1 L IH0 S @HEY_SODALIS</textarea>
+          <p id="keywordHelp" class="help">Default: <code>HH EY1</code> is the lexicon pronunciation for “HEY”. “SODALIS” is absent from the bundled English lexicon; the prototype adds the approximate Dutch reading <code>S OW0 D AA1 L IH0 S</code> for /soːˈdaːlɪs/. Try alternatives in this box. The model was not trained for Dutch.</p>
+
+          <div class="sliders">
+            <label class="slider-field" for="score">
+              <span>Keyword boost <strong id="scoreValue">1.0</strong></span>
+              <input id="score" type="range" min="0.1" max="3" step="0.1" value="1.0">
+              <span class="range-hint">Lower · 0.1 <span>3.0 · Higher</span></span>
+            </label>
+            <label class="slider-field" for="threshold">
+              <span>Detection threshold <strong id="thresholdValue">0.25</strong></span>
+              <input id="threshold" type="range" min="0.05" max="1" step="0.01" value="0.25">
+              <span class="range-hint">More sensitive · 0.05 <span>1.00 · Stricter</span></span>
+            </label>
+          </div>
+          <button id="applySettings" class="button button-secondary" type="button" disabled>Apply keyword settings</button>
+          <p id="settingsState" class="inline-status" role="status">Waiting for the local WASM runtime.</p>
+        </section>
+
+        <section class="panel measure-panel" aria-labelledby="measureTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">HANDS-ON COUNTS</p>
+              <h2 id="measureTitle">Your observations</h2>
+            </div>
+            <span class="tag">No audio in this log</span>
+          </div>
+          <div class="counter-grid">
+            <div class="counter-card"><span>Detections</span><strong id="detectionCount">0</strong></div>
+            <div class="counter-card"><span>False activations</span><strong id="falseCount">0</strong></div>
+            <div class="counter-card"><span>First-try success</span><strong id="firstTryRate">—</strong><small id="attemptCount">0 attempts</small></div>
+            <div class="counter-card"><span>Median activation latency</span><strong id="medianLatency">—</strong><small>End of trigger → visible state</small></div>
+          </div>
+          <div class="button-row">
+            <button id="falseButton" class="button button-warn" type="button" disabled>False activation +1</button>
+            <button id="successButton" class="button button-success" type="button" disabled>Intended: first try worked</button>
+            <button id="missButton" class="button button-secondary" type="button" disabled>Intended: first try missed</button>
+          </div>
+          <fieldset class="rating-fieldset">
+            <legend>Felt intrusiveness — choose one</legend>
+            <div id="ratingButtons" class="rating-buttons">
+              <button type="button" data-rating="fine" aria-pressed="false">Fine</button>
+              <button type="button" data-rating="uneasy" aria-pressed="false">Uneasy</button>
+              <button type="button" data-rating="unacceptable" aria-pressed="false">Unacceptable</button>
+            </div>
+          </fieldset>
+        </section>
+      </div>
+
+      <section class="panel log-panel" aria-labelledby="logTitle">
+        <div class="panel-heading log-heading">
+          <div>
+            <p class="eyebrow">SESSION LOG</p>
+            <h2 id="logTitle">Activation events</h2>
+          </div>
+          <div class="export-buttons">
+            <button id="exportJson" class="button button-secondary" type="button">Export JSON</button>
+            <button id="exportText" class="button button-secondary" type="button">Export text</button>
+          </div>
+        </div>
+        <p class="help">Detection timestamps and latency are recorded automatically. Add a false activation or intended attempt immediately after it happens. Nothing here contains microphone audio or transcripts.</p>
+        <ol id="eventList" class="event-list" aria-live="polite">
+          <li class="empty-log">No detections recorded yet.</li>
+        </ol>
+      </section>
+
+      <footer class="footnotes">
+        <p><strong>CPU hint:</strong> browser JavaScript cannot reliably report tab CPU use. In Chrome/Edge, open the browser Task Manager with <kbd>Shift</kbd>+<kbd>Esc</kbd> (or menu → More tools → Task Manager), compare this tab’s CPU before and after a few minutes. The prototype itself reports no CPU percentage.</p>
+        <p><strong>Evidence note:</strong> this page is an activation-only prototype. No Dutch accuracy, CPU/power, tablet behavior, or one-hour eagerness threshold is established until the human hands-on check is complete.</p>
+      </footer>
+    </main>
+
+    <script src="assets/runtime/sherpa-onnx-kws.js"></script>
+    <script src="app.js"></script>
+    <script src="assets/runtime/sherpa-onnx-wasm-kws-main.js"></script>
+  </body>
+</html>
