@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f7f5" />
+    <title>Hey Sodalis · wakeword-prototype</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar" aria-label="Microfoonstatus">
+        <div class="mic-state" id="mic-state" role="status" aria-live="assertive">
+          <span class="state-dot" id="state-dot" aria-hidden="true"></span>
+          <span id="mic-state-text">Microfoon uit — niet aan het luisteren</span>
+        </div>
+        <button id="mute-button" class="mute-button" type="button" aria-label="Microfoon dempen" disabled>
+          Microfoon uit
+        </button>
+      </header>
+
+      <main>
+        <section class="intro" aria-labelledby="page-title">
+          <p class="eyebrow">THROWAWAY-PROTOTYPE · LOKALE SPRAAKHERKENNING</p>
+          <h1 id="page-title">Hey Sodalis</h1>
+          <p class="lede">Maak met je eigen stem een wakeword en test of Sodalis je hoort.</p>
+          <p class="privacy-note"><strong>Privé:</strong> audio blijft op dit apparaat. Voorbeelden zitten alleen tijdelijk in het werkgeheugen; er wordt geen audio opgeslagen of verstuurd.</p>
+        </section>
+
+        <section class="status-card" id="activation-card" aria-live="polite">
+          <div class="status-orb" id="status-orb" aria-hidden="true"><span></span></div>
+          <div>
+            <p class="eyebrow" id="activation-eyebrow">MICROFOON UIT</p>
+            <h2 id="activation-title">Nog niet actief</h2>
+            <p id="activation-detail">Neem eerst minimaal drie voorbeelden op.</p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="samples-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">STAP 1</p>
+              <h2 id="samples-heading">Neem je voorbeelden op</h2>
+            </div>
+            <span class="count-pill" id="sample-count">0 / 10</span>
+          </div>
+          <p>Zeg één keer <strong>“Hey Sodalis”</strong> op een natuurlijke manier. Neem 3 tot 10 voorbeelden op. Elk voorbeeld duurt 3 seconden.</p>
+          <div class="button-row">
+            <button id="record-button" class="button primary" type="button">Neem voorbeeld op</button>
+            <button id="build-button" class="button secondary" type="button" disabled>Maak wakeword</button>
+            <button id="clear-button" class="button quiet" type="button" disabled>Wis alles</button>
+          </div>
+          <ol id="sample-list" class="sample-list" aria-label="Opgenomen voorbeelden"></ol>
+          <p class="subtle" id="sample-help">De opnames worden na het maken van het wakeword direct uit het geheugen gewist.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="listening-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">STAP 2</p>
+              <h2 id="listening-heading">Test de activatie</h2>
+            </div>
+          </div>
+          <p>Start continu luisteren wanneer het wakeword is gemaakt. De microfoonstatus blijft altijd zichtbaar. Dempen stopt de microfoon in één aanraking.</p>
+          <div class="button-row">
+            <button id="listen-button" class="button primary" type="button" disabled>Start luisteren</button>
+            <button id="playback-button" class="button secondary" type="button" disabled>Start 10-minutentest</button>
+          </div>
+          <div class="metrics-grid" aria-live="polite">
+            <div class="metric"><span>Detecties</span><strong id="detection-count">0</strong></div>
+            <div class="metric"><span>Valse activaties</span><strong id="false-count">0</strong></div>
+            <div class="metric"><span>Luisterpogingen</span><strong id="attempt-count">0</strong></div>
+            <div class="metric"><span>Eerste poging gelukt</span><strong id="first-success-count">0</strong></div>
+            <div class="metric"><span>Eerste poging gemist</span><strong id="first-miss-count">0</strong></div>
+            <div class="metric"><span>Na herhaling gelukt</span><strong id="retry-success-count">0</strong></div>
+            <div class="metric"><span>Na herhaling gemist</span><strong id="final-miss-count">0</strong></div>
+            <div class="metric"><span>Achtergrondtest</span><strong id="playback-time">0:00</strong></div>
+          </div>
+          <div class="attempt-box" id="attempt-box">
+            <p id="attempt-status">Voor een bedoelde poging: tik op de knop en zeg “Hey Sodalis”.</p>
+            <div class="button-row">
+              <button id="attempt-button" class="button secondary" type="button" disabled>Start bedoelde poging</button>
+              <button id="retry-button" class="button secondary" type="button" hidden>Probeer nog één keer</button>
+              <button id="miss-button" class="button quiet" type="button" hidden>Markeer als gemist</button>
+            </div>
+          </div>
+          <div class="detection-log" aria-labelledby="detection-log-heading">
+            <div class="log-heading">
+              <h3 id="detection-log-heading">Laatste detecties</h3>
+              <button id="false-button" class="button danger small" type="button" disabled>Valse activatie +1</button>
+            </div>
+            <ol id="detection-list" class="detection-list"><li class="empty">Nog geen detecties.</li></ol>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="rating-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">STAP 3</p>
+              <h2 id="rating-heading">Hoe voelt dit?</h2>
+            </div>
+          </div>
+          <p>Kies na de test één antwoord. Er is geen goed of fout.</p>
+          <fieldset class="rating-options">
+            <legend>Gevoelde opdringerigheid</legend>
+            <label><input type="radio" name="intrusiveness" value="fine" /> <span>Prima</span></label>
+            <label><input type="radio" name="intrusiveness" value="uneasy" /> <span>Ongemakkelijk</span></label>
+            <label><input type="radio" name="intrusiveness" value="unacceptable" /> <span>Onacceptabel</span></label>
+          </fieldset>
+        </section>
+
+        <section class="panel" aria-labelledby="export-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SESSIEGEGEVENS</p>
+              <h2 id="export-heading">Exporteer de meting</h2>
+            </div>
+          </div>
+          <div class="metrics-grid compact">
+            <div class="metric"><span>Geschatte vertraging</span><strong id="latest-latency">—</strong></div>
+            <div class="metric"><span>Timervertraging (gemiddeld)</span><strong id="cpu-delay">—</strong></div>
+            <div class="metric"><span>Valse activaties per uur</span><strong id="false-rate">—</strong></div>
+          </div>
+          <p class="subtle">Timervertraging is géén CPU-percentage. Open in Chrome de browser-taakbeheerder met <kbd>Shift</kbd>+<kbd>Esc</kbd> en bekijk de kolom CPU.</p>
+          <div class="button-row">
+            <button id="json-button" class="button secondary" type="button">Download JSON</button>
+            <button id="text-button" class="button secondary" type="button">Download tekst</button>
+          </div>
+          <p class="subtle" id="message" role="status" aria-live="polite"></p>
+        </section>
+
+        <footer>
+          Alleen voor evaluatie. Geen spraakherkenning, transcriptie of gesprek volgt na het wakeword.
+          <span id="app-state">Microfoon uit · 0 voorbeelden · 0 detecties</span>
+        </footer>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
