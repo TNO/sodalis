@@ -19,7 +19,8 @@
     "test": "vitest run && pnpm --recursive test",
     "test:python": "python3 -m unittest scripts/test_tts_compare.py && cd services/speech-http && python3 -m unittest test_server.py",
     "audit:dependencies": "pnpm audit --audit-level high",
-    "typecheck": "tsc -p scripts --noEmit && pnpm --recursive typecheck"
+    "typecheck": "tsc -p scripts --noEmit && pnpm --recursive typecheck",
+    "prototype:external-trigger": "tsx scripts/external-trigger-prototype.ts"
   },
   "devDependencies": {
     "@types/mithril": "^2.2.9",

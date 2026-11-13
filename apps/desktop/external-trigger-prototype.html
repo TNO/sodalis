@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2f6f7" />
+    <title>External trigger prototype</title>
+  </head>
+  <body>
+    <main id="prototype" class="prototype">
+      <header>
+        <h1>External-trigger listening-state prototype</h1>
+        <p>Throwaway interaction test. The browser microphone stays off; a demo button event only shows that Sodalis is ready to listen.</p>
+      </header>
+      <div class="connection"><p id="connection" data-state="connecting" role="status" aria-live="polite">Connecting to the local push service…</p></div>
+      <section id="listening-state" class="listening-state" aria-label="Waiting for a trigger" aria-live="assertive" aria-atomic="true">
+        <div class="indicator" aria-hidden="true"></div>
+        <h2 id="listening-title">Waiting for a trigger</h2>
+        <p id="listening-description">Press the stand-in button, or send the local mock event.</p>
+      </section>
+      <div class="actions" aria-label="Trigger and safety controls">
+        <button id="stand-in" type="button">Press stand-in button</button>
+        <button id="enable-chime" type="button">Enable chime</button>
+        <button id="mute-dismiss" type="button">Mute chime</button>
+      </div>
+      <p class="microcopy">Enable the chime once with a user gesture. The stand-in sends the same fixed event path as the local mock; it does not open a microphone or start speech recognition.</p>
+      <dl class="metrics" aria-label="Prototype counters">
+        <div class="metric"><dt>Intended attempts</dt><dd id="attempt-count">0</dd></div>
+        <div class="metric"><dt>First-try successes</dt><dd id="success-count">0</dd></div>
+        <div class="metric"><dt>Misses</dt><dd id="miss-count">0</dd></div>
+        <div class="metric"><dt>False activations</dt><dd id="false-count">0</dd></div>
+        <div class="metric latency"><dt>Trigger to indicator update (frame estimate logged separately)</dt><dd id="latest-latency">Not measured yet</dd></div>
+      </dl>
+      <section>
+        <h2>Felt intrusiveness</h2>
+        <label for="intrusiveness">Choose one rating:</label>
+        <select id="intrusiveness">
+          <option value="">Not rated</option>
+          <option value="fine">Fine</option>
+          <option value="uneasy">Uneasy</option>
+          <option value="unacceptable">Unacceptable</option>
+        </select>
+      </section>
+      <section>
+        <h2>False activation</h2>
+        <button id="flag-false" type="button" disabled>Flag latest trigger as false</button>
+        <p class="microcopy">Use this if the visible listening state appeared without an intended attempt.</p>
+      </section>
+      <section>
+        <div class="log-header"><h2>Recent activity</h2><button id="export-log" type="button">Export JSON log</button></div>
+        <ol id="log-list" aria-live="polite" aria-relevant="additions"></ol>
+      </section>
+    </main>
+    <script type="module" src="/src/prototypes/external-trigger/main.ts"></script>
+  </body>
+</html>

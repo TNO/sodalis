@@ -46,6 +46,11 @@ export default defineConfig({
           process.env.SODALIS_HOME_API_URL ?? gateway ?? "http://127.0.0.1:3003",
         changeOrigin: true,
       },
+      "/api/prototype/external-trigger": {
+        target:
+          process.env.EXTERNAL_TRIGGER_API_URL ?? "http://127.0.0.1:3013",
+        changeOrigin: true,
+      },
       ...(process.env.HOME_ADMIN_UI === "1"
         ? {
             "/": {

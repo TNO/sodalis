@@ -14,7 +14,8 @@
     "start:ai": "tsx src/assistant/main.ts",
     "start:home": "tsx src/home/main.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prototype:external-trigger-api": "tsx src/prototypes/externalTriggerPrototypeMain.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "1.5.0",
