@@ -3,6 +3,7 @@ import { Button, ThemeManager } from "mithril-materialized";
 import { createAttentionTargetRegistry } from "@sodalis/avatar";
 import { createAppIntegrationRegistry } from "@sodalis/app-sdk";
 import { DesktopAvatarOverlay } from "./avatar/DesktopAvatarOverlay.js";
+import { ActivationListeningStatePrototype } from "./avatar/ActivationListeningStatePrototype.js";
 import { createAttentionManager } from "./avatar/AttentionManager.js";
 import { createAvatarPresentationController } from "./avatar/AvatarPresentationController.js";
 import { createAvatarSelection } from "./avatar/avatarCatalogue.js";
@@ -33,6 +34,10 @@ const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
 const DesktopShell = () => {
+  const activationPrototype =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get("prototype") ===
+      "activation-listening";
   const state: {
     host?: DesktopHost;
     applications: DesktopApplication[];
@@ -189,42 +194,44 @@ const DesktopShell = () => {
                     }),
                   ],
                 ),
-                m(DesktopAvatarOverlay, {
-                  asset: avatarSelection.selected.asset,
-                  preferences: companionPreferences,
-                  reducedMotion: state.avatarLab.reducedMotion,
-                  switchTo: avatarSwitchOption(),
-                  targetRegistry: avatarTargetRegistry,
-                  onGeometryChange: () => attention.refresh(),
-                  gazeOverlay: state.avatarLab.gazeOverlay,
-                  showGazeTarget: state.avatarLab.showGazeTarget,
-                  frame: state.desktopFrame,
-                  onScene(scene) {
-                    if (scene) {
-                      scene.setFraming(presentation.state.framing);
-                      scene.setQuality(state.avatarLab.quality);
-                      scene.controller.setReducedMotion(
-                        state.avatarLab.reducedMotion,
-                      );
-                    }
-                    state.avatarScene = scene;
-                    attention.refresh();
-                    m.redraw();
-                  },
-                  presentation,
-                  actionRuntime,
-                  onSpeechInput(controller) {
-                    state.speechInput = controller;
-                  },
-                  getAppContext: () =>
-                    integrations.getCurrentAppContext(),
-                  async onOpenApplication(appId) {
-                    if (!state.host) {
-                      throw new Error("The desktop connection is unavailable.");
-                    }
-                    await state.host.openApplication(appId);
-                  },
-                }),
+                activationPrototype
+                  ? m(ActivationListeningStatePrototype)
+                  : m(DesktopAvatarOverlay, {
+                      asset: avatarSelection.selected.asset,
+                      preferences: companionPreferences,
+                      reducedMotion: state.avatarLab.reducedMotion,
+                      switchTo: avatarSwitchOption(),
+                      targetRegistry: avatarTargetRegistry,
+                      onGeometryChange: () => attention.refresh(),
+                      gazeOverlay: state.avatarLab.gazeOverlay,
+                      showGazeTarget: state.avatarLab.showGazeTarget,
+                      frame: state.desktopFrame,
+                      onScene(scene) {
+                        if (scene) {
+                          scene.setFraming(presentation.state.framing);
+                          scene.setQuality(state.avatarLab.quality);
+                          scene.controller.setReducedMotion(
+                            state.avatarLab.reducedMotion,
+                          );
+                        }
+                        state.avatarScene = scene;
+                        attention.refresh();
+                        m.redraw();
+                      },
+                      presentation,
+                      actionRuntime,
+                      onSpeechInput(controller) {
+                        state.speechInput = controller;
+                      },
+                      getAppContext: () =>
+                        integrations.getCurrentAppContext(),
+                      async onOpenApplication(appId) {
+                        if (!state.host) {
+                          throw new Error("The desktop connection is unavailable.");
+                        }
+                        await state.host.openApplication(appId);
+                      },
+                    }),
               ],
             ),
             m("aside.assistant-panel[aria-labelledby='assistant-title']", [
