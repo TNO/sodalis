@@ -19,6 +19,9 @@ const base = {
 
 interface ComposeConfig {
   services: Record<string, {
+    image?: string;
+    build?: { context: string; dockerfile: string };
+    pull_policy?: string;
     environment?: Record<string, string>;
     command?: string[];
     networks?: Record<string, unknown>;
@@ -34,6 +37,35 @@ describe("developer audit persistence", () => {
 });
 
 describe.skipIf(!available)("companion Compose configuration (no daemon or model required)", () => {
+  it("builds the shared API image locally for every consumer, including Home", () => {
+    const directory = mkdtempSync(join(tmpdir(), "sodalis-compose-"));
+    try {
+      const envFile = join(directory, "empty.env");
+      writeFileSync(envFile, "");
+      const result = spawnSync(compose.command, [
+        ...compose.prefix, "--env-file", envFile, "-f", join(root, "compose.yaml"),
+        "--profile", "home-api", "config", "--format", "json",
+      ], {
+        cwd: root, encoding: "utf8", timeout: 10_000,
+        env: {
+          PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot,
+          ...resolveStack(base).environment,
+        },
+      });
+      expect(result.status, result.stderr).toBe(0);
+      const config = JSON.parse(result.stdout) as ComposeConfig;
+      for (const name of ["speech", "ai", "home"]) {
+        expect(config.services[name], name).toMatchObject({
+          image: "sodalis-api:dev",
+          build: { context: root, dockerfile: "services/api/Dockerfile" },
+          pull_policy: "build",
+        });
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it.each([false, true])("renders the AI configuration with readings enabled=%s", (readings) => {
     const directory = mkdtempSync(join(tmpdir(), "sodalis-compose-"));
     try {
