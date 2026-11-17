@@ -186,3 +186,21 @@ result.
 - [x] 0062 Repairing transcript tails and onset timing *(needs 0061)*
 - [x] 0063 Adding speech captions and playback fallback *(needs 0058, 0061, 0062)*
 - [x] 0064 Companion dots and accessibility controls
+
+## Hands-free activation
+
+Decided in the
+[interaction-modes evaluation](../docs/evaluations/interaction-modes.md): a
+sample-based wake word, an optional external trigger and opt-in avatar prompts,
+with hold-to-talk and typing as fallbacks. The spec is 0091; 0085–0090 are its
+slices. Tasks 0086 and 0087 can proceed in parallel once 0085 is done. Tablet
+deployment needs the evaluation's "Future research on a tablet" measurements
+first.
+
+- [ ] [0085 Add the activation controller and listening state](0085-activation-controller-and-listening-state.md) *(needs 0020, 0023)*
+- [ ] [0086 Add the sample-based wake word, enrolment and Activation settings](0086-wake-word-enrolment-and-activation-settings.md) *(needs 0085)*
+- [ ] [0087 Add the external trigger push channel](0087-external-trigger-push-channel.md) *(needs 0085; 0038 only to enable it against a real Home Assistant)*
+- [ ] [0088 Add the avatar-initiated prompt scheduler](0088-avatar-prompt-scheduler.md) *(needs 0085, 0086)*
+- [ ] [0089 Add the optional spoken activation acknowledgment](0089-spoken-activation-acknowledgment.md) *(needs 0086)*
+- [ ] [0090 Review privacy before hands-free listening reaches real users](0090-privacy-review-before-hands-free-rollout.md) *(needs 0086; blocks real-user rollout of 0086)*
+- [ ] [0091 Spec: hands-free activation on the tablet](0091-hands-free-activation-spec.md) *(parent spec of 0085–0090)*
