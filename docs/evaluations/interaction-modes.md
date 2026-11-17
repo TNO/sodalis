@@ -268,16 +268,17 @@ In order, each with behaviour tests under ADR 0006 and verified on a laptop:
    Sample-based wake word, enrolment and the Activation settings section
    (needs 0085).
 3. [0087](../../TASKS/0087-external-trigger-push-channel.md) Server-to-browser
-   push channel and the administrator's trigger setup (needs 0038).
+   push channel and the administrator's trigger setup (needs 0085).
 4. [0088](../../TASKS/0088-avatar-prompt-scheduler.md) Avatar-initiated prompt
-   scheduler (needs 0085, 0087).
+   scheduler (needs 0085, 0086).
 5. [0089](../../TASKS/0089-spoken-activation-acknowledgment.md) Optional spoken
    acknowledgment (needs 0086).
 6. [0090](../../TASKS/0090-privacy-review-before-hands-free-rollout.md) Privacy
    review before hands-free listening is switched on for real users (blocks the
    real-user rollout of 0086).
 
-Tasks 0086 and 0087 can run in parallel after 0085.
+Tasks 0086 and 0087 can run in parallel after 0085. The parent spec is
+[0091](../../TASKS/0091-hands-free-activation-spec.md).
 
 ## Artefacts
 

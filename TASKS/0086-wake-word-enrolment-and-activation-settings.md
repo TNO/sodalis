@@ -1,8 +1,10 @@
 # 0086 Add the sample-based wake word, enrolment and Activation settings
 
 Status: open
+Triage: ready-for-agent
 Priority: high
 Subsystem: speech
+Spec: [0091](0091-hands-free-activation-spec.md)
 Depends on: 0085
 
 ## Context

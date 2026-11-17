@@ -1,9 +1,11 @@
 # 0088 Add the avatar-initiated prompt scheduler
 
 Status: open
+Triage: ready-for-agent
 Priority: medium
 Subsystem: avatar
-Depends on: 0085, 0087
+Spec: [0091](0091-hands-free-activation-spec.md)
+Depends on: 0085, 0086 (Activation settings section)
 
 ## Context
 

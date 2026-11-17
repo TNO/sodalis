@@ -1,9 +1,11 @@
 # 0087 Add the external trigger push channel
 
 Status: open
+Triage: ready-for-agent
 Priority: medium
 Subsystem: server
-Depends on: 0038, 0085
+Spec: [0091](0091-hands-free-activation-spec.md)
+Depends on: 0085 (0038 is needed only to enable it against a real Home Assistant)
 
 ## Context
 

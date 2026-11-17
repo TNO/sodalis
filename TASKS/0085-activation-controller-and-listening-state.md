@@ -1,8 +1,10 @@
 # 0085 Add the activation controller and listening state
 
 Status: open
+Triage: ready-for-agent
 Priority: high
 Subsystem: avatar
+Spec: [0091](0091-hands-free-activation-spec.md)
 Depends on: 0020, 0023
 
 ## Context

@@ -1,8 +1,10 @@
 # 0089 Add the optional spoken activation acknowledgment
 
 Status: open
+Triage: ready-for-agent
 Priority: low
 Subsystem: speech
+Spec: [0091](0091-hands-free-activation-spec.md)
 Depends on: 0086
 
 ## Context

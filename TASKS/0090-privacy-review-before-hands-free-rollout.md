@@ -1,8 +1,10 @@
 # 0090 Review privacy before hands-free listening reaches real users
 
 Status: open
+Triage: human review (not agent work)
 Priority: high
 Subsystem: privacy
+Spec: [0091](0091-hands-free-activation-spec.md)
 Depends on: 0086
 
 ## Context
