@@ -19,13 +19,14 @@ services:
 
   speech:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-speech
-    build:
+    build: &api-build
       context: .
       dockerfile: services/api/Dockerfile
       cache_from:
         - ghcr.io/tno/sodalis-api:buildcache-amd64
         - ghcr.io/tno/sodalis-api:buildcache-arm64
     image: sodalis-api:dev
+    pull_policy: build
     command: ["pnpm", "--filter", "@sodalis/server", "start:speech"]
     environment:
       HOST: 0.0.0.0
@@ -47,13 +48,9 @@ services:
 
   ai:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-ai
-    build:
-      context: .
-      dockerfile: services/api/Dockerfile
-      cache_from:
-        - ghcr.io/tno/sodalis-api:buildcache-amd64
-        - ghcr.io/tno/sodalis-api:buildcache-arm64
+    build: *api-build
     image: sodalis-api:dev
+    pull_policy: build
     command: ["pnpm", "--filter", "@sodalis/server", "start:ai"]
     environment:
       HOST: 0.0.0.0
@@ -114,7 +111,9 @@ services:
   home:
     container_name: ${SODALIS_SERVICE_PREFIX:-sodalis-dev}-home
     profiles: ["home-api"]
+    build: *api-build
     image: sodalis-api:dev
+    pull_policy: build
     command: ["pnpm", "--filter", "@sodalis/server", "start:home"]
     environment:
       HOST: 0.0.0.0
