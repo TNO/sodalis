@@ -5,6 +5,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { HomeSimulatorSelection } from "../stack-config.js";
 import { resolveBridgeHost } from "./bridge.js";
 
+const repository = resolve(import.meta.dirname, "../..");
+
 export interface StackLifecycle {
   readonly composeDown: () => void | Promise<void>;
   readonly composeUp: () => void | Promise<void>;
@@ -16,7 +18,7 @@ export interface StackLifecycle {
 export async function runStackLifecycle(
   operation: "up" | "down", enabled: boolean, runtime: StackLifecycle,
 ): Promise<void> {
-  if (enabled) await runtime.stopBridge();
+  await runtime.stopBridge();
   await runtime.composeDown();
   if (operation === "up") {
     await runtime.composeUp();
@@ -32,6 +34,57 @@ export async function runStackLifecycle(
   }
 }
 
+function alive(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+function isBridge(pid: number): boolean {
+  const entry = resolve(repository, "scripts/home-simulator/bridge-main.ts");
+  try {
+    if (process.platform === "linux") {
+      return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").includes(entry);
+    }
+    const command = process.platform === "win32"
+      ? spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+        `(Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}').CommandLine`], { encoding: "utf8" })
+      : spawnSync("ps", ["-ww", "-p", String(pid), "-o", "command="], { encoding: "utf8" });
+    return command.status === 0 && command.stdout.includes(entry);
+  } catch {
+    // If the process cannot be identified, never risk signalling a reused PID.
+    return false;
+  }
+}
+
+export async function stopHomeSimulatorBridge(
+  directory = resolve(repository, "logs/home-simulator"),
+): Promise<void> {
+  const recordPath = resolve(directory, "bridge.json");
+  if (!existsSync(recordPath)) return;
+  const record = JSON.parse(readFileSync(recordPath, "utf8"));
+  const pid = record?.pid;
+  if (!Number.isSafeInteger(pid) || pid <= 1) throw new Error(`Invalid bridge PID in ${recordPath}.`);
+  if (pid !== process.pid && isBridge(pid)) {
+    try { process.kill(pid, "SIGTERM"); } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    }
+    const deadline = Date.now() + 5_000;
+    while (isBridge(pid) && Date.now() < deadline) await sleep(50);
+    if (isBridge(pid)) {
+      // The detached group also contains the stdio child if graceful shutdown stalled.
+      try { process.kill(process.platform === "win32" ? pid : -pid, "SIGKILL"); } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+      const killDeadline = Date.now() + 2_000;
+      while (isBridge(pid) && Date.now() < killDeadline) await sleep(50);
+      if (isBridge(pid)) throw new Error(`Could not stop Home Simulator bridge PID ${pid}.`);
+    }
+  }
+  rmSync(recordPath, { force: true });
+}
+
 export interface LauncherOptions {
   readonly selection: HomeSimulatorSelection;
   readonly directory?: string;
@@ -39,7 +92,6 @@ export interface LauncherOptions {
 }
 
 export function createHomeSimulatorLauncher(options: LauncherOptions): Pick<StackLifecycle, "stopBridge" | "runSession" | "startBridge"> {
-  const repository = resolve(import.meta.dirname, "../..");
   const directory = options.directory ?? resolve(repository, "logs/home-simulator");
   const recordPath = resolve(directory, "bridge.json");
   const host = resolveBridgeHost(options.selection.bridgeHost);
@@ -52,35 +104,7 @@ export function createHomeSimulatorLauncher(options: LauncherOptions): Pick<Stac
     HOME_SIMULATOR_BRIDGE_PORT: String(port),
     HOME_SIMULATOR_HANDOFF_PATH: resolve(directory, "session.json"),
   };
-  function alive(pid: number): boolean {
-    try { process.kill(pid, 0); return true; } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
-      throw error;
-    }
-  }
-  async function stopBridge(): Promise<void> {
-    if (!existsSync(recordPath)) return;
-    const record = JSON.parse(readFileSync(recordPath, "utf8"));
-    const pid = record?.pid;
-    if (!Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) throw new Error(`Invalid bridge PID in ${recordPath}.`);
-    if (alive(pid)) {
-      try { process.kill(pid, "SIGTERM"); } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-      }
-      const deadline = Date.now() + 5_000;
-      while (alive(pid) && Date.now() < deadline) await sleep(50);
-      if (alive(pid)) {
-        // The detached group also contains the stdio child if graceful shutdown stalled.
-        try { process.kill(process.platform === "win32" ? pid : -pid, "SIGKILL"); } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-        }
-        const killDeadline = Date.now() + 2_000;
-        while (alive(pid) && Date.now() < killDeadline) await sleep(50);
-        if (alive(pid)) throw new Error(`Could not stop Home Simulator bridge PID ${pid}.`);
-      }
-    }
-    rmSync(recordPath, { force: true });
-  }
+  const stopBridge = () => stopHomeSimulatorBridge(directory);
   return {
     stopBridge,
     runSession: () => {

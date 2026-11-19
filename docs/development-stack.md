@@ -1102,8 +1102,9 @@ absolute path of your home_simulator checkout", and `stack:up` stops with
 "HOME_SIMULATOR_ROOT … does not exist" or "… is missing its Python environment
 (create the checkout's .venv first)" for an unusable checkout. A Home Assistant
 simulator alone is therefore not possible with the flag on. With
-`HOME_PROVIDER=external-api` no Home Simulator helper, handoff file or setting
-is read.
+`HOME_PROVIDER=external-api` no Home Simulator helper is started, and no
+handoff file or simulator setting is read. Only an existing bridge PID record
+is checked for cleanup.
 
 The `ai` service receives `HOME_SIMULATOR_BRIDGE_URL=http://host.docker.internal:<port>`
 (blank when the flag is off). While the flag is on, the `HOME_GRAPH_*` and
@@ -1112,11 +1113,19 @@ validated, no readings file is mounted, and the graph and SQLite tools are not
 offered. Switch to `HOME_PROVIDER=external-api` to use the graph and readings
 again (see [the graph setup](#companion-workflow-against-the-test-graph)).
 
-With the flag on, `stack:up` stops any previously recorded host bridge, runs
-Compose, runs `pnpm home-simulator:session`, then starts the detached host bridge
-and waits for `/health`. `stack:down` stops the bridge and its avatar child;
-repeated stops are harmless. Every `stack:up` therefore starts a fresh replay
-session at the beginning of the dataset.
+Every `stack:up` and `stack:down` first stops any host bridge recorded in
+`logs/home-simulator/bridge.json`, even after switching the flag off.
+`stack:down` does not require valid startup settings such as
+`HOME_SIMULATOR_ROOT`. Before signalling a recorded PID, the launcher checks
+that it still belongs to this worktree's bridge; a stale record pointing at an
+unrelated process is removed without signalling it. A missing record is a
+no-op, and the handoff and logs are left untouched.
+
+With the flag on, `stack:up` then runs Compose, runs
+`pnpm home-simulator:session`, starts the detached host bridge and waits for
+`/health`. Stopping the bridge also stops its avatar child; repeated stops are
+harmless. Every flag-on `stack:up` therefore starts a fresh replay session at
+the beginning of the dataset.
 
 The session script uses the checkout's unresolved `.venv/bin/python` path with
 that checkout as its working directory. It drives the Home Simulator's
