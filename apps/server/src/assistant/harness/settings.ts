@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 
 export interface CompanionDataSettings {
   readonly COMPANION_HARNESS?: string;
+  readonly HOME_SIMULATOR_BRIDGE_URL?: string;
   readonly HOME_GRAPH_URL?: string;
   readonly HOME_GRAPH_USER?: string;
   readonly HOME_GRAPH_PASSWORD?: string;
@@ -65,6 +66,24 @@ function companionHarnessMode(value: string | undefined): "off" | "pi" {
 /** Shared by native startup and Compose selection; never resolves graph-provided paths. */
 export function validateCompanionSettings(settings: CompanionDataSettings): "off" | "pi" {
   const mode = companionHarnessMode(settings.COMPANION_HARNESS);
+  const bridgeUrl = settings.HOME_SIMULATOR_BRIDGE_URL?.trim();
+  if (bridgeUrl) {
+    if (mode === "off") return mode;
+    let url: URL;
+    try {
+      url = new URL(bridgeUrl);
+    } catch {
+      throw new Error("HOME_SIMULATOR_BRIDGE_URL must be an HTTP(S) origin.");
+    }
+    if (
+      !["http:", "https:"].includes(url.protocol) || !url.hostname ||
+      url.username || url.password || url.search || url.hash ||
+      (url.pathname !== "" && url.pathname !== "/")
+    ) {
+      throw new Error("HOME_SIMULATOR_BRIDGE_URL must be an HTTP(S) origin without credentials, path, query or fragment.");
+    }
+    return mode;
+  }
   const configured = ([
     "HOME_GRAPH_URL", "HOME_GRAPH_USER", "HOME_GRAPH_PASSWORD", "HOME_GRAPH_DATABASE",
     "HOME_GRAPH_SCOPE", "HOME_DATA_SQLITE_FILE", "HOME_DATA_SQLITE_ENDPOINT",

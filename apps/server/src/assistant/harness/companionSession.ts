@@ -31,6 +31,7 @@ export type CompanionModelRequestObservation =
 async function explicitResources(
   observeModelRequest?: (observation: CompanionModelRequestObservation) => void,
   settingsManager = SettingsManager.inMemory(),
+  appendSystemPrompt: readonly string[] = [],
 ): Promise<ResourceLoader> {
   const loader = new DefaultResourceLoader({
     cwd: NEUTRAL_CWD,
@@ -42,6 +43,7 @@ async function explicitResources(
     noThemes: true,
     noContextFiles: true,
     systemPrompt: COMPANION_SYSTEM_PROMPT,
+    appendSystemPrompt: [...appendSystemPrompt],
     extensionFactories: observeModelRequest
       ? [{
           name: "sodalis-audit",
@@ -87,6 +89,7 @@ export interface CompanionSessionOptions {
   /** Earlier resident conversation, oldest first; not the question being asked. */
   readonly history: readonly ConversationMessage[];
   readonly tools: readonly ToolDefinition[];
+  readonly appendSystemPrompt?: readonly string[];
   readonly observeModelRequest?: (observation: CompanionModelRequestObservation) => void;
 }
 
@@ -106,7 +109,7 @@ export async function createCompanionSession(options: CompanionSessionOptions): 
           : {}),
       })
     : undefined;
-  const resourceLoader = await explicitResources(observeModelRequest, settingsManager);
+  const resourceLoader = await explicitResources(observeModelRequest, settingsManager, options.appendSystemPrompt);
   const start = Date.now() - options.history.length;
   options.history.forEach((message, index) => {
     sessionManager.appendMessage(
