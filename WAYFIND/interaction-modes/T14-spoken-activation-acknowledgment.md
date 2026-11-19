@@ -8,6 +8,10 @@ blocked-by: [T08-activation-and-listening-state-ux.md]
 
 ## Question
 
+> Historical decision. Spoken activation acknowledgments are deferred with the
+> entire hands-free rollout; current feedback stays unchanged. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 The user preferred a short chime for now but raised the possibility of replacing
 it later with a spoken sentence. Should a spoken activation acknowledgment
 replace or supplement the chime, and what wording would be clear without

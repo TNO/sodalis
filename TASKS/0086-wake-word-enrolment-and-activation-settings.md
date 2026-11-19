@@ -1,11 +1,21 @@
 # 0086 Add the sample-based wake word, enrolment and Activation settings
 
-Status: open
-Triage: ready-for-agent
+Status: cancelled (2026-11-19; wake word out of scope)
+Triage: archived; do not implement
 Priority: high
 Subsystem: speech
 Spec: [0091](0091-hands-free-activation-spec.md)
-Depends on: 0085
+Historical dependency: 0085
+
+## Current disposition
+
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md) cancels
+this task. Always-listening wake-word detection remains intrusive even when
+local, false detections can send subsequent speech/text to configured
+providers, and missed or delayed triggers undermine reliability. Do not add
+the detector, enrolment data, dependencies or Activation settings, including
+as disabled features. Keep the existing UI button and typing unchanged.
+The original task below is historical, not an implementation backlog.
 
 ## Context
 

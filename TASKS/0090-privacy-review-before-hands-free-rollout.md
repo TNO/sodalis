@@ -1,11 +1,27 @@
 # 0090 Review privacy before hands-free listening reaches real users
 
-Status: open
-Triage: human review (not agent work)
+Status: superseded (2026-11-19; wake-word rollout cancelled)
+Triage: archived; no wake-word rollout authorized
 Priority: high
 Subsystem: privacy
 Spec: [0091](0091-hands-free-activation-spec.md)
-Depends on: 0086
+Historical dependency: 0086
+
+## Current disposition
+
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md) removes
+the wake-word rollout, so this is no longer a gate for shipping that feature.
+It is not a completed human privacy review or a waiver for existing speech,
+LLM processing or future physical-button hardware.
+
+Local pre-activation buffers do not prevent disclosure after activation:
+a mistaken detection could still send subsequent audio to configured STT,
+and cancellation cannot recall it. That is one reason the feature is out of
+scope. See the
+[decision rationale](../docs/evaluations/interaction-modes.md#why-the-decision-changed).
+Reassess capture location, provider flows, consent and deletion in the scope
+of any future button implementation. The original checklist below is retained
+as historical research, not a current implementation or rollout plan.
 
 ## Context
 

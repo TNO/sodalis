@@ -8,6 +8,10 @@ blocked-by: []
 
 ## Question
 
+> Historical research. Automatic activation is not part of the current
+> button-first scope; keep the UI unchanged. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 Which smart-home signals could indicate that a person is about to talk to
 Sodalis or is receptive to being addressed: presence or motion in the room,
 distance to the tablet, doorbell or door events, time of day and routines,

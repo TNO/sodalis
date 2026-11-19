@@ -41,4 +41,4 @@ a single place to find conclusions.
 | [Personal-assistant memory and embodiment for older adults](personal-assistant-memory-and-embodiment.md) | 0039, 0054 | Research complete; implementation and user validation remain |
 | [Pi ecosystem packages for the read-only email and calendar readers](pi-packages-for-account-readers.md) | 0072, 0074 | Research complete; no third-party/provider packages implemented |
 | [Security review: read-only email journey](email-journey-security-review.md) | 0072 | Complete; static review, no vulnerabilities found |
-| [Hands-free interaction modes for the tablet](interaction-modes.md) | 0085–0090 | Decisions complete; one tester on a laptop, no tablet, eagerness unmeasured |
+| [Hands-free interaction modes for the tablet](interaction-modes.md) | 0085–0091 | Superseded 2026-11-19 by ADR 0010; current UI unchanged, wake word out of scope, future physical button undecided |

@@ -1,13 +1,47 @@
 # Hands-free interaction modes for the Sodalis tablet
 
-Status: decisions complete as of 2026-11-17. This is a desk and hands-on
-evaluation by one tester on a laptop. Nothing was built into the product, no
-tablet was available, and no cloud provider command was run. The follow-up
-tasks are 0085–0090 in [`TASKS/`](../../TASKS/README.md#hands-free-activation).
-The decision trail (tickets and rubric) is in
-[`WAYFIND/interaction-modes/`](../../WAYFIND/interaction-modes/map.md).
+Status: recommendation superseded on 2026-11-19 by
+[ADR 0010](../adr/0010-button-activation-without-wake-word.md).
+The original desk and laptop evaluation concluded on 2026-11-17. Its evidence
+is retained below, but its wake-word recommendation and rollout plan are no
+longer current. No tablet was available and no cloud provider command was run
+in that evaluation.
 
 ## Summary
+
+Keep Sodalis's current UI unchanged: the existing hold-to-talk control starts
+listening and typing remains available. Wake-word detection and enrolment are
+out of scope, not features to ship disabled. Defer the entire hands-free
+rollout, including the shared activation controller/listening UI, automatic
+avatar prompts and spoken acknowledgments.
+
+The future direction is **physical-button activation**. The device,
+connection, press/hold semantics, listening duration, feedback and microphone
+placement remain undecided. An embedded-device microphone could extend
+Sodalis beyond the tablet, but is only an option for future design. The old
+Home Assistant push channel is not a selected implementation.
+
+### Why the decision changed
+
+- Always-listening hardware can feel intrusive in the home even when
+  pre-activation audio stays in local, temporary buffers. Local processing
+  alone does not resolve perceived privacy.
+- A false wake detection can start ordinary speech capture and send subsequent
+  audio to configured STT and text onward to an LLM. Keeping the *detector's*
+  audio local is not a guarantee against that disclosure.
+- Missed or delayed wake words make activation uncertain and frustrating.
+  The original one-speaker laptop results and unmeasured false-activation
+  rate do not establish reliable use in the home.
+- A deliberate physical action is the preferred direction; there is no need
+  to change the already-working tablet UI while its implementation is decided.
+
+## Historical summary (superseded)
+
+Everything from here through the historical research sections records the
+2026-11-17 evaluation, not the current recommendation. The original follow-up
+tasks are [0085-0091](../../TASKS/README.md#hands-free-activation), now cancelled,
+deferred or superseded. The decision trail is in
+[`WAYFIND/interaction-modes/`](../../WAYFIND/interaction-modes/map.md).
 
 Sodalis is used on a fixed tablet by an older adult, so the criteria are, in
 order: privacy; false and missed activations (including **eagerness**);
@@ -30,14 +64,14 @@ in [`GLOSSARY.md`](../../GLOSSARY.md).
   silence list and a bounded listening window after a question.
 - **Do not build a standing open microphone**, and do not adopt sherpa-onnx
   keyword spotting, openWakeWord, Porcupine, voice satellites or camera-based
-  presence. Reasons are under [Analysis](#analysis).
+  presence. Reasons are under [Historical analysis](#historical-analysis).
 - **Sensor-reasoned activation is desk research only.** It has no task; see
-  [Open items](#open-items).
+  [Historical open items](#historical-open-items).
 
 The ordered follow-up tasks are listed under
 [Follow-up tasks](#follow-up-tasks).
 
-## Scope
+## Historical scope
 
 In: which activation modes Sodalis should offer on a tablet in a home room,
 how they combine, and the listening-state UX. Out: implementing any mode,
@@ -48,7 +82,7 @@ this evaluation fixes only the activation rules it must follow, and flags that
 holding night-time alerts under quiet hours affects safety and must be revisited
 there.
 
-## Method and hardware
+## Historical method and hardware
 
 - **Target device:** a fixed tablet on a stand or wall, built-in microphone
   and speaker, sometimes handheld, Home Assistant sensors available. **No
@@ -78,7 +112,7 @@ there.
   wake-word engines, open-mic limits on tablets, external triggers, sensor
   signals, privacy and consent, and prior art on false activations.
 
-## Results
+## Historical results
 
 ### Candidate modes
 
@@ -89,7 +123,7 @@ there.
 | External trigger over a server-to-browser push channel | hands-on on a laptop, mock Home Assistant source plus an on-screen stand-in | 2 of 2 first tries (far too few to rate the gate); 0 false activations; felt intrusiveness fine; stand-in 9–14 ms to the DOM; pushed-event latency not reliably measured (clock drift; an earlier automated run measured a median of 94 ms, single clock); no event arrived while the tab was hidden, no reconnect exercised. |
 | Avatar-initiated prompts | desk research | Policy decided; not built or measured. |
 | Sensor-reasoned intent | desk research | No live presence or door signal reaches the assistant today; prior art reaches about 70–80% accuracy; no study covers older adults. |
-| Standing open mic with VAD | desk research | Ruled out by the product owner (see [Analysis](#analysis)). |
+| Standing open mic with VAD | desk research | Ruled out by the product owner (see [Historical analysis](#historical-analysis)). |
 
 ### Listening-state UX
 
@@ -121,7 +155,7 @@ This is one person's hands-on reaction, not a usability study.
   had an error, 0.6% mis-triggers). Lab false-accept rates are about 0.03–0.95
   per hour. Mis-triggers draw a user reaction far more often than other errors.
 
-## Analysis
+## Historical analysis
 
 - **Wake word wins** because it is the only mode that passed hands-on, keeps
   audio on the device before activation (tier 1), and needs 0 touches. Its cost
@@ -182,7 +216,7 @@ This is one person's hands-on reaction, not a usability study.
   - A prompt never executes or pre-confirms a Home action; the existing
     exact-action confirmation is unchanged.
 
-## Limitations
+## Historical limitations
 
 - **One tester, one laptop, one voice.** Other and older Dutch speakers,
   accents and changing voices are untested. The 94% figure is user-adjusted
@@ -190,7 +224,7 @@ This is one person's hands-on reaction, not a usability study.
   5 points, and the log does not mark which attempts were limit tests.
 - **Eagerness is unmeasured for every mode.** No playback test was run for the
   wake word, so the 0.25 per hour gate is unverified. The recommendation is
-  unconditional because the product owner judged that a playback test cannot be
+  unconditional at the time because the product owner judged that a playback test cannot be
   run within this effort.
 - **The external trigger result is thin:** two intended attempts, unreliable
   pushed-event latency, no real hardware, no sleeping or backgrounded tablet.
@@ -202,7 +236,10 @@ This is one person's hands-on reaction, not a usability study.
 - **Privacy is not legal advice.** Whether the pre-activation buffer is GDPR
   processing is unsettled in the sources read.
 
-## Open items
+## Historical open items
+
+These are limitations of the abandoned evaluation, not a request to resume
+wake-word trials or the deferred rollout. Future button work needs a new scope.
 
 ### Evidence gaps
 
@@ -260,6 +297,10 @@ measurements first; they are not separate tasks.
 
 ## Follow-up tasks
 
+**Historical ordering only.** None of these tasks is ready for implementation.
+See [ADR 0010](../adr/0010-button-activation-without-wake-word.md) and each task's
+current disposition.
+
 In order, each with behaviour tests under ADR 0006 and verified on a laptop:
 
 1. [0085](../../TASKS/0085-activation-controller-and-listening-state.md)
@@ -282,8 +323,8 @@ Tasks 0086 and 0087 can run in parallel after 0085. The parent spec is
 
 ## Artefacts
 
-These branches are pushed, never merged, and have no pull requests. Delete them
-once the follow-up tasks are done. Cite by commit.
+Historical research/prototype inventory. Paths below describe the original
+research artifacts, not supported product features. Cite by commit.
 
 | Branch | Commit | Content |
 | --- | --- | --- |

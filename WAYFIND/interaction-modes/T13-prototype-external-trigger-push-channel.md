@@ -8,6 +8,11 @@ blocked-by: []
 
 ## Question
 
+> Historical prototype. The push channel is deferred, not the selected design
+> for the future physical button. Hardware, transport and microphone placement
+> remain undecided. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 Can a physical-style button start a Sodalis turn without touching the tablet?
 The repo has no inbound path from the server to an idle browser, the Home
 Assistant token is non-admin, and the entity allowlist hides `event` and

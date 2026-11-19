@@ -8,6 +8,10 @@ blocked-by: []
 
 ## Question
 
+> Superseded hand-off. Tasks 0085-0091 are now deferred, cancelled or superseded,
+> not ready for implementation. Keep the current UI unchanged. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 All activation decisions are made. What goes into the ordered follow-up list for `TASKS/`, and how does `docs/evaluations/interaction-modes.md` treat the items that remain open? Settle:
 
 - The follow-up tasks and their order, drawn from the closed tickets: for example the wake-word implementation with enrolment ([T15](T15-wake-word-route.md)), the listening-state UX ([T08](T08-activation-and-listening-state-ux.md)), the settings section, mute and microphone-blocked states ([T16](T16-how-activation-modes-combine.md)), the server-to-browser push channel and the administrator's trigger setup ([T13](T13-prototype-external-trigger-push-channel.md)), the prompt scheduler with its silence rules and the tablet autoplay policy ([T09](T09-avatar-initiated-prompt-policy.md)), the optional spoken acknowledgment ([T14](T14-spoken-activation-acknowledgment.md)), and a real presence signal plus a soak before inferred-intent prompts. Which of these are tasks, which merge, and what order.

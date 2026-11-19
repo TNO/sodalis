@@ -8,6 +8,10 @@ blocked-by: []
 
 ## Question
 
+> Historical research, not an implementation plan. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md):
+> no always-listening activation; keep the current UI unchanged.
+
 What are the practical limits of keeping the microphone open in a tablet
 browser or kiosk (Android Chrome, iPadOS Safari, PWA, kiosk mode)? Cover:
 persistent microphone permission, behaviour when the screen sleeps or the tab
