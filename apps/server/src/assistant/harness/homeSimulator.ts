@@ -127,8 +127,9 @@ const parameters = {
 function boundedResult(name: SimulatorToolName, result: Record<string, unknown>, args: Record<string, unknown>) {
   let remaining = 14_000;
   let truncated = result.has_more === true;
+  let exhausted = false;
   function visit(value: unknown, depth: number): unknown {
-    if (depth > 8 || remaining < 8) { truncated = true; remaining -= 4; return null; }
+    if (depth > 8 || remaining < 8) { truncated = true; exhausted ||= remaining < 8; remaining -= 4; return null; }
     if (typeof value === "string") {
       let text = value.slice(0, 1_000);
       while (JSON.stringify(text).length > remaining - 2) text = text.slice(0, Math.floor(text.length / 2));
@@ -142,7 +143,11 @@ function boundedResult(name: SimulatorToolName, result: Record<string, unknown>,
       for (const item of value.slice(0, 50)) {
         if (remaining < 16) break;
         remaining -= 1;
-        output.push(visit(item, depth + 1));
+        const wasExhausted = exhausted;
+        const visited = visit(item, depth + 1);
+        // An item cut short by the budget would lose its fields (and a paging cursor), so omit it.
+        if (exhausted && !wasExhausted && output.length > 0) break;
+        output.push(visited);
       }
       if (output.length < value.length) truncated = true;
       return output;
@@ -152,7 +157,7 @@ function boundedResult(name: SimulatorToolName, result: Record<string, unknown>,
       const entries: [string, unknown][] = [];
       for (const [key, item] of Object.entries(value).slice(0, 50)) {
         const cost = JSON.stringify(key).length + 2;
-        if (key.length > 100 || remaining < cost + 16) { truncated = true; continue; }
+        if (key.length > 100 || remaining < cost + 16) { truncated = true; exhausted ||= remaining < cost + 16; continue; }
         remaining -= cost;
         entries.push([key, visit(item, depth + 1)]);
       }

@@ -1,6 +1,6 @@
 # 0097 Document the Home Simulator path, add the live test, accept ADR 0009
 
-Status: open
+Status: done
 Triage: ready-for-agent
 Priority: medium
 Subsystem: docs, scripts
@@ -29,3 +29,20 @@ Depends on: 0093, 0094, 0095, 0096
   `/home/al/github-projects/home_simulator` when it exists (no cloud providers
   are involved; do not run `stack:smoke`, live LLM or cloud checks).
 - Gates: `pnpm test`, `pnpm typecheck`, `pnpm build`.
+
+## Outcome
+
+- Documentation consolidated in `docs/development-stack.md#home-simulator-replay-data`
+  and checked against the code; `.env.example`, `apps/server/README.md`, the root
+  README and `docs/architecture/companion-harness.md` link to it.
+- Live test: `scripts/home-simulator/live.test.ts` (skipped without
+  `HOME_SIMULATOR_ROOT`; not set in CI). Run for real on 2026-11-19 against
+  `/home/al/github-projects/home_simulator`: generated the `avatar-support` dataset
+  (about 20 s), opened a replay session, served the clock and the five tools and
+  advanced once; the session, bridge and advance scripts and the server tools were
+  also driven by hand against the same checkout.
+- The real run found one bug in 0096: a full `query_sensor_data` page exceeded the
+  16,000-character result budget and the last kept event was cut short, losing its
+  `sequence` and so `next_after_sequence`. Fixed with a regression test; oversized
+  pages now keep only whole events and a usable cursor.
+- ADR 0009 accepted.

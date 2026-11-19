@@ -1,6 +1,6 @@
 # 0092 Spec: Home Simulator through its MCP workflow
 
-Status: open
+Status: done
 Type: spec
 Triage: ready-for-agent
 Priority: medium
@@ -110,7 +110,7 @@ Maintainers and reviewers:
 - **Sensitive data.** No additional exclusion filter is added for Home Simulator results, by decision, because the data is synthetic and gated by the flag. Existing exclusions for the graph path are unchanged.
 - **Harness requirement.** The Home Simulator tools exist only when the companion harness is enabled, as for the existing Home tools.
 - **Python.** The checkout's environment is a given (currently Python 3.14); Sodalis neither pins nor installs it.
-- **ADR.** [ADR 0009](../docs/adr/0009-home-simulator-host-bridge.md) (proposed) records the host bridge, the avatar-role-only boundary and the absence of a compose service; [ADR 0007](../docs/adr/0007-companion-harness.md) still governs the harness boundary. Mark it accepted when the work lands.
+- **ADR.** [ADR 0009](../docs/adr/0009-home-simulator-host-bridge.md) (accepted) records the host bridge, the avatar-role-only boundary and the absence of a compose service; [ADR 0007](../docs/adr/0007-companion-harness.md) still governs the harness boundary.
 - **Glossary.** **Simulated home**, **Home Assistant simulator**, **Home Simulator** and **Replay session** are already defined and must be used.
 
 ## Testing Decisions

@@ -46,8 +46,11 @@ it is **not yet a feature-complete replacement** for turn mode.
 ### Selecting and switching modes
 
 - `COMPANION_HARNESS=off` (or unset) selects turn mode; `pi` selects workflow
-  mode. The standard `.env.example` selects `pi`, with the simulator's graph
-  URL, user, database, and scope prefilled; supply your own graph password.
+  mode. The standard `.env.example` selects `pi` with the simulated home, whose
+  **Home Simulator** supplies the tools' data (see
+  [Home Simulator replay tools](#home-simulator-replay-tools)); its `home_simulator`
+  graph URL, user, database, and scope are prefilled for `HOME_PROVIDER=external-api`,
+  where you supply your own graph password.
   Unset remains `off` for compatibility. Other values fail configuration validation.
 - The desktop reads `GET /api/assistant/config` at startup. The response is
   `{mode: "turn"}` or `{mode: "workflow"}`, without provider settings or
@@ -60,8 +63,9 @@ it is **not yet a feature-complete replacement** for turn mode.
   displayed instead of silently choosing a different mode; reload to retry.
 - The existing turn endpoint remains registered when Pi is enabled; mode
   discovery selects the normal desktop path, not an access-control policy.
-  Graph settings and an optional read-only SQLite mount are only needed for
-  workflow investigation, not for ordinary conversation with Pi.
+  Graph settings and an optional read-only SQLite mount (or, with the simulated
+  home, the Home Simulator bridge) are only needed for workflow investigation,
+  not for ordinary conversation with Pi.
 
 For example, "Help me reply to this email" needs turn mode's registered desktop
 actions today. "What is the bedroom temperature?" can use workflow mode to find
@@ -194,7 +198,7 @@ Dutch compounds over names, URI slugs, and types; equally good candidates can
 produce `ambiguous`. Inspect the actual imported schema when changing queries;
 diagram labels are not proof of deployed schema.
 
-Only the simulator's configured SQLite `readings` series has a reader.
+Only the `home_simulator` snapshot's configured SQLite `readings` series has a reader.
 Time-series HTTP, Microsoft Graph calendar, SQLite agenda, and weather references
 report `unavailable`. The model cannot supply arbitrary URLs, SQL, files, or
 credentials. See [graph examples](companion-graph-examples.md) for illustrative
@@ -205,6 +209,32 @@ answers are cached across workflows. Repeated unproductive calls stop the
 investigation. Stable metadata and changing source contents need separate
 freshness policies before any future caching. A future agenda request must
 fetch current contents, not reuse a previous answer.
+
+### Home Simulator replay tools
+
+With `HOME_PROVIDER=simulator` the stack selects the Home Simulator instead of
+the graph ([ADR 0009](../adr/0009-home-simulator-host-bridge.md)): when
+`HOME_SIMULATOR_BRIDGE_URL` is set the workflow offers exactly five read-only
+tools instead of the graph and SQLite tools: `query_sensor_data`, `get_context`,
+`query_ontology`, `query_weather` and `get_agenda`
+([homeSimulator.ts](../../apps/server/src/assistant/harness/homeSimulator.ts)).
+They reach the avatar role of the Home Simulator's MCP server only through a
+host bridge that the stack launcher starts, bound to one **replay session** and
+to a private interface; the `ai` container calls `/clock` and the five fixed
+tool paths and nothing else. The coordinator (scenario authoring, dataset
+generation, session creation) and the batch, acknowledgement and claim-parsing
+tools are never reachable from the model: sessions are opened by the launcher's
+session script and the replay is moved on only by the operator's advance script.
+
+Each workflow reads the replay clock and states it, with its Europe/Amsterdam
+local time, as the simulated "now" in the prompt; freshness is judged against it,
+not today's date, and sensor reads are clamped so they cannot see past it. An
+unreadable clock or bridge reports `unavailable`, never an empty home. The
+replay is read-only, so dialogue cannot change the simulated home, and Home
+action confirmation is unchanged. Neo4j and SQLite code is left in place but
+unused while the flag is on. Setup, scripts and limits:
+[development stack](../development-stack.md#home-simulator-replay-data) and the
+[server README](../../apps/server/README.md#home-simulator-replay-tools).
 
 ### Read-only calendar design (deferred; no runtime)
 
@@ -996,6 +1026,9 @@ skips without its local Neo4j settings.
 | Speech-stop/steer distinction, in-transit answers, newer input | [WorkflowConversation.test.ts](../../packages/assistant/src/WorkflowConversation.test.ts) |
 | HTTP/SSE transport | [ServerWorkflowClient.test.ts](../../packages/assistant/src/ServerWorkflowClient.test.ts) |
 | Runtime mode discovery and explicit failures | [assistantMode.test.ts](../../packages/assistant/src/assistantMode.test.ts), [DesktopAvatarOverlay.test.ts](../../apps/desktop/src/avatar/DesktopAvatarOverlay.test.ts) |
+| Home Simulator tool surface, simulated now, unavailable reporting, sensor read clamping and result bounds | [homeSimulator.test.ts](../../apps/server/src/assistant/harness/homeSimulator.test.ts) |
+| Home Simulator bridge (avatar role only), session and advance scripts and launcher lifecycle, against a fake stdio MCP server | [bridge.test.ts](../../scripts/home-simulator/bridge.test.ts), [session.test.ts](../../scripts/home-simulator/session.test.ts), [advance.test.ts](../../scripts/home-simulator/advance.test.ts), [launcher.test.ts](../../scripts/home-simulator/launcher.test.ts) |
+| Real `home_simulator` checkout: session, bridge, five tools, clock and one advance; opt-in via `HOME_SIMULATOR_ROOT`, skipped in `pnpm test` and CI, no cloud | [live.test.ts](../../scripts/home-simulator/live.test.ts) |
 | Validated stack selection and read-only Compose data wiring | [stack-config.test.ts](../../scripts/stack-config.test.ts), [companion-compose.test.ts](../../scripts/companion-compose.test.ts) |
 
 Scripted models establish orchestration behavior, not real-model investigative

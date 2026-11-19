@@ -158,8 +158,10 @@ used when unset) retains desktop actions and optional consent-based memory;
 **workflow mode** (`COMPANION_HARNESS=pi`) uses an embedded Pi investigation
 loop with read-only home tools, but no desktop actions or long-term memory.
 Both use the same selected model provider and desktop speech facilities.
-The standard `.env.example` enables workflow mode and prefills the simulator
-graph settings; supplying `HOME_GRAPH_PASSWORD` is required before launch.
+The standard `.env.example` enables workflow mode with the simulated home, which
+needs `HOME_SIMULATOR_ROOT` (see [Home Simulator replay tools](#home-simulator-replay-tools));
+the prefilled `HOME_GRAPH_*` settings apply only with `HOME_PROVIDER=external-api`,
+where `HOME_GRAPH_PASSWORD` is required.
 The [mode comparison and switching guide](../../docs/architecture/companion-harness.md#turn-mode-versus-workflow-mode)
 documents context, answer delivery, steering, barge-in, cancellation, and
 current limitations side by side. The turn-mode behavior follows here;
@@ -324,11 +326,11 @@ read-only tools, resource restrictions, provider mapping, and host limits are
 described in the [architecture](../../docs/architecture/companion-harness.md).
 Tools run inside the AI service process, not an operating-system sandbox.
 
-The graph tools run fixed, parameterized read queries against the Neo4j
+Without the Home Simulator (see [below](#home-simulator-replay-tools)), the graph tools run fixed, parameterized read queries against the Neo4j
 import from the separate `home_simulator` project (`--neo4j-readable`), within
 `HOME_GRAPH_SCOPE`. They never return health, profile or interest records,
 or service connection details. `read_external_data` resolves a discovered
-reference on the server and reads only the simulator's SQLite `readings`
+reference on the server and reads only the `home_simulator` SQLite `readings`
 series at `HOME_DATA_SQLITE_FILE`, for references whose endpoint is
 `HOME_DATA_SQLITE_ENDPOINT`; other adapters (time-series HTTP, Microsoft Graph
 calendar, weather, agenda) report `unavailable`. Results distinguish
@@ -339,7 +341,12 @@ the tools report `unavailable`.
 
 With `COMPANION_HARNESS=pi`, set `HOME_SIMULATOR_BRIDGE_URL` to the private
 HTTP(S) origin of the host bridge (for example `http://host.docker.internal:<bridge-port>`).
-This replaces the graph and SQLite tools with exactly five read-only Home
+The Compose launcher sets it, and starts the bridge and a fresh replay session on
+every `stack:up`, whenever `HOME_PROVIDER=simulator`; running the server natively,
+set it yourself. See the
+[stack guide](../../docs/development-stack.md#home-simulator-replay-data) for
+`HOME_SIMULATOR_ROOT`, the session and advance scripts, and the bridge's private
+binding. This replaces the graph and SQLite tools with exactly five read-only Home
 Simulator tools: `query_sensor_data`, `get_context`, `query_ontology`,
 `query_weather`, and `get_agenda`. Neo4j/SQLite settings are ignored in this mode;
 email remains independently opt-in. An unset bridge URL preserves the graph
