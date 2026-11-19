@@ -3,6 +3,7 @@ import { createCompanionModel } from "./companionModel.js";
 import { createCompanionSession } from "./companionSession.js";
 import { SqliteReadingsReader } from "./externalData.js";
 import { Neo4jHomeGraph } from "./homeGraph.js";
+import { HomeSimulatorBridge, homeSimulatorGuidance } from "./homeSimulator.js";
 import { createHomeTools } from "./tools.js";
 import { FileCompanionAuditWriter } from "./audit.js";
 import { CompanionWorkflows } from "./workflow.js";
@@ -32,7 +33,9 @@ export async function createCompanionHarnessFromEnv(
   const emailProvider = validateEmailSettings(settings);
   const auditEnabled = validateCompanionAuditSettings(settings);
   if (validateCompanionSettings(settings) === "off") return undefined;
-  const file = settings.HOME_DATA_SQLITE_FILE?.trim();
+  const bridgeUrl = settings.HOME_SIMULATOR_BRIDGE_URL?.trim();
+  const bridge = bridgeUrl ? new HomeSimulatorBridge(bridgeUrl) : undefined;
+  const file = bridge ? undefined : settings.HOME_DATA_SQLITE_FILE?.trim();
   if (file) validateReadingsFile(file);
   const model = await createCompanionModel(settings);
   const reader = file
@@ -42,7 +45,7 @@ export async function createCompanionHarnessFromEnv(
       })
     : undefined;
   let graph: Neo4jHomeGraph | undefined;
-  if (settings.HOME_GRAPH_URL?.trim()) {
+  if (!bridge && settings.HOME_GRAPH_URL?.trim()) {
     graph = new Neo4jHomeGraph({
       url: settings.HOME_GRAPH_URL.trim(),
       user: settings.HOME_GRAPH_USER?.trim() || "neo4j",
@@ -53,22 +56,25 @@ export async function createCompanionHarnessFromEnv(
     });
     // An unreachable graph is reported by the tools as `unavailable`; startup continues.
     graph.warmUp().catch((error: unknown) => console.error("Home graph warm-up failed:", error));
-  } else {
+  } else if (!bridge) {
     console.warn("COMPANION_HARNESS=pi without HOME_GRAPH_URL: home tools report unavailable.");
   }
   return new CompanionWorkflows({
     ...(auditEnabled ? { audit: new FileCompanionAuditWriter() } : {}),
-    createSession: ({ history, budget, observeModelRequest }) => {
+    createSession: async ({ history, budget, observeModelRequest }) => {
+      const simulator = bridge ? { bridge, simulationTime: await bridge.readClock() } : undefined;
       const emailReader = emailProvider === "mock" ? createMockEmailReader() : undefined;
       return createCompanionSession({
         model,
         history,
         tools: createHomeTools({
+          ...(simulator ? { simulator } : {}),
           ...(graph ? { graph } : {}),
           ...(reader ? { reader } : {}),
           ...(emailReader ? { emailReader } : {}),
           budget,
         }),
+        ...(simulator ? { appendSystemPrompt: [homeSimulatorGuidance(simulator.simulationTime)] } : {}),
         ...(observeModelRequest ? { observeModelRequest } : {}),
       });
     },
