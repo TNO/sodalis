@@ -1,6 +1,6 @@
 # 0095 Add the replay advance script
 
-Status: open
+Status: done
 Triage: ready-for-agent
 Priority: medium
 Subsystem: scripts
