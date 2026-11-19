@@ -5,6 +5,7 @@ import { parseEnv } from "node:util";
 import {
   ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix, validateHomeSimulatorCheckout,
 } from "./stack-config.js";
+import { createHomeSimulatorLauncher, runStackLifecycle } from "./home-simulator/launcher.js";
 import { validateReadingsFile } from "../apps/server/src/assistant/harness/settings.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -88,11 +89,15 @@ function run(args: readonly string[]): void {
 console.log(`Sodalis Compose profiles: ${selection.profiles.join(", ") || "none"}`);
 const allProfiles = ALL_LOCAL_PROFILES.flatMap((profile) => ["--profile", profile]);
 if (operation === "up" || operation === "down") {
-  run([...allProfiles, "down", "--remove-orphans"]);
-}
-if (operation === "up") {
-  run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
-    "up", "--build", "-d"]);
+  const simulator = selection.homeSimulator
+    ? createHomeSimulatorLauncher({ selection: selection.homeSimulator, environment }) : undefined;
+  void runStackLifecycle(operation, !!simulator, {
+    composeDown: () => run([...allProfiles, "down", "--remove-orphans"]),
+    composeUp: () => run([...selection.profiles.flatMap((profile) => ["--profile", profile]), "up", "--build", "-d"]),
+    stopBridge: simulator?.stopBridge ?? (() => {}),
+    runSession: simulator?.runSession ?? (() => {}),
+    startBridge: simulator?.startBridge ?? (() => {}),
+  }).catch((error: unknown) => { console.error(error); process.exitCode = 1; });
 } else if (operation === "config") {
   run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
     "config", "--quiet"]);
