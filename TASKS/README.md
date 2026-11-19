@@ -208,7 +208,7 @@ first.
 ## Simulated home
 
 - [ ] [0092 Spec: Home Simulator through its MCP workflow](0092-home-simulator-mcp-spec.md) *(needs 0032; Neo4j path deferred; slices 0093–0097)*
-- [ ] [0093 Add Home Simulator flag handling to stack selection](0093-home-simulator-stack-selection.md) *(spec 0092)*
+- [x] [0093 Add Home Simulator flag handling to stack selection](0093-home-simulator-stack-selection.md) *(spec 0092)*
 - [ ] [0094 Add the Home Simulator host bridge and session script](0094-home-simulator-host-bridge-and-session.md) *(needs 0093)*
 - [ ] [0095 Add the replay advance script](0095-home-simulator-advance-script.md) *(needs 0094)*
 - [ ] [0096 Add the Home Simulator assistant tools and simulated now](0096-home-simulator-assistant-tools.md) *(spec 0092; parallel to 0093)*
