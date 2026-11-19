@@ -1,21 +1,33 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { describe, expect, it } from "vitest";
-import { resolveStack, serviceNamePrefix } from "./stack-config.js";
+import {
+  resolveStack, serviceNamePrefix, validateHomeSimulatorCheckout,
+} from "./stack-config.js";
 
+const simulatorRoot = "/srv/home_simulator";
 const base = {
   STT_PROVIDER: "whisper-cpp",
   TTS_PROVIDER: "piper",
   LLM_PROVIDER: "mock",
   HOME_PROVIDER: "simulator",
   HOME_ADMIN_UI: "1",
+  HOME_SIMULATOR_ROOT: simulatorRoot,
+};
+// The flag off: the Home Assistant simulator is not selected, so Neo4j and SQLite apply.
+const flagOff = {
+  STT_PROVIDER: "whisper-cpp",
+  TTS_PROVIDER: "piper",
+  LLM_PROVIDER: "mock",
+  HOME_PROVIDER: "external-api",
+  HOME_API_URL: "http://home.test",
 };
 
 describe("development stack selection", () => {
   it("maps explicit companion data settings to the AI container without copying its source", () => {
     const selected = resolveStack({
-      ...base, COMPANION_HARNESS: "pi",
+      ...flagOff, COMPANION_HARNESS: "pi",
       HOME_GRAPH_URL: "bolt://host.docker.internal:7687",
       HOME_GRAPH_PASSWORD: "test", HOME_GRAPH_SCOPE: "test-scope",
       HOME_DATA_SQLITE_FILE: "/srv/simulator/timeseries.sqlite",
@@ -30,7 +42,7 @@ describe("development stack selection", () => {
       HOME_DATA_SQLITE_FILE: "/data/home/readings.sqlite",
       HOME_DATA_SQLITE_ENDPOINT: "local://simulation/timeseries.sqlite",
     });
-    expect(selected.profiles).toEqual(resolveStack(base).profiles);
+    expect(selected.profiles).toEqual(resolveStack(flagOff).profiles);
   });
 
   it("leaves companion settings and the optional data mount off by default", () => {
@@ -76,16 +88,16 @@ describe("development stack selection", () => {
     { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://graph:7687", HOME_GRAPH_PASSWORD: "test", HOME_DATA_SQLITE_FILE: "relative.sqlite" },
     { COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "bolt://graph:7687", HOME_GRAPH_PASSWORD: "test", HOME_DATA_SQLITE_ENDPOINT: "local://unused" },
   ])("rejects inconsistent companion settings %j", (settings) => {
-    expect(() => resolveStack({ ...base, ...settings })).toThrow();
+    expect(() => resolveStack({ ...flagOff, ...settings })).toThrow();
   });
 
-  it("enables Pi in the example and requires an explicit graph password before launch", () => {
+  it("enables Pi in the example and selects the Home Simulator without a graph password", () => {
     const example = parseEnv(
       readFileSync(resolve(import.meta.dirname, "../.env.example"), "utf8"),
     );
     expect(example.HOME_GRAPH_PASSWORD).toBe("");
-    expect(() => resolveStack(example)).toThrow("Set HOME_GRAPH_PASSWORD");
-    const selected = resolveStack({ ...example, HOME_GRAPH_PASSWORD: "synthetic-test-password" });
+    expect(example.HOME_SIMULATOR_ROOT).toMatch(/^\//);
+    const selected = resolveStack(example);
     expect(selected.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
     expect(selected.models).toEqual(expect.arrayContaining([
       "models/piper/nl_NL-ronnie-medium.onnx",
@@ -93,16 +105,29 @@ describe("development stack selection", () => {
     ]));
     expect(selected.environment).toMatchObject({
       COMPANION_HARNESS: "pi",
-      HOME_GRAPH_URL: "bolt://neo4j:7687",
-      HOME_GRAPH_USER: "neo4j",
-      HOME_GRAPH_DATABASE: "neo4j",
-      HOME_GRAPH_SCOPE: "cphs:simulation:couple-apartment",
+      HOME_GRAPH_URL: "",
+      HOME_GRAPH_SCOPE: "",
+      HOME_SIMULATOR_BRIDGE_URL: "http://host.docker.internal:8095",
       STT_PROVIDER: "parakeet-tdt",
       PARAKEET_TDT_URL: "http://parakeet-tdt:8080",
       LLM_PROVIDER: "openai-compatible",
       LLM_BASE_URL: "http://host.docker.internal:11434/v1",
       LLM_MODEL: "llama3.2:3b",
     });
+  });
+
+  it("still requires an explicit graph password in the example once the flag is off", () => {
+    const example = parseEnv(
+      readFileSync(resolve(import.meta.dirname, "../.env.example"), "utf8"),
+    );
+    const off = { ...example, HOME_PROVIDER: "external-api", HOME_API_URL: "http://home.test", HOME_ADMIN_UI: "0" };
+    expect(() => resolveStack(off)).toThrow("Set HOME_GRAPH_PASSWORD");
+    expect(resolveStack({ ...off, HOME_GRAPH_PASSWORD: "synthetic-test-password" }).environment)
+      .toMatchObject({
+        HOME_GRAPH_URL: "bolt://neo4j:7687",
+        HOME_GRAPH_SCOPE: "cphs:simulation:couple-apartment",
+        HOME_SIMULATOR_BRIDGE_URL: "",
+      });
   });
 
   it("names root-checkout services without a repeated prefix while keeping worktrees distinct", () => {
@@ -131,6 +156,7 @@ describe("development stack selection", () => {
       LLM_PROVIDER: "mock",
       HOME_PROVIDER: "simulator",
       HOME_ADMIN_UI: "1",
+      HOME_SIMULATOR_ROOT: simulatorRoot,
     });
     expect(selected.profiles).toEqual(["parakeet-tdt", "piper", "home-simulator"]);
     expect(selected.environment.STT_PROVIDER).toBe("parakeet-tdt");
@@ -321,5 +347,116 @@ describe("development stack selection", () => {
     expect(selected.profiles).toEqual(["llm", "home-simulator", "home-api"]);
     expect(selected.environment.LLM_BASE_URL).toBe("http://llm:8080/v1");
     expect(selected.environment.HOME_ASSISTANT_TOKEN).toBe("local-test-token");
+  });
+});
+
+describe("Home Simulator selection", () => {
+  it("is enabled by the existing simulator flag and passes the bridge address to ai", () => {
+    const selected = resolveStack(base);
+    expect(selected.profiles).toEqual(["whisper", "piper", "home-simulator"]);
+    expect(selected.environment.HOME_SIMULATOR_BRIDGE_URL).toBe("http://host.docker.internal:8095");
+    expect(selected.homeSimulator).toEqual({
+      root: simulatorRoot, scenario: "avatar-support", bridgePort: 8095, bridgeHost: "",
+    });
+  });
+
+  it("applies the configured scenario, port and bind address", () => {
+    const selected = resolveStack({
+      ...base, HOME_SIMULATOR_SCENARIO: " custom-1 ", HOME_SIMULATOR_BRIDGE_PORT: "9100",
+      HOME_SIMULATOR_BRIDGE_HOST: "172.17.0.1", HOME_SIMULATOR_ROOT: ` ${simulatorRoot} `,
+    });
+    expect(selected.homeSimulator).toEqual({
+      root: simulatorRoot, scenario: "custom-1", bridgePort: 9100, bridgeHost: "172.17.0.1",
+    });
+    expect(selected.environment.HOME_SIMULATOR_BRIDGE_URL).toBe("http://host.docker.internal:9100");
+  });
+
+  it("does not pass the checkout path or the bind settings to ai", () => {
+    const { environment } = resolveStack({
+      ...base, HOME_SIMULATOR_BRIDGE_HOST: "172.17.0.1", HOME_SIMULATOR_SCENARIO: "avatar-support",
+    });
+    for (const key of [
+      "HOME_SIMULATOR_ROOT", "HOME_SIMULATOR_SCENARIO",
+      "HOME_SIMULATOR_BRIDGE_PORT", "HOME_SIMULATOR_BRIDGE_HOST",
+    ]) {
+      expect(environment, key).not.toHaveProperty(key);
+    }
+  });
+
+  it.each([undefined, "", "   ", "home_simulator", "./home_simulator"])(
+    "fails fast, naming the setting and .env, for root %j", (root) => {
+      expect(() => resolveStack({ ...base, HOME_SIMULATOR_ROOT: root }))
+        .toThrow(/HOME_SIMULATOR_ROOT.*\.env/);
+    });
+
+  it.each([
+    { HOME_SIMULATOR_BRIDGE_PORT: "0" },
+    { HOME_SIMULATOR_BRIDGE_PORT: "65536" },
+    { HOME_SIMULATOR_BRIDGE_PORT: "80a" },
+    { HOME_SIMULATOR_BRIDGE_HOST: "0.0.0.0" },
+    { HOME_SIMULATOR_BRIDGE_HOST: "::" },
+    { HOME_SIMULATOR_BRIDGE_HOST: "[::]" },
+    { HOME_SIMULATOR_BRIDGE_HOST: "bad host" },
+    { HOME_SIMULATOR_SCENARIO: "../escape" },
+  ])("rejects invalid bridge or scenario settings %j", (settings) => {
+    expect(() => resolveStack({ ...base, ...settings })).toThrow(/HOME_SIMULATOR_/);
+  });
+
+  it("ignores Neo4j and SQLite settings: blanked, unvalidated, no readings mount", () => {
+    const selected = resolveStack({
+      ...base, COMPANION_HARNESS: "pi",
+      HOME_GRAPH_URL: "https://not-a-bolt-url", HOME_GRAPH_PASSWORD: "unused",
+      HOME_GRAPH_USER: "neo4j", HOME_GRAPH_DATABASE: "neo4j", HOME_GRAPH_SCOPE: "scope",
+      HOME_DATA_SQLITE_FILE: "relative.sqlite", HOME_DATA_SQLITE_ENDPOINT: "local://x",
+    });
+    expect(selected.environment).toMatchObject({
+      COMPANION_HARNESS: "pi",
+      HOME_GRAPH_URL: "", HOME_GRAPH_USER: "", HOME_GRAPH_PASSWORD: "",
+      HOME_GRAPH_DATABASE: "", HOME_GRAPH_SCOPE: "",
+      HOME_DATA_SQLITE_FILE: "", HOME_DATA_SQLITE_SOURCE: "", HOME_DATA_SQLITE_ENDPOINT: "",
+    });
+  });
+
+  it("still validates the harness mode while the flag is on", () => {
+    expect(() => resolveStack({ ...base, COMPANION_HARNESS: "typo" })).toThrow("COMPANION_HARNESS");
+  });
+
+  it("leaves the stack unchanged and the bridge address blank when the flag is off", () => {
+    const selected = resolveStack({
+      ...flagOff, HOME_SIMULATOR_ROOT: "relative", HOME_SIMULATOR_BRIDGE_PORT: "bad",
+    });
+    expect(selected.homeSimulator).toBeUndefined();
+    expect(selected.profiles).toEqual(["whisper", "piper"]);
+    expect(selected.environment.HOME_SIMULATOR_BRIDGE_URL).toBe("");
+    expect(Object.keys(selected.environment).filter((key) => key.startsWith("HOME_SIMULATOR")))
+      .toEqual(["HOME_SIMULATOR_BRIDGE_URL"]);
+  });
+});
+
+describe("Home Simulator checkout usability check", () => {
+  const python = join(simulatorRoot, ".venv", "bin", "python");
+  const service = join(simulatorRoot, "applications", "tool_service");
+  const checkout = (present: readonly string[], platform: NodeJS.Platform = "linux") =>
+    () => validateHomeSimulatorCheckout(simulatorRoot, {
+      exists: (path) => present.includes(path), platform,
+    });
+
+  it("accepts a checkout with its interpreter and tool service", () => {
+    expect(checkout([simulatorRoot, python, service])).not.toThrow();
+  });
+
+  it.each([
+    { present: [], fix: /does not exist/ },
+    { present: [simulatorRoot, service], fix: /\.venv\/bin\/python/ },
+    { present: [simulatorRoot, python], fix: /applications\/tool_service/ },
+  ])("names what to fix for a broken checkout %#", ({ present, fix }) => {
+    expect(checkout(present)).toThrow(fix);
+    expect(checkout(present)).toThrow(/HOME_SIMULATOR_ROOT/);
+  });
+
+  it("looks for the Windows interpreter on Windows", () => {
+    const winPython = join(simulatorRoot, ".venv", "Scripts", "python.exe");
+    expect(checkout([simulatorRoot, winPython, service], "win32")).not.toThrow();
+    expect(checkout([simulatorRoot, python, service], "win32")).toThrow(/python\.exe/);
   });
 });

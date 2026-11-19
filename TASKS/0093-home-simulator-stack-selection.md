@@ -1,6 +1,6 @@
 # 0093 Add Home Simulator flag handling to stack selection
 
-Status: open
+Status: done
 Triage: ready-for-agent
 Priority: medium
 Subsystem: scripts, compose

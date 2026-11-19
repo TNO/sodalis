@@ -1,4 +1,5 @@
-import { isAbsolute } from "node:path";
+import { existsSync } from "node:fs";
+import { isAbsolute, join } from "node:path";
 import { azureLlmSettings } from "../apps/server/src/assistant/providers.js";
 import {
   validateCompanionAuditSettings,
@@ -10,6 +11,16 @@ export interface StackSelection {
   readonly profiles: readonly string[];
   readonly environment: Readonly<Record<string, string>>;
   readonly models: readonly string[];
+  /** Present only while HOME_PROVIDER=simulator selects the Home Simulator path. */
+  readonly homeSimulator?: HomeSimulatorSelection;
+}
+
+export interface HomeSimulatorSelection {
+  readonly root: string;
+  readonly scenario: string;
+  readonly bridgePort: number;
+  /** Bind address for the host bridge; blank leaves the choice to the bridge launcher. */
+  readonly bridgeHost: string;
 }
 
 type Settings = Readonly<Record<string, string | undefined>>;
@@ -36,6 +47,59 @@ function endpoint(value: string | undefined, name: string, preserveTrailingSlash
     ? url.toString() : url.toString().replace(/\/$/, "");
 }
 
+const WILDCARD_HOSTS = new Set(["0.0.0.0", "::", "[::]", "*", "0:0:0:0:0:0:0:0"]);
+
+function homeSimulatorSelection(settings: Settings): HomeSimulatorSelection {
+  const root = settings.HOME_SIMULATOR_ROOT?.trim();
+  if (!root || !isAbsolute(root)) {
+    throw new Error(
+      "Set HOME_SIMULATOR_ROOT in .env to the absolute path of your home_simulator checkout " +
+        "(HOME_PROVIDER=simulator also selects the Home Simulator).",
+    );
+  }
+  const scenario = settings.HOME_SIMULATOR_SCENARIO?.trim() || "avatar-support";
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(scenario)) {
+    throw new Error("HOME_SIMULATOR_SCENARIO must be a scenario name such as avatar-support.");
+  }
+  const port = settings.HOME_SIMULATOR_BRIDGE_PORT?.trim() || "8095";
+  if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+    throw new Error("HOME_SIMULATOR_BRIDGE_PORT must be a port number from 1 to 65535.");
+  }
+  const bridgeHost = settings.HOME_SIMULATOR_BRIDGE_HOST?.trim() || "";
+  if (WILDCARD_HOSTS.has(bridgeHost) || !/^[A-Za-z0-9.:_-]*$/.test(bridgeHost)) {
+    throw new Error(
+      "HOME_SIMULATOR_BRIDGE_HOST must be a specific private interface address, never a wildcard such as 0.0.0.0.",
+    );
+  }
+  return { root, scenario, bridgePort: Number(port), bridgeHost };
+}
+
+export interface CheckoutFileSystem {
+  readonly exists: (path: string) => boolean;
+  readonly platform: NodeJS.Platform;
+}
+
+/** The filesystem part of the Home Simulator selection; only `stack:up` calls it. */
+export function validateHomeSimulatorCheckout(
+  root: string,
+  fileSystem: CheckoutFileSystem = { exists: existsSync, platform: process.platform },
+): void {
+  const python = fileSystem.platform === "win32"
+    ? join(root, ".venv", "Scripts", "python.exe") : join(root, ".venv", "bin", "python");
+  const fix = "Fix HOME_SIMULATOR_ROOT in .env to point at a prepared home_simulator checkout.";
+  if (!fileSystem.exists(root)) {
+    throw new Error(`HOME_SIMULATOR_ROOT ${root} does not exist. ${fix}`);
+  }
+  for (const [path, what] of [
+    [python, "its Python environment (create the checkout's .venv first)"],
+    [join(root, "applications", "tool_service"), "applications/tool_service"],
+  ] as const) {
+    if (!fileSystem.exists(path)) {
+      throw new Error(`HOME_SIMULATOR_ROOT ${root} is missing ${what}: ${path} not found. ${fix}`);
+    }
+  }
+}
+
 export function resolveStack(settings: Settings): StackSelection {
   const profiles: string[] = [];
   const models: string[] = [];
@@ -50,15 +114,23 @@ export function resolveStack(settings: Settings): StackSelection {
   validateCompanionAuditSettings(settings);
   environment.NODE_ENV = settings.NODE_ENV?.trim() || "development";
   environment.COMPANION_AUDIT = settings.COMPANION_AUDIT?.trim() || "false";
-  environment.COMPANION_HARNESS = validateCompanionSettings(settings);
+  // While the flag is on, the Home Simulator replaces the graph and readings;
+  // their settings stay accepted but are neither validated nor forwarded.
+  const homeSimulator = settings.HOME_PROVIDER === "simulator"
+    ? homeSimulatorSelection(settings) : undefined;
+  environment.COMPANION_HARNESS = validateCompanionSettings(homeSimulator
+    ? { COMPANION_HARNESS: settings.COMPANION_HARNESS } : settings);
+  environment.HOME_SIMULATOR_BRIDGE_URL = homeSimulator
+    ? `http://host.docker.internal:${homeSimulator.bridgePort}` : "";
   environment.EMAIL_PROVIDER = validateEmailSettings(settings);
   for (const key of [
     "HOME_GRAPH_URL", "HOME_GRAPH_USER", "HOME_GRAPH_PASSWORD", "HOME_GRAPH_DATABASE",
     "HOME_GRAPH_SCOPE", "HOME_DATA_SQLITE_ENDPOINT",
   ] as const) {
-    environment[key] = key === "HOME_GRAPH_PASSWORD" ? settings[key] || "" : settings[key]?.trim() || "";
+    environment[key] = homeSimulator ? ""
+      : key === "HOME_GRAPH_PASSWORD" ? settings[key] || "" : settings[key]?.trim() || "";
   }
-  const readings = settings.HOME_DATA_SQLITE_FILE?.trim();
+  const readings = homeSimulator ? undefined : settings.HOME_DATA_SQLITE_FILE?.trim();
   if (readings && !isAbsolute(readings)) {
     throw new Error("HOME_DATA_SQLITE_FILE must be an absolute file path on the Compose host.");
   }
@@ -254,5 +326,5 @@ export function resolveStack(settings: Settings): StackSelection {
         ? `Unsupported HOME_PROVIDER "${settings.HOME_PROVIDER}".`
         : "Set HOME_PROVIDER to simulator or external-api.");
   }
-  return { profiles, environment, models };
+  return { profiles, environment, models, ...(homeSimulator ? { homeSimulator } : {}) };
 }
