@@ -9,6 +9,7 @@ import {
   type HomeGraph,
   type RelationGroup,
 } from "./homeGraph.js";
+import { createHomeSimulatorTools, type HomeSimulatorSource } from "./homeSimulator.js";
 import type {
   EmailContainer,
   EmailListFilters,
@@ -188,25 +189,11 @@ function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
-export interface HomeToolsOptions {
-  /** Omit when no home graph is configured; tools then report `unavailable`. */
-  readonly graph?: HomeGraph;
-  readonly reader?: ExternalDataReader;
-  readonly emailReader?: ReadOnlyEmailReader;
-  readonly budget: ToolBudget;
-  readonly now?: () => number;
-}
-
-/**
- * The three read-only companion tools for one workflow. Results of equivalent
- * calls are reused within the workflow and never shared with later ones.
- */
-export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
-  const now = options.now ?? Date.now;
+export function createToolRunner(budget: ToolBudget) {
   const previous = new Map<string, unknown>();
   let repeatedCalls = 0;
 
-  async function run<T>(
+  return async function run<T>(
     name: string,
     params: T,
     signal: AbortSignal | undefined,
@@ -216,7 +203,7 @@ export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
     const key = callKey(name, params);
     if (previous.has(key)) {
       repeatedCalls += 1;
-      if (repeatedCalls > TOOL_LIMITS.maxRepeatedCalls) options.budget.onUnproductive();
+      if (repeatedCalls > TOOL_LIMITS.maxRepeatedCalls) budget.onUnproductive();
       return jsonResult({
         repeated: true,
         note: "Equivalent call already made in this investigation; this is the earlier result.",
@@ -238,7 +225,28 @@ export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
     }
     previous.set(key, result);
     return jsonResult(result);
-  }
+  };
+}
+
+export type ToolRunner = ReturnType<typeof createToolRunner>;
+
+export interface HomeToolsOptions {
+  /** Omit when no home graph is configured; tools then report `unavailable`. */
+  readonly graph?: HomeGraph;
+  readonly simulator?: HomeSimulatorSource;
+  readonly reader?: ExternalDataReader;
+  readonly emailReader?: ReadOnlyEmailReader;
+  readonly budget: ToolBudget;
+  readonly now?: () => number;
+}
+
+/**
+ * Read-only home tools (graph or Home Simulator) and optional email for one workflow. Results of equivalent
+ * calls are reused within the workflow and never shared with later ones.
+ */
+export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
+  const now = options.now ?? Date.now;
+  const run = createToolRunner(options.budget);
 
   const findEntities = defineTool({
     name: "find_entities",
@@ -315,7 +323,9 @@ export function createHomeTools(options: HomeToolsOptions): ToolDefinition[] {
     },
   });
 
-  const tools: ToolDefinition[] = [findEntities, inspectNeighborhood, readExternalData];
+  const tools: ToolDefinition[] = options.simulator
+    ? createHomeSimulatorTools(options.simulator, run)
+    : [findEntities, inspectNeighborhood, readExternalData];
   if (options.emailReader) {
     const listMessages = defineTool({
       name: "list_messages",

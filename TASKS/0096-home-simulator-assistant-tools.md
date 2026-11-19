@@ -1,6 +1,6 @@
 # 0096 Add the Home Simulator assistant tools and simulated now
 
-Status: open
+Status: done
 Triage: ready-for-agent
 Priority: medium
 Subsystem: server
