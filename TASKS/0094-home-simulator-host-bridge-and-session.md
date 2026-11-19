@@ -1,6 +1,6 @@
 # 0094 Add the Home Simulator host bridge and session script
 
-Status: open
+Status: done
 Triage: ready-for-agent
 Priority: medium
 Subsystem: scripts
