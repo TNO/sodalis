@@ -1092,6 +1092,41 @@ flag is on, the `HOME_GRAPH_*` and `HOME_DATA_SQLITE_*` settings stay valid but
 are ignored: blanked for `ai`, not validated, and no readings file is mounted.
 Switch to `HOME_PROVIDER=external-api` to use the graph and readings again.
 
+With the flag on, `stack:up` stops any previously recorded host bridge, starts
+Compose, runs `pnpm home-simulator:session`, then starts the detached host bridge
+and waits for `/health`. `stack:down` stops the bridge and its avatar child;
+repeated stops are harmless. With the flag off, no Home Simulator helper or
+handoff file is touched.
+
+The session script uses the checkout's unresolved `.venv/bin/python` path with
+that checkout as its working directory. It drives the coordinator privately,
+reuses the lexicographically smallest registered dataset whose `metadata.plan`
+matches the scenario, or generates one and waits for its job to finish. Every
+run opens a fresh replay session; generation failures leave the previous handoff
+untouched. The coordinator connection closes before the bridge starts.
+
+`logs/home-simulator/session.json` is the shared session handoff. Its JSON fields
+are `root` (absolute checkout path), `stateDir` (absolute path, normally
+`<root>/output/tool-service`), `sessionId`, `datasetId` and `scenario`. The bridge
+and operator script must read that same file. Standalone session/bridge commands
+read `.env`, overridden by their environment; `HOME_SIMULATOR_HANDOFF_PATH` can
+select a different handoff file. `bridge.json` in the same log directory records
+`pid`, `host` and `port`; bridge stdout/stderr go to `bridge.log`.
+
+The unauthenticated bridge binds to `172.17.0.1` by default **only if that address
+exists on a Linux host**, otherwise to `127.0.0.1`. Linux Docker Engine's
+`host-gateway` maps to the Docker bridge address: a loopback-only listener is
+not reachable from `ai`. For a custom Docker/Podman network, explicitly set
+`HOME_SIMULATOR_BRIDGE_HOST` to a private, container-reachable IP and keep the
+host firewall restrictive. Wildcard and public IP bindings are rejected.
+
+The bridge exposes only `/health`, `/clock` and POST calls to the five read-only
+avatar tools (`query_sensor_data`, `get_context`, `query_ontology`,
+`query_weather`, `get_agenda`). Coordinator, batch, acknowledgement, claims and
+session tools are never exposed. The replay is immutable: dialogue cannot
+advance it or change the simulated home. If the avatar child exits, the bridge
+warns on stderr and responds with HTTP 503 rather than empty observations.
+
 ### Companion workflow against the test graph
 
 The read-only Pi companion workflow (task 0067) is embedded in the existing
