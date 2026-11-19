@@ -2,7 +2,9 @@ import { spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseEnv } from "node:util";
-import { ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix } from "./stack-config.js";
+import {
+  ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix, validateHomeSimulatorCheckout,
+} from "./stack-config.js";
 import { validateReadingsFile } from "../apps/server/src/assistant/harness/settings.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -31,6 +33,7 @@ if (operation === "up") {
   } catch (error) {
     throw new Error("The repository logs/ directory must be accessible to your user. Repair its ownership before starting the stack; see apps/server/README.md.", { cause: error });
   }
+  if (selection.homeSimulator) validateHomeSimulatorCheckout(selection.homeSimulator.root);
   const readings = selection.environment.HOME_DATA_SQLITE_SOURCE;
   if (readings) validateReadingsFile(readings);
   for (const model of selection.models) {
