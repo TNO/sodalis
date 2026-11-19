@@ -1113,6 +1113,15 @@ read `.env`, overridden by their environment; `HOME_SIMULATOR_HANDOFF_PATH` can
 select a different handoff file. `bridge.json` in the same log directory records
 `pid`, `host` and `port`; bridge stdout/stderr go to `bridge.log`.
 
+`pnpm home-simulator:advance` is the operator-only way to move the replay on. It
+reads the same handoff, starts its own avatar child on that session, pages
+`next_interaction_batch` to `window_complete`, acknowledges the batch as a
+`context` checkpoint (`sodalis-advance-<batch_id>`; nothing is stored durably)
+and prints the new simulated time and next interaction. A failed run is safe to
+repeat: the pending batch is re-read from page 1 and only acknowledged after all
+pages. Once the dataset ends it prints "Dataset ended, nothing left to replay"
+and exits 0. The bridge and the assistant cannot call it.
+
 The unauthenticated bridge binds to `172.17.0.1` by default **only if that address
 exists on a Linux host**, otherwise to `127.0.0.1`. Linux Docker Engine's
 `host-gateway` maps to the Docker bridge address: a loopback-only listener is

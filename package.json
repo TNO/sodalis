@@ -13,6 +13,7 @@
     "stack:config": "tsx scripts/dev-stack.ts config",
     "stack:pull": "tsx scripts/dev-stack.ts pull",
     "home-simulator:session": "tsx scripts/home-simulator/session-main.ts",
+    "home-simulator:advance": "tsx scripts/home-simulator/advance-main.ts",
     "home-simulator:bridge": "tsx scripts/home-simulator/bridge-main.ts",
     "stack:smoke": "tsx scripts/smoke-stack.ts",
     "audit:report": "tsx scripts/companion-audit-report.ts",
