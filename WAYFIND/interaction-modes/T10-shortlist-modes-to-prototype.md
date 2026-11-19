@@ -8,6 +8,10 @@ blocked-by: [T07-evaluation-rubric.md]
 
 ## Question
 
+> Historical shortlist. Do not resume wake-word prototyping or the deferred
+> rollout from this ticket. Keep the current UI unchanged. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 Given the research (no published Dutch wake-word accuracy, proprietary or
 non-commercial licences on the browser-ready engines, no push path from the
 server to an idle browser, unproven barge-in over the tablet's own speaker,

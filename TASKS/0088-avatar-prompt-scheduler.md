@@ -1,11 +1,20 @@
 # 0088 Add the avatar-initiated prompt scheduler
 
-Status: open
-Triage: ready-for-agent
+Status: deferred (2026-11-19)
+Triage: requires re-scoping; do not implement
 Priority: medium
 Subsystem: avatar
 Spec: [0091](0091-hands-free-activation-spec.md)
-Depends on: 0085, 0086 (Activation settings section)
+Historical dependencies: 0085, 0086 (Activation settings section)
+
+## Current disposition
+
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md) defers
+automatic avatar prompts along with the entire hands-free rollout. Do not
+add the proposed scheduler or automatic listening windows. The
+cancelled wake-word task is no longer a dependency to implement. Any future
+prompt effort needs its own scope and privacy/safety review. The original
+task below is historical, not authorization to change the current UI.
 
 ## Context
 

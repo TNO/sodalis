@@ -1,11 +1,22 @@
 # 0087 Add the external trigger push channel
 
-Status: open
-Triage: ready-for-agent
+Status: deferred (2026-11-19; physical-button design undecided)
+Triage: requires re-scoping; do not implement
 Priority: medium
 Subsystem: server
 Spec: [0091](0091-hands-free-activation-spec.md)
-Depends on: 0085 (0038 is needed only to enable it against a real Home Assistant)
+Historical dependencies: 0085, 0038 (real Home Assistant only)
+
+## Current disposition
+
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md) selects
+a physical button as the future direction, not this implementation. Keep the
+current UI unchanged for now. Hardware, transport, press/hold behavior,
+listening duration, feedback and microphone placement still need decisions;
+an embedded microphone is only an option. Do not assume Home Assistant, an
+admin token, a push channel or a dependency on the cancelled wake-word plan.
+Re-scope this task before implementation. The original dependencies and
+criteria below describe an abandoned design, not current requirements.
 
 ## Context
 

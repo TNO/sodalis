@@ -8,6 +8,10 @@ blocked-by: [T06-prior-art-false-activations-older-adults.md]
 
 ## Question
 
+> Historical rubric for the abandoned rollout, not current acceptance gates.
+> Wake-word work is out of scope and future physical-button work needs re-scoping.
+> See [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 How do we score each interaction mode? Fix concrete, measurable definitions
 and acceptance thresholds for: eagerness (false activations per hour, and what
 counts as irritating), missed activations, activation effort (steps and

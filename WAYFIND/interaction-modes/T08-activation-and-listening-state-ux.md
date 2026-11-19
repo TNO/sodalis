@@ -8,6 +8,10 @@ blocked-by: [T07-evaluation-rubric.md]
 
 ## Question
 
+> Historical prototype decision. New listening-state UI is deferred; preserve
+> the existing conversation controls and speech behavior. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 How should Sodalis show that it is armed, activated, listening, and has stopped
 (or muted) when activation is hands-free? Make a rough clickable prototype in
 the avatar conversation card and overlay for the candidate flows, so we can

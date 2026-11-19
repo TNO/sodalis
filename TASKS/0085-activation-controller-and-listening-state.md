@@ -1,11 +1,20 @@
 # 0085 Add the activation controller and listening state
 
-Status: open
-Triage: ready-for-agent
+Status: deferred (2026-11-19)
+Triage: requires re-scoping; do not implement
 Priority: high
 Subsystem: avatar
 Spec: [0091](0091-hands-free-activation-spec.md)
-Depends on: 0020, 0023
+Historical dependencies: 0020, 0023
+
+## Current disposition
+
+The entire hands-free rollout is deferred by
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md).
+Keep the current conversation UI and speech behavior unchanged. Do not add
+the proposed controller or listening-state UI. Any controller needed for a
+future physical button must follow a new, scoped design, not these criteria.
+The original task below is historical and does not authorize implementation.
 
 ## Context
 

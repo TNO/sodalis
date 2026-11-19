@@ -8,6 +8,10 @@ blocked-by: [T04-sensor-signals-for-intent-to-talk.md, T05-privacy-and-consent-a
 
 ## Question
 
+> Historical policy, not approved rollout requirements. Automatic prompts and
+> their listening windows are deferred with the entire hands-free rollout.
+> See [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 When may Sodalis speak first and open the mic afterwards? Decide which
 triggers qualify (sensor events, reminders, time of day, other household
 events), how often and in which situations it must stay silent, how the user

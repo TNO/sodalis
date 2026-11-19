@@ -8,6 +8,10 @@ blocked-by: []
 
 ## Question
 
+> Historical research. The rollout recommendations are superseded by
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md):
+> wake-word work is out of scope; keep the current UI unchanged.
+
 Which on-device, browser-capable wake-word engines (for example openWakeWord,
 Porcupine, microWakeWord, TensorFlow.js or ONNX/WASM models) can detect a
 custom phrase such as "Hey Sodalis" with a Dutch speaker, running in a tablet

@@ -8,6 +8,10 @@ blocked-by: []
 
 ## Question
 
+> Historical research. Its evidence does not authorize the abandoned rollout.
+> Wake-word work is out of scope; keep the current UI unchanged. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 What does published research and industry evidence say about how older adults
 activate voice assistants and where it goes wrong: rates and causes of false
 activations and missed activations, how users react to over-eager devices

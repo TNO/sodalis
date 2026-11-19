@@ -19,7 +19,13 @@ An avatar usable for a restricted prototype but not approved for commercial dist
 The moment Sodalis starts listening to a user's speech for a turn, whether prompted by the user, a household device, or Sodalis itself.
 
 **Activation mode**:
-A way an activation can be triggered, such as a button, a wake word, an open microphone, or an external device.
+The deliberate action or event that starts a listening period.
+
+**Button activation**:
+Starting a listening period through a deliberate button action rather than a spoken trigger.
+
+**Physical-button activation**:
+Button activation using a separate physical control rather than an on-screen control.
 
 **False activation**:
 An activation the user did not intend, in any mode: a wake word triggered by background sound, speech not addressed to Sodalis, or an unwanted prompt from Sodalis.
@@ -43,7 +49,7 @@ The deliberate actions (touches, spoken attempts, waiting) a user spends, retrie
 Recording a few samples of a person saying the wake phrase so Sodalis recognises that person's voice saying it.
 
 **Standing open microphone**:
-A microphone that is always on and treats any speech it hears as a possible turn, with no wake word or other trigger. Sodalis does not use this mode.
+A microphone that is always on and treats any speech it hears as a possible turn, with no wake word or other trigger.
 
 **Listening window**:
 A short, bounded period after an activation or a prompt from Sodalis in which the user can speak without a new trigger.
@@ -52,7 +58,7 @@ A short, bounded period after an activation or a prompt from Sodalis in which th
 Sodalis speaking first, from a reminder, a household event or alert rule, or an inferred intent to talk, rather than in reply to the user. An unwanted one counts as a false activation.
 
 **Administrator**:
-The person who installs Sodalis and sets up what the tablet screen does not offer, such as connecting an external trigger to Home Assistant. Anyone at the tablet, including the user, can change the ordinary activation switches; only the administrator does the server-side setup.
+The person responsible for installing Sodalis and setting up integrations that are not configured through the ordinary user interface.
 
 **Trial period**:
 A stretch of real use with a real signal, long enough to count a mode's false activations per waking hour before it is switched on for people.

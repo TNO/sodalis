@@ -8,6 +8,11 @@ blocked-by: []
 
 ## Question
 
+> Historical research. A future physical button is the direction, but its
+> hardware, transport and microphone location are undecided. This ticket
+> does not select Home Assistant or a push channel. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 Which physical or external triggers can start a Sodalis turn without touching
 the tablet: Bluetooth or Zigbee buttons and remotes, a Home Assistant button
 or event entity, a voice satellite such as ESPHome or Wyoming satellites, a

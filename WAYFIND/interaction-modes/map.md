@@ -3,9 +3,24 @@ title: Sodalis interaction modes beyond push-to-talk
 label: wayfinder:map
 ---
 
+## Current disposition (2026-11-19)
+
+**Archived decision trail.**
+[ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md) supersedes
+the recommendations in T01-T17 and the original evaluation. Keep the existing
+UI hold-to-talk and typing unchanged. Wake-word work is out of scope and the
+entire hands-free rollout is deferred, including automatic prompts and spoken
+acknowledgments. A physical button is the future direction, but hardware,
+transport, listening behavior and microphone placement are undecided; an
+embedded microphone is only a future option.
+
+Closed tickets remain closed as historical research, not active implementation
+instructions. The [evaluation](../../docs/evaluations/interaction-modes.md)
+records the research evidence and revised decision rationale.
+
 ## Destination
 
-A decision document in `docs/evaluations/interaction-modes.md` (following that
+The original destination was a decision document in `docs/evaluations/interaction-modes.md` (following that
 folder's README) that recommends which hands-free activation modes Sodalis
 should implement on a tablet, plus a short ordered list of follow-up
 implementation tasks for `TASKS/`. The map plans and decides; it implements
@@ -39,7 +54,7 @@ nothing in the product.
   `docs/evaluations/`.
 - Tracker: local markdown, see [WAYFIND/README.md](../README.md).
 
-## Decisions so far
+## Historical decisions (superseded)
 
 <!-- one line per closed ticket: [title](link): gist -->
 
@@ -64,11 +79,15 @@ nothing in the product.
 
 ## Not yet specified
 
-Nothing: the way is clear. The hand-off is written: the decision document
-[`docs/evaluations/interaction-modes.md`](../../docs/evaluations/interaction-modes.md)
-and the follow-up tasks 0085-0090 in `TASKS/`.
+The future physical button still needs a scoped design: hardware, transport,
+press/hold semantics, listening duration and stop/cancel behavior, feedback,
+failure handling, capture location and privacy. No implementation is authorized
+by the old hand-off or tasks 0085-0091.
 
-## Out of scope
+## Historical scope boundaries
+
+These describe the original investigation, not current product scope.
+In particular, its bounded prompt windows are also deferred by ADR 0010.
 
 - The alert and proactive-notification catalogue (CO2, stove, smoke, fall,
   medication, thresholds, urgency, escalation, who else is told) and which

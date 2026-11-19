@@ -8,6 +8,9 @@ blocked-by: []
 
 ## Question
 
+> Historical prototype, not a feature to merge. Wake-word work is out of scope
+> under [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 How does a sample-based browser wake-word engine (rustpotter or
 EfficientWord-Net, whichever runs in the browser with least effort) behave for
 "Hey Sodalis" in Dutch, recorded from the user's own voice? Build a throwaway

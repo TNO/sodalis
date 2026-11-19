@@ -8,6 +8,11 @@ blocked-by: []
 
 ## Question
 
+> Historical privacy research, not legal approval. Local processing does not
+> settle perceived intrusion or disclosure after a false detection. Wake-word
+> work is now out of scope under
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 What do GDPR and EU guidance, and established practice (for example how Home
 Assistant voice, Apple, Google, and Amazon handle wake-word listening), say
 about always-listening devices in a home: what counts as processing before
