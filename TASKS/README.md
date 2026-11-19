@@ -204,3 +204,7 @@ first.
 - [ ] [0089 Add the optional spoken activation acknowledgment](0089-spoken-activation-acknowledgment.md) *(needs 0086)*
 - [ ] [0090 Review privacy before hands-free listening reaches real users](0090-privacy-review-before-hands-free-rollout.md) *(needs 0086; blocks real-user rollout of 0086)*
 - [ ] [0091 Spec: hands-free activation on the tablet](0091-hands-free-activation-spec.md) *(parent spec of 0085–0090)*
+
+## Simulated home
+
+- [ ] [0092 Spec: Home Simulator through its MCP workflow](0092-home-simulator-mcp-spec.md) *(needs 0032; Neo4j path deferred)*
