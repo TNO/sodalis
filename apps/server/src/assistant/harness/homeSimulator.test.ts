@@ -64,6 +64,26 @@ describe("Home Simulator assistant tools", () => {
     expect(h.requests.at(-1)).toMatchObject({ method: "POST", path: `/tools/${name}`, body: { ...args, limit: 50 } });
   });
 
+  it("keeps whole sensor events and a usable continuation cursor when a full page exceeds the result budget", async () => {
+    const h = await setup();
+    const events = Array.from({ length: 50 }, (_, index) => ({
+      event_id: `event-${index}`, run_id: "run-3a9a428144bdbfa4",
+      timestamp: "2025-02-15T00:00:00+01:00", received_at: "2025-02-15T00:00:00+01:00",
+      sensor_uri: "https://example.org/regiodeal/resource/apartment-v1/temp-hum",
+      target_uri: "https://example.org/regiodeal/resource/apartment-v1/bathroom",
+      property: "Temperature", event_type: "measurement", value: 19.5, unit: "celsius",
+      series: "couple-apartment/temp-hum/Temperature", synthetic: true, sequence: 1_000 + index,
+    }));
+    h.replies.set("/tools/query_sensor_data", { body: {
+      events, has_more: true, next_after_sequence: 1_049, through: SIMULATION_TIME, clock: "received_at",
+    } });
+    const result = await call(h.tools, "query_sensor_data");
+    const visible = result.events as { sequence?: number; unit?: string }[];
+    expect(visible.length).toBeLessThan(50);
+    expect(visible.every((event) => event.unit === "celsius" && event.sequence !== undefined)).toBe(true);
+    expect(result).toMatchObject({ has_more: true, truncated: true, next_after_sequence: visible.at(-1)!.sequence });
+  });
+
   it.each([
     ["query_sensor_data", { limit: 51 }],
     ["get_context", { entity_uri: "https://example.org/room", offset: -1 }],

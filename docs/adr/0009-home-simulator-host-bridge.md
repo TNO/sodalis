@@ -1,6 +1,6 @@
 # ADR 0009: Reach the Home Simulator through a host bridge, avatar role only
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-19
 
 ## Context
