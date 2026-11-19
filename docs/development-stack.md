@@ -1074,6 +1074,24 @@ The same pattern supports
 separate Home Assistant Core endpoint and token are reachable from the host;
 Compose's Core container has no host port by design.
 
+### Home Simulator selection
+
+`HOME_PROVIDER=simulator` also selects the Home Simulator path (ADR 0009), in
+addition to the Home Assistant simulator. Settings:
+
+| Setting | Meaning |
+| --- | --- |
+| `HOME_SIMULATOR_ROOT` | Required absolute path of your `home_simulator` checkout. `stack:config`/`pull`/`ps`/`down` only require it to be absolute; `stack:up` also requires the directory, its `.venv/bin/python` (`.venv\Scripts\python.exe` on Windows) and `applications/tool_service` to exist. Not passed to `ai`. |
+| `HOME_SIMULATOR_SCENARIO` | Scenario to replay; default `avatar-support`. |
+| `HOME_SIMULATOR_BRIDGE_PORT` | Host bridge port; default `8095`. |
+| `HOME_SIMULATOR_BRIDGE_HOST` | Bridge bind address, a private interface reachable from containers; never `0.0.0.0`. |
+
+The `ai` service receives `HOME_SIMULATOR_BRIDGE_URL=http://host.docker.internal:<port>`
+(blank when the flag is off). No Compose service or profile is added. While the
+flag is on, the `HOME_GRAPH_*` and `HOME_DATA_SQLITE_*` settings stay valid but
+are ignored: blanked for `ai`, not validated, and no readings file is mounted.
+Switch to `HOME_PROVIDER=external-api` to use the graph and readings again.
+
 ### Companion workflow against the test graph
 
 The read-only Pi companion workflow (task 0067) is embedded in the existing
