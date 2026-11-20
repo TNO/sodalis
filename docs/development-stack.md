@@ -1094,7 +1094,7 @@ launcher runs the checkout's own Python environment on the host.
 | `HOME_SIMULATOR_ROOT` | Required absolute path of your `home_simulator` checkout. `stack:config`/`pull`/`ps`/`down` only require it to be absolute; `stack:up` also requires the directory, its `.venv/bin/python` (`.venv\Scripts\python.exe` on Windows) and `applications/tool_service` to exist. Not passed to `ai`. |
 | `HOME_SIMULATOR_SCENARIO` | Scenario to replay; default `avatar-support`. |
 | `HOME_SIMULATOR_BRIDGE_PORT` | Host bridge port; default `8095`. |
-| `HOME_SIMULATOR_BRIDGE_HOST` | Bridge bind address, a private interface reachable from containers; never `0.0.0.0`. |
+| `HOME_SIMULATOR_BRIDGE_HOST` | Bridge bind address, a private address of the stack network; never `0.0.0.0` or loopback. Blank (the default) uses that network's gateway. |
 
 Selection fails fast, before anything starts: a missing or relative
 `HOME_SIMULATOR_ROOT` stops with "Set HOME_SIMULATOR_ROOT in .env to the
@@ -1106,9 +1106,11 @@ simulator alone is therefore not possible with the flag on. With
 handoff file or simulator setting is read. Only an existing bridge PID record
 is checked for cleanup.
 
-The `ai` service receives `HOME_SIMULATOR_BRIDGE_URL=http://host.docker.internal:<port>`
-(blank when the flag is off). While the flag is on, the `HOME_GRAPH_*` and
-`HOME_DATA_SQLITE_*` settings stay valid but are ignored: blanked for `ai`, not
+The `ai` service receives `HOME_SIMULATOR_BRIDGE_URL=http://<bridge host>:<port>`
+(blank when the flag is off), where `<bridge host>` is the address chosen below;
+`stack:up` sets it, and `stack:config` shows a `host.docker.internal` placeholder. While
+the flag is on, the `HOME_GRAPH_*` and `HOME_DATA_SQLITE_*` settings stay valid but are
+ignored: blanked for `ai`, not
 validated, no readings file is mounted, and the graph and SQLite tools are not
 offered. Switch to `HOME_PROVIDER=external-api` to use the graph and readings
 again (see [the graph setup](#companion-workflow-against-the-test-graph)).
@@ -1160,13 +1162,18 @@ batch is re-read from page 1 and only acknowledged after all pages. Once the
 dataset ends it prints "Dataset ended, nothing left to replay" and exits 0. The
 bridge and the assistant cannot call it.
 
-The unauthenticated bridge binds to `172.17.0.1` by default **only if that address
-exists on a Linux host**, otherwise to `127.0.0.1`. Linux Docker Engine's
-`host-gateway` maps `host.docker.internal` to the Docker bridge address, so a
-loopback-only listener is not reachable from `ai` there. For a custom
-Docker/Podman network, explicitly set `HOME_SIMULATOR_BRIDGE_HOST` to a private,
-container-reachable IP and keep the host firewall restrictive. Wildcard and
-public IP bindings are rejected.
+The unauthenticated bridge binds, when `HOME_SIMULATOR_BRIDGE_HOST` is blank, to
+the gateway that Docker reports for the `EXTERNAL_NETWORK_NAME` network (default
+`sodalis`; `.env.example` sets `sodalis-network`). The bridge interface can be down while the stack is stopped, so this
+does not require the address to be live. If Docker cannot report a gateway, it
+falls back to `172.17.0.1` on a Linux host where that address exists, and
+`127.0.0.1` otherwise. The `ai` service's
+`HOME_SIMULATOR_BRIDGE_URL` is set to the chosen address before Compose starts, so
+the container and the bridge agree. `stack:up` stops with an error if the chosen
+or configured address is loopback, because `ai` cannot reach a loopback-only
+listener, and `stack:config` rejects a loopback `HOME_SIMULATOR_BRIDGE_HOST`.
+Set `HOME_SIMULATOR_BRIDGE_HOST` explicitly only for a custom network, and keep
+the host firewall restrictive. Wildcard and public IP bindings are rejected.
 
 The bridge exposes only `/health`, `/clock` and POST calls to the five read-only
 avatar tools (`query_sensor_data`, `get_context`, `query_ontology`,

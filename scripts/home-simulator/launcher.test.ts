@@ -7,7 +7,7 @@ import { delimiter, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { expect, it } from "vitest";
-import { createHomeSimulatorLauncher, runStackLifecycle, stopHomeSimulatorBridge } from "./launcher.js";
+import { createHomeSimulatorLauncher, resolveHomeSimulatorBridge, runStackLifecycle, stopHomeSimulatorBridge } from "./launcher.js";
 
 function runtime(fail?: string) {
   const events: string[] = [];
@@ -43,6 +43,27 @@ it("never opens a replay session when compose fails", async () => {
   const run = runtime("compose-up");
   await expect(runStackLifecycle("up", true, run)).rejects.toThrow("Failed compose-up");
   expect(run.events).toEqual(["stop-bridge", "compose-down", "compose-up"]);
+});
+
+it("reads the gateway of the configured stack network before choosing a blank bridge host", () => {
+  const selection = { root: "/unused", scenario: "avatar-support", bridgePort: 8095, bridgeHost: "" };
+  const networks: string[] = [];
+  expect(() => resolveHomeSimulatorBridge(selection, { EXTERNAL_NETWORK_NAME: "stack-net" }, (network) => {
+    networks.push(network);
+    return undefined;
+  })).toThrow(/cannot reach/);
+  expect(networks).toEqual(["stack-net"]);
+});
+
+it("stops stack:up when the bridge would bind to loopback, which the ai container cannot reach", () => {
+  const selection = { root: "/unused", scenario: "avatar-support", bridgePort: 8095, bridgeHost: "" };
+  expect(() => resolveHomeSimulatorBridge(selection, {}, () => undefined)).toThrow(/cannot reach/);
+  expect(() => resolveHomeSimulatorBridge({ ...selection, bridgeHost: "127.0.0.1" }, {}, () => "172.19.0.1")).toThrow(/cannot reach/);
+});
+
+it("uses the explicit private bridge host in the container URL", () => {
+  const selection = { root: "/unused", scenario: "avatar-support", bridgePort: 8095, bridgeHost: "172.19.0.1" };
+  expect(resolveHomeSimulatorBridge(selection, {}, () => undefined)).toEqual({ host: "172.19.0.1", url: "http://172.19.0.1:8095" });
 });
 
 it("cleans a partially started bridge when startup fails", async () => {

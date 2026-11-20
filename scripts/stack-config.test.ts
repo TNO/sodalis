@@ -397,6 +397,8 @@ describe("Home Simulator selection", () => {
     { HOME_SIMULATOR_BRIDGE_HOST: "::" },
     { HOME_SIMULATOR_BRIDGE_HOST: "[::]" },
     { HOME_SIMULATOR_BRIDGE_HOST: "bad host" },
+    { HOME_SIMULATOR_BRIDGE_HOST: "127.0.0.1" },
+    { HOME_SIMULATOR_BRIDGE_HOST: "::1" },
     { HOME_SIMULATOR_SCENARIO: "../escape" },
   ])("rejects invalid bridge or scenario settings %j", (settings) => {
     expect(() => resolveStack({ ...base, ...settings })).toThrow(/HOME_SIMULATOR_/);

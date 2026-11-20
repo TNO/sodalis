@@ -6,6 +6,7 @@ import {
   validateCompanionSettings,
   validateEmailSettings,
 } from "../apps/server/src/assistant/harness/settings.js";
+import { isLoopbackHost } from "./home-simulator/bridge.js";
 
 export interface StackSelection {
   readonly profiles: readonly string[];
@@ -69,6 +70,12 @@ function homeSimulatorSelection(settings: Settings): HomeSimulatorSelection {
   if (WILDCARD_HOSTS.has(bridgeHost) || !/^[A-Za-z0-9.:_-]*$/.test(bridgeHost)) {
     throw new Error(
       "HOME_SIMULATOR_BRIDGE_HOST must be a specific private interface address, never a wildcard such as 0.0.0.0.",
+    );
+  }
+  if (isLoopbackHost(bridgeHost)) {
+    throw new Error(
+      "HOME_SIMULATOR_BRIDGE_HOST must be an address of the stack network, not loopback: " +
+        "the ai container cannot reach a loopback bridge. Leave it blank or use the network gateway.",
     );
   }
   return { root, scenario, bridgePort: Number(port), bridgeHost };

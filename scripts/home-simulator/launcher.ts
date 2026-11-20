@@ -1,11 +1,44 @@
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { isIP } from "node:net";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { HomeSimulatorSelection } from "../stack-config.js";
-import { resolveBridgeHost } from "./bridge.js";
+import { isLoopbackHost, localAddresses, resolveBridgeHost } from "./bridge.js";
 
 const repository = resolve(import.meta.dirname, "../..");
+
+/** The IPv4 gateway of a Docker or Podman network, or undefined when it cannot be read. */
+export function networkGateway(network: string): string | undefined {
+  const result = spawnSync("docker", [
+    "network", "inspect", network, "--format", "{{range .IPAM.Config}}{{.Gateway}} {{end}}",
+  ], { encoding: "utf8" });
+  if (result.status !== 0) return undefined;
+  return result.stdout.trim().split(/\s+/).find((address) => isIP(address) === 4);
+}
+
+/**
+ * Chooses the bridge address and the URL the `ai` container uses for it. Run before
+ * Compose starts, so the container is created with the URL that matches the bridge.
+ */
+export function resolveHomeSimulatorBridge(
+  selection: HomeSimulatorSelection,
+  environment: NodeJS.ProcessEnv,
+  lookupGateway: (network: string) => string | undefined = networkGateway,
+): { readonly host: string; readonly url: string } {
+  const gateway = lookupGateway(environment.EXTERNAL_NETWORK_NAME?.trim() || "sodalis");
+  const host = resolveBridgeHost(selection.bridgeHost, {
+    platform: process.platform, addresses: localAddresses(), gateway,
+  });
+  if (isLoopbackHost(host)) {
+    throw new Error(
+      `The Home Simulator bridge would bind to ${host}, which the ai container cannot reach. ` +
+        "Set HOME_SIMULATOR_BRIDGE_HOST in .env to a private address of the stack network, " +
+        "such as its gateway (docker network inspect <EXTERNAL_NETWORK_NAME>).",
+    );
+  }
+  return { host, url: `http://${host.includes(":") ? `[${host}]` : host}:${selection.bridgePort}` };
+}
 
 export interface StackLifecycle {
   readonly composeDown: () => void | Promise<void>;

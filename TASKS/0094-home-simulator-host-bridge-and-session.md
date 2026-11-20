@@ -34,8 +34,10 @@ copied; Sodalis only spawns the checkout's own Python.
 - Host bridge (Sodalis-owned process, `tsx` entry): spawns `--role avatar
   --session-id <id> --state-dir <dir>` as a stdio child and serves HTTP, bound
   to `HOME_SIMULATOR_BRIDGE_HOST` on `HOME_SIMULATOR_BRIDGE_PORT`; never binds
-  `0.0.0.0`. Default host: the Docker bridge address (`172.17.0.1`) when present
-  on a Linux host, otherwise `127.0.0.1`; document why (Linux `host-gateway`).
+  `0.0.0.0`. Default host: originally the Docker bridge address (`172.17.0.1`)
+  when present on a Linux host, otherwise `127.0.0.1`. Superseded: the default is
+  now the gateway of the `EXTERNAL_NETWORK_NAME` network, and `stack:up` rejects
+  loopback because `ai` cannot reach it (see `docs/development-stack.md`).
   No authentication.
 - Bridge HTTP contract (also consumed by 0096; keep exact):
   - `GET /health` → `200 {"ok":true}`.

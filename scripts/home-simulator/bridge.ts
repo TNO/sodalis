@@ -19,14 +19,22 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.end(JSON.stringify(body));
 }
 
+export function localAddresses(): string[] {
+  return Object.values(networkInterfaces()).flatMap((entries) => entries?.map((entry) => entry.address) ?? []);
+}
+
+export function isLoopbackHost(host: string): boolean {
+  return host === "::1" || /^127\./.test(host);
+}
+
 export function resolveBridgeHost(
   configured = "",
-  network: { platform: NodeJS.Platform; addresses: readonly string[] } = {
+  network: { platform: NodeJS.Platform; addresses: readonly string[]; gateway?: string } = {
     platform: process.platform,
-    addresses: Object.values(networkInterfaces()).flatMap((entries) => entries?.map((entry) => entry.address) ?? []),
+    addresses: localAddresses(),
   },
 ): string {
-  const host = configured.trim() || (network.platform === "linux" && network.addresses.includes("172.17.0.1")
+  const host = configured.trim() || network.gateway || (network.platform === "linux" && network.addresses.includes("172.17.0.1")
     ? "172.17.0.1" : "127.0.0.1");
   const octets = host.split(".").map(Number);
   const privateV4 = isIP(host) === 4 && (octets[0] === 127 || octets[0] === 10 ||

@@ -340,7 +340,7 @@ the tools report `unavailable`.
 ### Home Simulator replay tools
 
 With `COMPANION_HARNESS=pi`, set `HOME_SIMULATOR_BRIDGE_URL` to the private
-HTTP(S) origin of the host bridge (for example `http://host.docker.internal:<bridge-port>`).
+HTTP(S) origin of the host bridge (for example `http://<network-gateway>:<bridge-port>`).
 The Compose launcher sets it, and starts the bridge and a fresh replay session on
 every `stack:up`, whenever `HOME_PROVIDER=simulator`; running the server natively,
 set it yourself. See the

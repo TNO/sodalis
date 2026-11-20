@@ -32,7 +32,9 @@ Spec stories 1–7, 11, 23–25. Notes for implementers (read first):
   must not run for `config`, `pull`, `ps` or `down`.
 - The `ai` service receives `HOME_SIMULATOR_BRIDGE_URL`, built as
   `http://host.docker.internal:<port>` (the existing host-helper pattern, see
-  `extra_hosts` on `ai`), only when the flag is on; blank otherwise. Add the key
+  `extra_hosts` on `ai`), only when the flag is on; blank otherwise. Superseded
+  for `stack:up`, which replaces the host with the bridge's resolved address
+  (the stack network gateway by default; see `docs/development-stack.md`). Add the key
   to `compose.yaml` `ai.environment` as `${VAR:-}`. No new compose service, no
   new profile. `HOME_SIMULATOR_ROOT` itself is not passed to `ai`.
 - Flag on: Neo4j (`HOME_GRAPH_*`) and SQLite readings (`HOME_DATA_SQLITE_*`)

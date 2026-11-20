@@ -92,6 +92,8 @@ it("chooses a container-reachable Linux default only when that bridge address ex
   expect(resolveBridgeHost("", { platform: "linux", addresses: ["127.0.0.1", "172.17.0.1"] })).toBe("172.17.0.1");
   expect(resolveBridgeHost("", { platform: "linux", addresses: ["127.0.0.1", "192.168.1.1"] })).toBe("127.0.0.1");
   expect(resolveBridgeHost("", { platform: "darwin", addresses: ["172.17.0.1"] })).toBe("127.0.0.1");
+  expect(resolveBridgeHost("", { platform: "linux", addresses: ["127.0.0.1", "172.19.0.1"], gateway: "172.19.0.1" })).toBe("172.19.0.1");
+  expect(resolveBridgeHost("", { platform: "linux", addresses: ["127.0.0.1"], gateway: "172.19.0.1" })).toBe("172.19.0.1");
   expect(resolveBridgeHost("192.168.1.2")).toBe("192.168.1.2");
   expect(resolveBridgeHost("::1")).toBe("::1");
   for (const host of ["0.0.0.0", "::", "[::]", "*", "8.8.8.8", "host.example", "0", "127.1"]) {

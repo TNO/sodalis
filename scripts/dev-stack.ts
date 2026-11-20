@@ -5,7 +5,7 @@ import { parseEnv } from "node:util";
 import {
   ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix, validateHomeSimulatorCheckout, type StackSelection,
 } from "./stack-config.js";
-import { createHomeSimulatorLauncher, runStackLifecycle, stopHomeSimulatorBridge } from "./home-simulator/launcher.js";
+import { createHomeSimulatorLauncher, resolveHomeSimulatorBridge, runStackLifecycle, stopHomeSimulatorBridge } from "./home-simulator/launcher.js";
 import { validateReadingsFile } from "../apps/server/src/assistant/harness/settings.js";
 
 const root = resolve(import.meta.dirname, "..");
@@ -94,8 +94,14 @@ async function main(): Promise<void> {
   console.log(`Sodalis Compose profiles: ${selection.profiles.join(", ") || "none"}`);
   const allProfiles = ALL_LOCAL_PROFILES.flatMap((profile) => ["--profile", profile]);
   if (operation === "up" || operation === "down") {
-    const simulator = selection.homeSimulator
-      ? createHomeSimulatorLauncher({ selection: selection.homeSimulator, environment }) : undefined;
+    let homeSimulator = selection.homeSimulator;
+    if (operation === "up" && homeSimulator) {
+      const bridge = resolveHomeSimulatorBridge(homeSimulator, environment);
+      homeSimulator = { ...homeSimulator, bridgeHost: bridge.host };
+      environment.HOME_SIMULATOR_BRIDGE_URL = bridge.url;
+    }
+    const simulator = homeSimulator
+      ? createHomeSimulatorLauncher({ selection: homeSimulator, environment }) : undefined;
     await runStackLifecycle(operation, !!simulator, {
       composeDown: () => run([...allProfiles, "down", "--remove-orphans"]),
       composeUp: () => run([...selection.profiles.flatMap((profile) => ["--profile", profile]), "up", "--build", "-d"]),
