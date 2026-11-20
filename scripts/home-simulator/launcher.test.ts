@@ -9,6 +9,14 @@ import { promisify } from "node:util";
 import { expect, it } from "vitest";
 import { createHomeSimulatorLauncher, resolveHomeSimulatorBridge, runStackLifecycle, stopHomeSimulatorBridge } from "./launcher.js";
 
+// A stopped process can stay visible as an unreaped zombie for a moment (macOS).
+async function expectGone(pid: number): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  const alive = () => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  while (alive() && Date.now() < deadline) await new Promise((done) => setTimeout(done, 50));
+  expect(alive()).toBe(false);
+}
+
 function runtime(fail?: string) {
   const events: string[] = [];
   const step = (name: string) => async () => {
@@ -104,9 +112,9 @@ it.each(["up", "down"] as const)("stops a previously recorded bridge and its ava
     await runStackLifecycle(operation, false, { ...run, stopBridge: launcher.stopBridge });
     expect(run.events).toEqual(operation === "up" ? ["compose-down", "compose-up"] : ["compose-down"]);
     expect(existsSync(resolve(logs, "bridge.json"))).toBe(false);
-    expect(() => process.kill(record.pid, 0)).toThrow();
     expect(avatarPid).toBeGreaterThan(0);
-    expect(() => process.kill(avatarPid!, 0)).toThrow();
+    await expectGone(record.pid);
+    await expectGone(avatarPid!);
     await launcher.stopBridge();
     await launcher.runSession();
     await launcher.startBridge();
