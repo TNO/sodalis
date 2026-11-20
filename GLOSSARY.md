@@ -66,3 +66,20 @@ _Avoid_: Soak
 
 **Barge-in**:
 The user speaking over Sodalis while it replies, which stops its speech and starts listening. It applies to replies marked interruptible and works only while a turn is active.
+
+## Simulated home
+
+**Simulated home**:
+The development stack's stand-in for a real home, selected by the simulator flag. It has two distinct parts: the Home Assistant simulator and the Home Simulator.
+
+**Home Assistant simulator**:
+The Home Assistant Core instance in the stack that stands in for a real Home Assistant installation, and the part of the simulated home that can be commanded.
+_Avoid_: Simulator (alone)
+
+**Home Simulator**:
+The separately owned `home_simulator` project, which replays a generated dataset of sensor readings, context, weather and agenda through its MCP workflow. Its replay is read-only: dialogue cannot change it.
+_Avoid_: Simulator (alone), simulator MCP
+
+**Replay session**:
+One run through a dataset of the Home Simulator, with its own clock and cursors, from which Sodalis reads only what the clock has reached.
+_Avoid_: Simulation run

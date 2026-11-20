@@ -209,3 +209,12 @@ These are historical tasks, not ready-to-run backlog or completed features:
 | [0089 Spoken activation acknowledgment](0089-spoken-activation-acknowledgment.md) | Deferred |
 | [0090 Hands-free privacy review](0090-privacy-review-before-hands-free-rollout.md) | Superseded; no human privacy approval claimed |
 | [0091 Hands-free activation spec](0091-hands-free-activation-spec.md) | Superseded; original requirements archived |
+
+## Simulated home
+
+- [x] [0092 Spec: Home Simulator through its MCP workflow](0092-home-simulator-mcp-spec.md) *(needs 0032; Neo4j path deferred; slices 0093–0097)*
+- [x] [0093 Add Home Simulator flag handling to stack selection](0093-home-simulator-stack-selection.md) *(spec 0092)*
+- [x] [0094 Add the Home Simulator host bridge and session script](0094-home-simulator-host-bridge-and-session.md) *(needs 0093)*
+- [x] [0095 Add the replay advance script](0095-home-simulator-advance-script.md) *(needs 0094)*
+- [x] [0096 Add the Home Simulator assistant tools and simulated now](0096-home-simulator-assistant-tools.md) *(spec 0092; parallel to 0093)*
+- [x] [0097 Document the Home Simulator path, add the live test, accept ADR 0009](0097-home-simulator-documentation-and-live-test.md) *(needs 0093–0096)*

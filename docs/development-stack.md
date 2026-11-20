@@ -20,10 +20,13 @@ to `127.0.0.1:4176` by default; this is not a production deployment.
 
 Install dependencies with `pnpm install`, then copy `.env.example` to `.env`
 (`cp .env.example .env` on macOS/Linux, or `Copy-Item .env.example .env` in
-PowerShell). The example enables Pi and prefills the simulator graph settings;
-set `HOME_GRAPH_PASSWORD` from your Neo4j deployment before launching. Follow
-the [companion setup](#companion-workflow-against-the-test-graph) for connectivity
-and optional readings. Never commit `.env`, downloaded models, or access tokens.
+PowerShell). The example enables Pi and selects the **simulated home**
+(`HOME_PROVIDER=simulator`), which also needs the path of a prepared
+`home_simulator` checkout: set `HOME_SIMULATOR_ROOT` and follow
+[Home Simulator replay data](#home-simulator-replay-data). The `HOME_GRAPH_*`
+settings are only used with `HOME_PROVIDER=external-api`; see the
+[graph companion setup](#companion-workflow-against-the-test-graph). Never commit
+`.env`, downloaded models, or access tokens.
 
 ## Choose providers
 
@@ -39,7 +42,7 @@ Parakeet needs more than a 2 GB Podman VM; see the
 | STT | `whisper-cpp`, `whistle`, `parakeet-tdt` (blank matching URL), or `mock` | Matching provider with `WHISPER_CPP_URL`, `WHISTLE_URL`, or `PARAKEET_TDT_URL`; `azure` with `AZURE_STT_ENDPOINT` and `AZURE_STT_KEY` (real-time, max 30 s per utterance) |
 | TTS | `piper` (blank `PIPER_HTTP_URL`) or `mock` | `piper`/`piper-http` with `PIPER_HTTP_URL`; `pocket-http` with `POCKET_TTS_URL`, `POCKET_TTS_API_KEY`, and `POCKET_TTS_VOICE`; `azure` with `AZURE_TTS_URL`, `AZURE_TTS_KEY`, and `AZURE_TTS_VOICE` |
 | LLM | `mock`, or `openai-compatible` with `LLM_MODEL` naming a local `.gguf` and blank `LLM_BASE_URL` (Compose llama.cpp) | `openai-compatible` with `LLM_BASE_URL` and `LLM_MODEL` (the example targets host Ollama); `azure` with `AZURE_LLM_URL`, `AZURE_LLM_KEY`, and `AZURE_LLM_DEPLOYMENT` |
-| Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN` | `external-api` with `HOME_API_URL` |
+| Home | `simulator` with Core and its dedicated `HOME_ASSISTANT_TOKEN`; also brings up the Home Simulator and needs `HOME_SIMULATOR_ROOT` | `external-api` with `HOME_API_URL` |
 
 External URLs must be reachable **from the containers**, not just the host.
 For a host-native service, use `host.docker.internal` with Docker Desktop;
@@ -1074,13 +1077,141 @@ The same pattern supports
 separate Home Assistant Core endpoint and token are reachable from the host;
 Compose's Core container has no host port by design.
 
+### Home Simulator replay data
+
+The **simulated home** has two parts: the **Home Assistant simulator** (Core,
+commanded through the Home API) and the **Home Simulator**, the separately
+owned `home_simulator` project that replays a generated dataset of sensor
+readings, household context, weather and agenda. `HOME_PROVIDER=simulator`
+selects both; there is no second switch (ADR 0009). The companion (workflow
+mode, `COMPANION_HARNESS=pi`) then gets five read-only tools over the Home
+Simulator's **replay session** and is told the replay clock as the simulated
+"now". No Compose service is added and nothing of the checkout is copied: the
+launcher runs the checkout's own Python environment on the host.
+
+| Setting | Meaning |
+| --- | --- |
+| `HOME_SIMULATOR_ROOT` | Required absolute path of your `home_simulator` checkout. `stack:config`/`pull`/`ps`/`down` only require it to be absolute; `stack:up` also requires the directory, its `.venv/bin/python` (`.venv\Scripts\python.exe` on Windows) and `applications/tool_service` to exist. Not passed to `ai`. |
+| `HOME_SIMULATOR_SCENARIO` | Scenario to replay; default `avatar-support`. |
+| `HOME_SIMULATOR_BRIDGE_PORT` | Host bridge port; default `8095`. |
+| `HOME_SIMULATOR_BRIDGE_HOST` | Bridge bind address, a private address of the stack network; never `0.0.0.0` or loopback. Blank (the default) uses that network's gateway. |
+
+Selection fails fast, before anything starts: a missing or relative
+`HOME_SIMULATOR_ROOT` stops with "Set HOME_SIMULATOR_ROOT in .env to the
+absolute path of your home_simulator checkout", and `stack:up` stops with
+"HOME_SIMULATOR_ROOT … does not exist" or "… is missing its Python environment
+(create the checkout's .venv first)" for an unusable checkout. A Home Assistant
+simulator alone is therefore not possible with the flag on. With
+`HOME_PROVIDER=external-api` no Home Simulator helper is started, and no
+handoff file or simulator setting is read. Only an existing bridge PID record
+is checked for cleanup.
+
+The `ai` service receives `HOME_SIMULATOR_BRIDGE_URL=http://<bridge host>:<port>`
+(blank when the flag is off), where `<bridge host>` is the address chosen below;
+`stack:up` sets it, and `stack:config` shows a `host.docker.internal` placeholder. While
+the flag is on, the `HOME_GRAPH_*` and `HOME_DATA_SQLITE_*` settings stay valid but are
+ignored: blanked for `ai`, not
+validated, no readings file is mounted, and the graph and SQLite tools are not
+offered. Switch to `HOME_PROVIDER=external-api` to use the graph and readings
+again (see [the graph setup](#companion-workflow-against-the-test-graph)).
+
+Every `stack:up` and `stack:down` first stops any host bridge recorded in
+`logs/home-simulator/bridge.json`, even after switching the flag off.
+`stack:down` does not require valid startup settings such as
+`HOME_SIMULATOR_ROOT`. Before signalling a recorded PID, the launcher checks
+that it still belongs to this worktree's bridge; a stale record pointing at an
+unrelated process is removed without signalling it. A missing record is a
+no-op, and the handoff and logs are left untouched.
+
+With the flag on, `stack:up` then runs Compose, runs
+`pnpm home-simulator:session`, starts the detached host bridge and waits for
+`/health`. Stopping the bridge also stops its avatar child; repeated stops are
+harmless. Every flag-on `stack:up` therefore starts a fresh replay session at
+the beginning of the dataset.
+
+The session script uses the checkout's unresolved `.venv/bin/python` path with
+that checkout as its working directory. It drives the Home Simulator's
+coordinator role privately on the host (never reachable from the bridge or the
+assistant), reuses the lexicographically smallest registered dataset whose
+`metadata.plan` matches the scenario, or generates one and waits for its job to
+finish. The first launch of a scenario generates its dataset, about 20 seconds
+for `avatar-support`; later launches reuse it. Datasets, sessions and the MCP
+state (`<root>/output/tool-service`) live in the checkout's own git-ignored
+`output/` directory, and `stack:down` leaves them there. Generation failures
+leave the previous handoff untouched. The coordinator connection closes before
+the bridge starts.
+
+`logs/home-simulator/session.json` is the shared session handoff. Its JSON fields
+are `root` (absolute checkout path), `stateDir` (absolute path, normally
+`<root>/output/tool-service`), `sessionId`, `datasetId` and `scenario`. The bridge
+and operator script must read that same file. Standalone session/bridge commands
+read `.env`, overridden by their environment; `HOME_SIMULATOR_HANDOFF_PATH` can
+select a different handoff file. `bridge.json` in the same log directory records
+`pid`, `host` and `port`; bridge stdout/stderr go to `bridge.log`.
+
+A new replay session starts just before the dataset: its clock precedes the
+first observation, so sensor, weather and agenda reads are empty until you
+advance it. `pnpm home-simulator:advance` is the operator-only way to move the
+replay on, for example to stage "what the home looks like now" before talking to
+the companion. It reads the same handoff, starts its own avatar child on that
+session, pages `next_interaction_batch` to `window_complete`, acknowledges the
+batch as a `context` checkpoint (`sodalis-advance-<batch_id>`; nothing is stored
+durably) and prints the new simulated time and next interaction. The bridge sees
+the new clock on its next read. A failed run is safe to repeat: the pending
+batch is re-read from page 1 and only acknowledged after all pages. Once the
+dataset ends it prints "Dataset ended, nothing left to replay" and exits 0. The
+bridge and the assistant cannot call it.
+
+The unauthenticated bridge binds, when `HOME_SIMULATOR_BRIDGE_HOST` is blank, to
+the gateway that Docker reports for the `EXTERNAL_NETWORK_NAME` network (default
+`sodalis`; `.env.example` sets `sodalis-network`). The bridge interface can be down while the stack is stopped, so this
+does not require the address to be live. If Docker cannot report a gateway, it
+falls back to `172.17.0.1` on a Linux host where that address exists, and
+`127.0.0.1` otherwise. The `ai` service's
+`HOME_SIMULATOR_BRIDGE_URL` is set to the chosen address before Compose starts, so
+the container and the bridge agree. `stack:up` stops with an error if the chosen
+or configured address is loopback, because `ai` cannot reach a loopback-only
+listener, and `stack:config` rejects a loopback `HOME_SIMULATOR_BRIDGE_HOST`.
+Set `HOME_SIMULATOR_BRIDGE_HOST` explicitly only for a custom network, and keep
+the host firewall restrictive. Wildcard and public IP bindings are rejected.
+
+The bridge exposes only `/health`, `/clock` and POST calls to the five read-only
+avatar tools (`query_sensor_data`, `get_context`, `query_ontology`,
+`query_weather`, `get_agenda`). Coordinator, batch, acknowledgement, claims and
+session tools are never exposed. The replay is read-only: dialogue cannot
+advance it or change the simulated home, and the companion's existing refusal to
+execute Home actions without confirmation is unchanged. If the avatar child
+exits, the bridge warns on stderr and responds with HTTP 503, and the companion
+reports the Home Simulator as unavailable rather than an empty home. See
+[the server README](../apps/server/README.md#home-simulator-replay-tools) for
+the tool limits.
+
+#### Checking against a real checkout
+
+Behaviour tests run against a fake MCP server and need no checkout. To check
+the whole path against a real one (no cloud provider or credentials involved;
+never run in CI):
+
+```sh
+HOME_SIMULATOR_ROOT=/absolute/path/to/home_simulator pnpm vitest run scripts/home-simulator/live.test.ts
+```
+
+It reuses or generates the scenario's dataset in the checkout's `output/`
+directory (about 20 seconds the first time), opens a replay session, starts the
+bridge on loopback, reads the clock and the five tools, advances once and stops
+every process it started. Without `HOME_SIMULATOR_ROOT` it is skipped, as in
+`pnpm test` and CI.
+
 ### Companion workflow against the test graph
 
 The read-only Pi companion workflow (task 0067) is embedded in the existing
 Compose `ai` container. It does not launch a Pi CLI or require a separate Pi
 container. The standard `.env.example` selects `COMPANION_HARNESS=pi`.
 Set `off` and clear graph/data settings for the existing turn mode.
-Invalid selections fail explicitly.
+Invalid selections fail explicitly. This graph path applies with
+`HOME_PROVIDER=external-api`; with `HOME_PROVIDER=simulator` the
+[Home Simulator](#home-simulator-replay-data) replaces it and the graph
+settings below are ignored.
 See [turn mode versus workflow mode](architecture/companion-harness.md#turn-mode-versus-workflow-mode)
 before switching: workflow adds adaptive home investigation but currently
 does not provide turn mode's desktop actions or optional long-term memory.
@@ -1227,7 +1358,7 @@ stack commands.
 | `HOME_DATA_SQLITE_ENDPOINT` | no | Not a path: the graph endpoint whose references are served from that file. The default `local://simulation/timeseries.sqlite` matches the snapshot (`sqliteEndpoint` in its `SOURCE.json`). Sodalis ignores the file path stored in the graph. |
 
 Graph/data settings require `COMPANION_HARNESS=pi`; clear them when switching
-back to `off`. A configured readings file requires a graph URL and password.
+back to `off`. They are ignored while `HOME_PROVIDER=simulator`. A configured readings file requires a graph URL and password.
 With `pi` and no graph settings, tools explicitly report `unavailable`.
 Workflow mode retains the read-only capability restrictions, cancellation,
 and budgets; it does not offer desktop actions or retrieve/store long-term

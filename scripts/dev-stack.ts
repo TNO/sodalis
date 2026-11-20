@@ -2,100 +2,122 @@ import { spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { parseEnv } from "node:util";
-import { ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix } from "./stack-config.js";
+import {
+  ALL_LOCAL_PROFILES, resolveStack, serviceNamePrefix, validateHomeSimulatorCheckout, type StackSelection,
+} from "./stack-config.js";
+import { createHomeSimulatorLauncher, resolveHomeSimulatorBridge, runStackLifecycle, stopHomeSimulatorBridge } from "./home-simulator/launcher.js";
 import { validateReadingsFile } from "../apps/server/src/assistant/harness/settings.js";
 
 const root = resolve(import.meta.dirname, "..");
-const envPath = resolve(root, ".env");
-if (!existsSync(envPath)) throw new Error("Copy .env.example to .env and select LLM and Home providers.");
-const [operation, ...options] = process.argv.slice(2);
-if (!["up", "down", "config", "ps", "pull"].includes(operation ?? "") ||
-    (options.length && (options.length !== 2 || options[0] !== "--env"))) {
-  throw new Error(
-    "Usage: pnpm stack:up | stack:down | stack:config | stack:pull (or dev-stack.ts ps) [--env <overlay file>].",
-  );
-}
-// An explicit overlay (for example .env.azure) replaces matching .env settings.
-const overlayPath = options[1] ? resolve(root, options[1]) : undefined;
-if (overlayPath && !existsSync(overlayPath)) throw new Error(`Missing ${options[1]}.`);
-const settings = {
-  ...parseEnv(readFileSync(envPath, "utf8")),
-  ...(overlayPath ? parseEnv(readFileSync(overlayPath, "utf8")) : {}),
-};
-const selection = resolveStack(settings);
-if (operation === "up") {
-  const logs = resolve(root, "logs");
-  try {
-    mkdirSync(logs, { recursive: true, mode: 0o700 });
-    accessSync(logs, constants.R_OK | constants.W_OK | constants.X_OK);
-  } catch (error) {
-    throw new Error("The repository logs/ directory must be accessible to your user. Repair its ownership before starting the stack; see apps/server/README.md.", { cause: error });
+
+async function main(): Promise<void> {
+  const [operation, ...options] = process.argv.slice(2);
+  if (!["up", "down", "config", "ps", "pull"].includes(operation ?? "") ||
+      (options.length && (options.length !== 2 || options[0] !== "--env"))) {
+    throw new Error(
+      "Usage: pnpm stack:up | stack:down | stack:config | stack:pull (or dev-stack.ts ps) [--env <overlay file>].",
+    );
   }
-  const readings = selection.environment.HOME_DATA_SQLITE_SOURCE;
-  if (readings) validateReadingsFile(readings);
-  for (const model of selection.models) {
-    if (!existsSync(resolve(root, model))) {
-      throw new Error(`Missing ${model}; see docs/development-stack.md for model setup.`);
+  if (operation === "up" || operation === "down") await stopHomeSimulatorBridge();
+  const envPath = resolve(root, ".env");
+  if (!existsSync(envPath)) throw new Error("Copy .env.example to .env and select LLM and Home providers.");
+  // An explicit overlay (for example .env.azure) replaces matching .env settings.
+  const overlayPath = options[1] ? resolve(root, options[1]) : undefined;
+  if (overlayPath && !existsSync(overlayPath)) throw new Error(`Missing ${options[1]}.`);
+  const settings = {
+    ...parseEnv(readFileSync(envPath, "utf8")),
+    ...(overlayPath ? parseEnv(readFileSync(overlayPath, "utf8")) : {}),
+  };
+  const selection: StackSelection = operation === "down"
+    ? { profiles: [], environment: {}, models: [] }
+    : resolveStack(settings);
+  if (operation === "up") {
+    const logs = resolve(root, "logs");
+    try {
+      mkdirSync(logs, { recursive: true, mode: 0o700 });
+      accessSync(logs, constants.R_OK | constants.W_OK | constants.X_OK);
+    } catch (error) {
+      throw new Error("The repository logs/ directory must be accessible to your user. Repair its ownership before starting the stack; see apps/server/README.md.", { cause: error });
+    }
+    if (selection.homeSimulator) validateHomeSimulatorCheckout(selection.homeSimulator.root);
+    const readings = selection.environment.HOME_DATA_SQLITE_SOURCE;
+    if (readings) validateReadingsFile(readings);
+    for (const model of selection.models) {
+      if (!existsSync(resolve(root, model))) {
+        throw new Error(`Missing ${model}; see docs/development-stack.md for model setup.`);
+      }
     }
   }
-}
 
-const environment = { ...process.env, ...settings, ...selection.environment };
-environment.COMPOSE_PROJECT_NAME = `sodalis-${basename(root).toLowerCase().replace(/[^a-z0-9-]/g, "-")}`;
-environment.SODALIS_SERVICE_PREFIX = serviceNamePrefix(basename(root));
-environment.COMPOSE_PROFILES = "";
-const compose = spawnSync("docker", ["compose", "version"], { stdio: "ignore" }).status === 0
-  ? { command: "docker", prefix: ["compose"] }
-  : { command: "docker-compose", prefix: [] };
+  const environment = { ...process.env, ...settings, ...selection.environment };
+  environment.COMPOSE_PROJECT_NAME = `sodalis-${basename(root).toLowerCase().replace(/[^a-z0-9-]/g, "-")}`;
+  environment.SODALIS_SERVICE_PREFIX = serviceNamePrefix(basename(root));
+  environment.COMPOSE_PROFILES = "";
+  const compose = spawnSync("docker", ["compose", "version"], { stdio: "ignore" }).status === 0
+    ? { command: "docker", prefix: ["compose"] }
+    : { command: "docker-compose", prefix: [] };
 
-if (!environment.DOCKER_HOST && compose.command === "docker-compose") {
-  const machine = spawnSync("podman", [
-    "machine", "inspect", "--format", "{{.ConnectionInfo.PodmanSocket.Path}}",
-  ], { encoding: "utf8" });
-  if (machine.status === 0 && machine.stdout.trim()) {
-    environment.DOCKER_HOST = `unix://${machine.stdout.trim()}`;
-  } else {
-    const local = spawnSync("podman", [
-      "info", "--format", "{{.Host.RemoteSocket.Path}}",
+  if (!environment.DOCKER_HOST && compose.command === "docker-compose") {
+    const machine = spawnSync("podman", [
+      "machine", "inspect", "--format", "{{.ConnectionInfo.PodmanSocket.Path}}",
     ], { encoding: "utf8" });
-    if (local.status === 0 && local.stdout.trim()) {
-      environment.DOCKER_HOST = `unix://${local.stdout.trim()}`;
+    if (machine.status === 0 && machine.stdout.trim()) {
+      environment.DOCKER_HOST = `unix://${machine.stdout.trim()}`;
+    } else {
+      const local = spawnSync("podman", [
+        "info", "--format", "{{.Host.RemoteSocket.Path}}",
+      ], { encoding: "utf8" });
+      if (local.status === 0 && local.stdout.trim()) {
+        environment.DOCKER_HOST = `unix://${local.stdout.trim()}`;
+      }
     }
+  }
+
+  const baseArgs = [
+    ...compose.prefix,
+    "--env-file", envPath,
+    "-f", resolve(root, "compose.yaml"),
+    ...(selection.environment.HOME_DATA_SQLITE_SOURCE
+      ? ["-f", resolve(root, "compose.companion-data.yaml")]
+      : []),
+    ...(settings.SODALIS_LOCAL_IMAGES === "true"
+      ? ["-f", resolve(root, "compose.local-images.yaml")]
+      : []),
+  ];
+  function run(args: readonly string[]): void {
+    const result = spawnSync(compose.command, [...baseArgs, ...args], {
+      cwd: root, env: environment, stdio: "inherit",
+    });
+    if (result.error) throw result.error;
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
+  console.log(`Sodalis Compose profiles: ${selection.profiles.join(", ") || "none"}`);
+  const allProfiles = ALL_LOCAL_PROFILES.flatMap((profile) => ["--profile", profile]);
+  if (operation === "up" || operation === "down") {
+    let homeSimulator = selection.homeSimulator;
+    if (operation === "up" && homeSimulator) {
+      const bridge = resolveHomeSimulatorBridge(homeSimulator, environment);
+      homeSimulator = { ...homeSimulator, bridgeHost: bridge.host };
+      environment.HOME_SIMULATOR_BRIDGE_URL = bridge.url;
+    }
+    const simulator = homeSimulator
+      ? createHomeSimulatorLauncher({ selection: homeSimulator, environment }) : undefined;
+    await runStackLifecycle(operation, !!simulator, {
+      composeDown: () => run([...allProfiles, "down", "--remove-orphans"]),
+      composeUp: () => run([...selection.profiles.flatMap((profile) => ["--profile", profile]), "up", "--build", "-d"]),
+      stopBridge: stopHomeSimulatorBridge,
+      runSession: simulator?.runSession ?? (() => {}),
+      startBridge: simulator?.startBridge ?? (() => {}),
+    });
+  } else if (operation === "config") {
+    run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
+      "config", "--quiet"]);
+  } else if (operation === "pull") {
+    run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
+      "pull", "--ignore-buildable"]);
+  } else if (operation === "ps") {
+    run([...allProfiles, "ps"]);
   }
 }
 
-const baseArgs = [
-  ...compose.prefix,
-  "--env-file", envPath,
-  "-f", resolve(root, "compose.yaml"),
-  ...(selection.environment.HOME_DATA_SQLITE_SOURCE
-    ? ["-f", resolve(root, "compose.companion-data.yaml")]
-    : []),
-  ...(settings.SODALIS_LOCAL_IMAGES === "true"
-    ? ["-f", resolve(root, "compose.local-images.yaml")]
-    : []),
-];
-function run(args: readonly string[]): void {
-  const result = spawnSync(compose.command, [...baseArgs, ...args], {
-    cwd: root, env: environment, stdio: "inherit",
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) process.exit(result.status ?? 1);
-}
-console.log(`Sodalis Compose profiles: ${selection.profiles.join(", ") || "none"}`);
-const allProfiles = ALL_LOCAL_PROFILES.flatMap((profile) => ["--profile", profile]);
-if (operation === "up" || operation === "down") {
-  run([...allProfiles, "down", "--remove-orphans"]);
-}
-if (operation === "up") {
-  run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
-    "up", "--build", "-d"]);
-} else if (operation === "config") {
-  run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
-    "config", "--quiet"]);
-} else if (operation === "pull") {
-  run([...selection.profiles.flatMap((profile) => ["--profile", profile]),
-    "pull", "--ignore-buildable"]);
-} else if (operation === "ps") {
-  run([...allProfiles, "ps"]);
-}
+void main().catch((error: unknown) => { console.error(error); process.exitCode = 1; });

@@ -12,6 +12,9 @@
     "stack:down": "tsx scripts/dev-stack.ts down",
     "stack:config": "tsx scripts/dev-stack.ts config",
     "stack:pull": "tsx scripts/dev-stack.ts pull",
+    "home-simulator:session": "tsx scripts/home-simulator/session-main.ts",
+    "home-simulator:advance": "tsx scripts/home-simulator/advance-main.ts",
+    "home-simulator:bridge": "tsx scripts/home-simulator/bridge-main.ts",
     "stack:smoke": "tsx scripts/smoke-stack.ts",
     "audit:report": "tsx scripts/companion-audit-report.ts",
     "avatars:licensed": "tsx scripts/licensed-avatars.ts",
@@ -22,6 +25,7 @@
     "typecheck": "tsc -p scripts --noEmit && pnpm --recursive typecheck"
   },
   "devDependencies": {
+    "@earendil-works/pi-mcp": "^1.5.0",
     "@types/mithril": "^2.2.9",
     "@types/node": "^26.6.6",
     "jsdom": "^30.1.3",

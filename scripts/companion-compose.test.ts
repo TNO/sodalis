@@ -126,6 +126,52 @@ describe.skipIf(!available)("companion Compose configuration (no daemon or model
     }
   });
 
+  it("passes only the bridge address to ai when the Home Simulator flag is on, adding no service", () => {
+    const directory = mkdtempSync(join(tmpdir(), "sodalis-compose-"));
+    try {
+      const envFile = join(directory, "empty.env");
+      writeFileSync(envFile, "");
+      const render = (selected: ReturnType<typeof resolveStack>) => {
+        const result = spawnSync(compose.command, [
+          ...compose.prefix, "--env-file", envFile, "-f", join(root, "compose.yaml"),
+          ...selected.profiles.flatMap((profile) => ["--profile", profile]),
+          "config", "--format", "json",
+        ], {
+          cwd: root, encoding: "utf8", timeout: 10_000,
+          env: {
+            PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot,
+            ...selected.environment,
+          },
+        });
+        expect(result.status, result.stderr).toBe(0);
+        return JSON.parse(result.stdout) as ComposeConfig;
+      };
+      const mocks = { STT_PROVIDER: "mock", TTS_PROVIDER: "mock", LLM_PROVIDER: "mock" };
+      const off = resolveStack({ ...mocks, HOME_PROVIDER: "external-api", HOME_API_URL: "http://home.test" });
+      const on = resolveStack({
+        ...mocks, HOME_PROVIDER: "simulator", HOME_ADMIN_UI: "1", COMPANION_HARNESS: "pi",
+        HOME_SIMULATOR_ROOT: "/srv/home_simulator", HOME_SIMULATOR_BRIDGE_PORT: "9100",
+        HOME_GRAPH_URL: "bolt://graph.test:7687", HOME_GRAPH_PASSWORD: "unused",
+        HOME_DATA_SQLITE_FILE: join(directory, "unused.sqlite"),
+      });
+      expect(on.profiles).toEqual([...off.profiles, "home-simulator"]);
+      const flagOff = render(off);
+      const flagOn = render(on);
+      expect(flagOff.services.ai?.environment?.HOME_SIMULATOR_BRIDGE_URL).toBe("");
+      expect(flagOn.services.ai?.environment).toMatchObject({
+        HOME_SIMULATOR_BRIDGE_URL: "http://host.docker.internal:9100",
+        COMPANION_HARNESS: "pi", HOME_GRAPH_URL: "", HOME_GRAPH_PASSWORD: "", HOME_DATA_SQLITE_FILE: "",
+      });
+      expect(flagOn.services.ai?.environment).not.toHaveProperty("HOME_SIMULATOR_ROOT");
+      expect(flagOn.services.ai?.volumes?.some((volume) => volume.target === "/data/home/readings.sqlite"))
+        .toBe(false);
+      expect(Object.keys(flagOn.services).sort())
+        .toEqual([...Object.keys(flagOff.services), "homeassistant"].sort());
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     { externalNetworkName: undefined, expectedName: "sodalis" },
     { externalNetworkName: "shared-feature-graph", expectedName: "shared-feature-graph" },

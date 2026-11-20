@@ -19,6 +19,8 @@ import { createCompanionModel, type CompanionModel } from "./companionModel.js";
 import { createCompanionSession } from "./companionSession.js";
 import { SqliteReadingsReader, type ExternalDataReader } from "./externalData.js";
 import type { HomeGraph } from "./homeGraph.js";
+import { HomeSimulatorBridge, homeSimulatorGuidance } from "./homeSimulator.js";
+import { fakeHomeSimulator, SIMULATION_TIME } from "./homeSimulator.test-support.js";
 import { createHomeTools } from "./tools.js";
 import { CompanionWorkflows, type WorkflowEvent, type WorkflowLimits } from "./workflow.js";
 import type { CompanionAuditEvent, CompanionAuditSink } from "./audit.js";
@@ -104,6 +106,7 @@ afterEach(() => {
 
 async function harness(options: {
   graph?: HomeGraph;
+  simulatorBridge?: HomeSimulatorBridge;
   limits?: Partial<WorkflowLimits>;
   responses: FauxResponseStep[];
   audit?: CompanionAuditSink;
@@ -129,13 +132,18 @@ async function harness(options: {
     ...(options.limits ? { limits: options.limits } : {}),
     audit,
     async createSession({ history, budget, observeModelRequest }) {
+      const simulator = options.simulatorBridge
+        ? { bridge: options.simulatorBridge, simulationTime: await options.simulatorBridge.readClock() }
+        : undefined;
       const session = await createCompanionSession({
         model,
         history,
         tools: createHomeTools({
           graph, reader: options.reader ?? reader, budget,
+          ...(simulator ? { simulator } : {}),
           ...(options.now ? { now: options.now } : {}),
         }),
+        ...(simulator ? { appendSystemPrompt: [homeSimulatorGuidance(simulator.simulationTime)] } : {}),
         ...(observeModelRequest ? { observeModelRequest } : {}),
       });
       const dispose = vi.fn(session.dispose.bind(session));
@@ -520,6 +528,34 @@ async function started(result: ReturnType<CompanionWorkflows["start"]>) {
 }
 
 describe("companion workflow", () => {
+  it.each([SIMULATION_TIME, "2025-07-15T09:30:00Z", undefined])("audits simulated now and read-only guidance in the effective system prompt (%s)", async (time) => {
+    const bridge = await fakeHomeSimulator();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    bridge.replies.set("/clock", { body: time ? { simulationTime: time } : { error: "unavailable" }, status: time ? 200 : 503 });
+    try {
+      const h = await harness({ simulatorBridge: new HomeSimulatorBridge(bridge.url), responses: [
+        fauxAssistantMessage(fauxText("Here is what I can check.")),
+      ] });
+      await started(h.start());
+      const request = h.auditEvents.find((event) => event.event === "model.request.context")!;
+      expect(request.offeredTools).toEqual([
+        "query_sensor_data", "get_context", "query_ontology", "query_weather", "get_agenda",
+      ].map((name) => expect.objectContaining({ name })));
+      expect(request.effectiveSystemPrompt).toContain("The Home Simulator replay is read-only");
+      expect(request.effectiveSystemPrompt).toContain("dialogue cannot change the simulated home");
+      expect(request.effectiveSystemPrompt).toContain("Home action confirmation requirements remain unchanged");
+      if (time) {
+        expect(request.effectiveSystemPrompt).toContain(time);
+        expect(request.effectiveSystemPrompt).toContain("Europe/Amsterdam local time:");
+        expect(request.effectiveSystemPrompt).toContain(time === SIMULATION_TIME ? "10:30:00" : "11:30:00");
+        expect(request.effectiveSystemPrompt).toContain("not today's date");
+      } else {
+        expect(request.effectiveSystemPrompt).toContain("Home Simulator is unavailable");
+        expect(request.effectiveSystemPrompt).not.toContain("Simulated now:");
+      }
+    } finally { warn.mockRestore(); await bridge.close(); }
+  });
+
   it("observes the SDK-converted local provider request without changing model inputs or answers", async () => {
     let model!: CompanionModel;
     const bodies: Record<string, unknown>[] = [];
