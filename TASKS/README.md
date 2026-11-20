@@ -189,21 +189,26 @@ result.
 
 ## Hands-free activation
 
-Decided in the
-[interaction-modes evaluation](../docs/evaluations/interaction-modes.md): a
-sample-based wake word, an optional external trigger and opt-in avatar prompts,
-with hold-to-talk and typing as fallbacks. The spec is 0091; 0085–0090 are its
-slices. Tasks 0086 and 0087 can proceed in parallel once 0085 is done. Tablet
-deployment needs the evaluation's "Future research on a tablet" measurements
-first.
+**Superseded on 2026-11-19 by
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md).**
+Keep the existing UI hold-to-talk and typing unchanged. Wake-word work is out
+of scope, and the entire hands-free rollout is deferred. The future direction
+is a physical button; its hardware, transport, listening lifecycle and
+microphone placement are undecided. The
+[evaluation](../docs/evaluations/interaction-modes.md) preserves the research
+and explains the revised direction.
 
-- [ ] [0085 Add the activation controller and listening state](0085-activation-controller-and-listening-state.md) *(needs 0020, 0023)*
-- [ ] [0086 Add the sample-based wake word, enrolment and Activation settings](0086-wake-word-enrolment-and-activation-settings.md) *(needs 0085)*
-- [ ] [0087 Add the external trigger push channel](0087-external-trigger-push-channel.md) *(needs 0085; 0038 only to enable it against a real Home Assistant)*
-- [ ] [0088 Add the avatar-initiated prompt scheduler](0088-avatar-prompt-scheduler.md) *(needs 0085, 0086)*
-- [ ] [0089 Add the optional spoken activation acknowledgment](0089-spoken-activation-acknowledgment.md) *(needs 0086)*
-- [ ] [0090 Review privacy before hands-free listening reaches real users](0090-privacy-review-before-hands-free-rollout.md) *(needs 0086; blocks real-user rollout of 0086)*
-- [ ] [0091 Spec: hands-free activation on the tablet](0091-hands-free-activation-spec.md) *(parent spec of 0085–0090)*
+These are historical tasks, not ready-to-run backlog or completed features:
+
+| Task | Disposition |
+| --- | --- |
+| [0085 Activation controller and listening state](0085-activation-controller-and-listening-state.md) | Deferred; current UI unchanged |
+| [0086 Wake word, enrolment and Activation settings](0086-wake-word-enrolment-and-activation-settings.md) | Cancelled; do not implement or ship |
+| [0087 External trigger push channel](0087-external-trigger-push-channel.md) | Deferred; re-scope around a physical button without assuming this transport |
+| [0088 Avatar-initiated prompt scheduler](0088-avatar-prompt-scheduler.md) | Deferred |
+| [0089 Spoken activation acknowledgment](0089-spoken-activation-acknowledgment.md) | Deferred |
+| [0090 Hands-free privacy review](0090-privacy-review-before-hands-free-rollout.md) | Superseded; no human privacy approval claimed |
+| [0091 Hands-free activation spec](0091-hands-free-activation-spec.md) | Superseded; original requirements archived |
 
 ## Simulated home
 

@@ -1,11 +1,19 @@
 # 0089 Add the optional spoken activation acknowledgment
 
-Status: open
-Triage: ready-for-agent
+Status: deferred (2026-11-19)
+Triage: requires re-scoping; do not implement
 Priority: low
 Subsystem: speech
 Spec: [0091](0091-hands-free-activation-spec.md)
-Depends on: 0086
+Historical dependency: 0086
+
+## Current disposition
+
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md) defers
+spoken activation acknowledgments with the entire hands-free rollout.
+Keep current feedback unchanged; do not add the proposed acknowledgment
+or implement the cancelled wake-word dependency. Feedback for a future
+physical button remains undecided. The original task below is historical.
 
 ## Context
 

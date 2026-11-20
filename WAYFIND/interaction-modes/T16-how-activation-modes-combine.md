@@ -8,6 +8,11 @@ blocked-by: [T14-spoken-activation-acknowledgment.md, T15-wake-word-route.md]
 
 ## Question
 
+> Superseded design. Do not implement these modes, settings or automatic
+> listening windows. Preserve current UI hold-to-talk and typing; a future
+> physical button needs a new scope. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 Given the surviving modes (a wake word, an optional external trigger, bounded avatar-initiated prompts with a listening window, and hold-to-talk and typing as fallbacks), which are on by default, how does the user or a helper switch them, and what happens when one fails (for example the microphone is blocked, the wake word keeps missing, or the push channel is down)? Cover the always-visible listening state and one-touch mute from the rubric ([T07](T07-evaluation-rubric.md)), the UX from [T08](T08-activation-and-listening-state-ux.md), and the prompt policy from [T09](T09-avatar-initiated-prompt-policy.md).
 
 ## Resolution

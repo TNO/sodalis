@@ -1,8 +1,8 @@
 # 0091 Spec: hands-free activation on the tablet
 
-Status: open
+Status: superseded (2026-11-19)
 Type: spec
-Triage: ready-for-agent
+Triage: archived; do not implement
 Priority: high
 Subsystem: avatar, speech, server
 Slices: 0085, 0086, 0087, 0088, 0089 (agent work), 0090 (human review)
@@ -11,6 +11,31 @@ Source: the [interaction-modes evaluation](../docs/evaluations/interaction-modes
 and the decision trail in
 [`WAYFIND/interaction-modes/`](../WAYFIND/interaction-modes/map.md) (map, T01–T17).
 Terms are defined in [`GLOSSARY.md`](../GLOSSARY.md) and used as written there.
+
+## Current decision (2026-11-19)
+
+[ADR 0010](../docs/adr/0010-button-activation-without-wake-word.md) supersedes
+this spec and all of its slices. Keep the current UI, hold-to-talk, typing,
+and active-turn speech behavior unchanged. Wake-word detection and enrolment
+are out of scope; do not ship them, even disabled.
+The entire hands-free rollout is deferred, including new listening-state UI,
+automatic prompts and spoken acknowledgments.
+
+The future direction is physical-button activation. Before implementation,
+decide the hardware, connection/transport, press/hold semantics, listening
+duration and stop/cancel behavior, feedback, failure handling, microphone
+placement and privacy requirements. A microphone on an embedded device is
+only a future option. Neither Home Assistant nor the old push-channel design
+is selected. Task [0087](0087-external-trigger-push-channel.md) is deferred
+pending that re-scoping, not ready for implementation.
+
+The [evaluation](../docs/evaluations/interaction-modes.md)
+records the decision rationale and historical research evidence.
+The original spec below is retained solely as historical rationale; its user
+stories, implementation decisions, acceptance criteria and slice ordering are
+not current requirements.
+
+## Historical spec (superseded)
 
 ## Problem Statement
 

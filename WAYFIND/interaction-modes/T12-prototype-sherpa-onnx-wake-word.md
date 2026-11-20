@@ -8,6 +8,9 @@ blocked-by: []
 
 ## Question
 
+> Historical prototype, not a feature to merge. Wake-word work is out of scope
+> under [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 How does sherpa-onnx open-vocabulary keyword spotting (WASM build) behave for
 "Hey Sodalis" in Dutch, where the pretrained models cover English and Chinese
 only and the keyword is given as a phonetic token sequence? Build a throwaway

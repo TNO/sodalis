@@ -8,6 +8,10 @@ blocked-by: []
 
 ## Question
 
+> Superseded recommendation. No wake-word route is selected or in scope,
+> including the sample-based approach recommended below. See
+> [ADR 0010](../../docs/adr/0010-button-activation-without-wake-word.md).
+
 The sample-based wake word met the first-try bar on the laptop (directional, n=17 to 21) and the sherpa-onnx prototype with the pretrained zh-en model did not. Which route does the decision document recommend for a Dutch "Hey Sodalis" wake word: sample-based only, the reserve option (microWakeWord, a model trained on the actual keyword, English-trained today, no browser port), or something else? Weigh it against the rubric ([T07](T07-evaluation-rubric.md)): privacy tier 1, eagerness, missed activations, effort, latency.
 
 Inputs: [T01](T01-browser-wake-word-options.md), [T11](T11-prototype-sample-based-wake-word.md), [T12](T12-prototype-sherpa-onnx-wake-word.md). Known gaps to state plainly in the answer: no playback false-activation rate, latency only estimated (about 2.7 s), Dutch generalisation to other speakers and older voices untested, no tablet measurements. Decide also whether the follow-up work should include a soak or a trained-model experiment before any product implementation.
