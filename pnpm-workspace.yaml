@@ -4,6 +4,9 @@ packages:
 overrides:
   # jsdom's HTTP client must include the fixes for the 8.12.2 advisories.
   jsdom>undici: 8.12.2
+  # VitePress depends on Vite 5, which lacks the fix for GHSA-587h-7wmj-h5pm.
+  vitepress>vite: 6.4.4
+  '@vitejs/plugin-vue>vite': 6.4.4
 allowBuilds:
   '@google/genai': false
   esbuild: false
