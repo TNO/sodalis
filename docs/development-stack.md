@@ -1,5 +1,9 @@
 # Local development stack
 
+For the primary macOS/Linux simulated-home setup, start with the
+[setup guide](guide/setup.md). This page is the detailed configuration and
+troubleshooting reference.
+
 This Compose v2 stack runs the desktop gateway, speech API, and AI API.
 Optional local engines and the Home Assistant Core simulator are selected from
 one ignored `.env` file. The gateway is the **only** published service, bound
@@ -989,6 +993,9 @@ block each answer saw). LongMemEval-S has about 50 sessions per question;
 affordable on local models.
 
 ## Start, smoke, and stop
+
+Inspect the selected providers before running the smoke test: it exercises
+them and may send data to a configured cloud service.
 
 ```sh
 pnpm stack:config   # validate selection and Compose configuration

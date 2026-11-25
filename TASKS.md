@@ -2,7 +2,8 @@
 
 > Active task status and resumable details are maintained in
 > [`TASKS/README.md`](TASKS/README.md). This file retains the original Phase 0
-> checklist and implementation boundaries.
+> checklist and implementation boundaries. Its scope statements describe
+> that historical slice, not the current prototype.
 
 ## Initial repository slice
 

@@ -18,8 +18,8 @@
   - Evaluation and benchmark scripts need no tests.
   - Live cloud tests must self-skip without credentials and never run in CI.
 - Never add cloud-provider secrets to GitHub Actions.
-- The initial slice intentionally has no LLM, speech, memory, or external
-  account integration.
+- For documentation changes, follow `docs/guide/documentation.md`; distinguish
+  current behavior from historical plans and unverified capabilities.
 - Put the final, consolidated analysis of each evaluation (for example
   provider comparisons) in `docs/evaluations/`, following its README, and
   link it from the task. Keep only progress notes in `TASKS/`.
