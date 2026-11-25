@@ -49,11 +49,11 @@ Assistant responses may be spoken and optionally shown as captions.
 - Reading, searching, navigation, highlighting, and drafting are generally
   low risk. External effects and destructive actions require explicit
   confirmation enforced in code.
-- The initial repository slice hosts Aster and a placeholder for the
-  assistant/avatar. It does not yet include Mail, speech, a model, memory, or
-  an avatar asset.
-- The speech providers, avatar model, memory persistence, and deployment
-  topology are undecided.
+- The current research prototype includes Aster, an avatar, speech and AI
+  services, optional consent-governed memory, and simulated-home integrations.
+  Real home and personal-account integrations remain future work.
+- Providers remain replaceable; available implementations and their limits
+  are documented in the [development guide](docs/guide/development.md).
 
 ## Brand Commitments
 
@@ -62,11 +62,9 @@ macOS or Windows look and feel; the experience should be simple to use.
 
 ## Evidence on Hand
 
-- `SODALIS_IMPLEMENTATION_SPEC.md` is the supplied architecture and product
-  brief.
 - Aster Desktop is the reference and initial desktop foundation.
-- No approved avatar model, real Mail account, voice samples, or provider
-  credentials are available; none should be implied or fabricated.
+- Avatar assets have distinct licensing and distribution restrictions; see
+  the [avatar profile](docs/avatar/SODALIS_AVATAR_PROFILE.md).
 
 ## Product Principles
 

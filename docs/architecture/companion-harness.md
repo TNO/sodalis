@@ -6,7 +6,11 @@ offline sensor journey verified. A deterministic mock-only email reader is
 present; calendar runtime and all real email/calendar account access are
 deferred until further notice and are not supported. The development-only
 developer audit is implemented.
-Updated: 2026-11-10.
+The Home Simulator replay path was added after the original graph-focused
+implementation; see [Home Simulator replay tools](#home-simulator-replay-tools)
+and [ADR 0009](../adr/0009-home-simulator-host-bridge.md). The graph-specific
+sections below describe the alternative graph configuration, not the default
+simulated-home replay.
 
 The opt-in Pi workflow investigates household questions through successive
 read-only tool calls. It is a companion, not a coding agent. The architectural
@@ -31,9 +35,9 @@ it is **not yet a feature-complete replacement** for turn mode.
 | Intended use | Existing conversational desktop assistant, including registered app actions and optional memory. | Read-only household investigation whose next lookup depends on earlier evidence. |
 | Runtime | Sodalis turn orchestration and its LLM provider adapter; no Pi loop. | Pi SDK embedded in the same AI process, controlled by Sodalis lifecycle and tool code; no Pi CLI or shell-script harness. |
 | Reasoning over tools | Generates a structured utterance with an optional desktop action. Action results are not fed back into a continuing model/tool loop. Optional memory recall can trigger a second generation. | Repeated model/tool iterations can discover entities, inspect relationships, and read configured observations before answering. It can also answer without tools. |
-| Available context | Bounded conversation history, optional current app identity and registered semantic action descriptions; consent-governed recalled memory when enabled. No app document contents or DOM. | Bounded conversation history and evidence returned by three explicit home tools. No desktop app context/action registry, DOM, or long-term-memory retrieval. |
+| Available context | Bounded conversation history, optional current app identity and registered semantic action descriptions; consent-governed recalled memory when enabled. No app document contents or DOM. | Bounded conversation history and evidence from the selected read-only home tools: five replay tools or three graph tools. No desktop app context/action registry, DOM, or long-term-memory retrieval. |
 | Desktop actions | Supported through the trusted action registry. External-effect and destructive actions require exact-action confirmation. | Not supported. Selecting this mode does not grant Pi desktop or device-control authority. |
-| Home graph and readings | No Pi home-investigation tools on this path. | `find_entities`, `inspect_neighborhood`, and `read_external_data`; fixed scoped queries and explicitly configured sources, read-only. Missing sources produce explicit unavailable results. |
+| Home data | No Pi home-investigation tools on this path. | The simulated-home selection uses five read-only Home Simulator replay tools. The alternative graph path uses `find_entities`, `inspect_neighborhood`, and `read_external_data`. Missing sources produce explicit unavailable results. |
 | Long-term memory | Optional retrieval and recording under existing consent, health-consent, retention, and deletion policies. | Neither retrieves nor records long-term memory. Enabling the memory subsystem does not connect it to workflow conversations. |
 | Working history | Short in-memory resident conversation; no automatic persisted conversation transcript. | Short in-memory resident conversation plus a fresh in-memory Pi session per workflow. Tool evidence stays within that workflow; no automatic Pi transcript archive. |
 | Answer format and presentation | Streamed JSON utterance; the desktop progressively captions text, validates affect/gesture/interruptibility, and speaks the completed reply. | SSE lifecycle events and a settled plain-text answer. Intermediate model text and tool narration are not resident answers; no structured affect/gesture output. |
@@ -164,6 +168,9 @@ source-specific retrieval code, not a plugin system. No new workspace package,
 general job queue, retry scheduler, or observability platform is required.
 
 ## Tools and evidence
+
+This section describes the optional graph path. For the standard simulated-home
+selection, see [Home Simulator replay tools](#home-simulator-replay-tools).
 
 The separate `home_simulator` project supplies the Neo4j import and external
 references; it has no existing graph-read HTTP interface. These sources are not

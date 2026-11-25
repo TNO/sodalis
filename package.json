@@ -8,6 +8,9 @@
     "dev:speech": "pnpm --filter @sodalis/server dev:speech",
     "dev:ai": "pnpm --filter @sodalis/server dev:ai",
     "dev:home": "pnpm --filter @sodalis/server dev:home",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs",
     "stack:up": "tsx scripts/dev-stack.ts up",
     "stack:down": "tsx scripts/dev-stack.ts down",
     "stack:config": "tsx scripts/dev-stack.ts config",
@@ -29,9 +32,12 @@
     "@types/mithril": "^2.2.9",
     "@types/node": "^26.6.6",
     "jsdom": "^30.1.3",
+    "mermaid": "^11.17.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.8",
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17",
     "vitest": "^5.1.0"
   }
 }
